@@ -735,7 +735,11 @@
     .nav-btn.active{background:var(--tod-accent)!important}
     #views{background:linear-gradient(180deg,var(--tod-bg1),var(--tod-bg2));transition:background .8s}
     body[data-tod="night"] #views{background:radial-gradient(1px 1px at 12% 18%,#fff8,transparent),radial-gradient(1px 1px at 72% 9%,#fff9,transparent),radial-gradient(1.5px 1.5px at 40% 30%,#fff7,transparent),radial-gradient(1px 1px at 88% 40%,#fff8,transparent),linear-gradient(180deg,var(--tod-bg1),var(--tod-bg2))}
-    #view-home,#view-calendar,#view-events,#view-tide,#view-remind,#view-finance{background:transparent!important}
+    /* 各分頁有自己的顏色，再疊上時段配色 */
+    .view{--tab:#0369a1}
+    #view-home{--tab:#0369a1}#view-calendar{--tab:#7c3aed}#view-events{--tab:#ea580c}#view-tide{--tab:#0f8d96}#view-map{--tab:#16a34a}#view-flight{--tab:#4338ca}#view-remind{--tab:#dc2626}#view-finance{--tab:#d97706}
+    #views .view{background:linear-gradient(180deg,color-mix(in srgb,var(--tab) 22%,var(--tod-bg1)) 0%,color-mix(in srgb,var(--tab) 9%,var(--tod-bg2)) 100%)!important}
+    body[data-tod="night"] #views .view{background:linear-gradient(180deg,color-mix(in srgb,var(--tab) 30%,var(--tod-bg1)) 0%,color-mix(in srgb,var(--tab) 14%,var(--tod-bg2)) 100%)!important}
     .page-head h2,.ev-group h3,.fw-month,.xb-sec-title{color:var(--tod-ink)!important}
     .page-head p,.tide-status,.h-date{color:var(--tod-sub)!important}
     body[data-tod="night"] #views .empty{color:#c9d3f1}
@@ -745,7 +749,6 @@
     body[data-tod="night"] .ev-group h3 small,body[data-tod="night"] .fw-month small{color:#b8c3e6}
     .tod-badge{display:inline-flex;align-items:center;gap:4px;margin-left:8px;padding:2px 9px;border-radius:999px;background:var(--tod-chip);border:1px solid rgba(255,255,255,.3);font-size:.72rem;font-weight:800;color:#fff;vertical-align:middle}
     @media(max-width:820px){
-      #view-home,#view-calendar,#view-events,#view-tide,#view-remind,#view-finance{background:transparent!important}
       .app-nav .nav-btn[data-go="tide"]{--nc:#0f8d96;--nb:#d8eff1}
       .app-nav .nav-btn[data-go="remind"]{--nc:#dc2626;--nb:#fde2e2}
       .app-nav .nav-btn[data-go="finance"]{--nc:#b45309;--nb:#fdecc8}
@@ -785,6 +788,24 @@
     .ev-desc-more{align-self:flex-start;border:0;background:none;color:var(--blue);font-weight:900;font-size:.76rem;padding:0}
     .ev-ticket .ev-place{margin-top:2px;border-radius:12px}
     .ev-ticket .ev-actions{border-top:1px dashed #e3edf0;padding-top:7px}
+    /* 風浪天氣 */
+    .wx-now{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:0 8px 22px rgba(7,43,75,.08);margin-bottom:12px}
+    .wx-now .ic{font-size:2.6rem;line-height:1;grid-row:span 2}
+    .wx-now b{font-size:1.15rem;color:#0b3954}
+    .wx-now p{margin:0;color:#475569;font-size:.86rem;line-height:1.6}
+    .wx-badge{display:inline-block;border-radius:999px;padding:3px 10px;font-size:.76rem;font-weight:900;margin-left:6px;vertical-align:middle}
+    .wx-badge.ok{background:#dcfce7;color:#15803d}.wx-badge.warn{background:#fef3c7;color:#b45309}.wx-badge.bad{background:#fee2e2;color:#b91c1c}
+    .wx-hours{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 10px;margin-bottom:6px;scrollbar-width:thin}
+    .wx-h{flex:0 0 86px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:8px 6px;text-align:center;font-size:.78rem;color:#334155}
+    .wx-h b{display:block;font-size:.84rem;color:#0b3954}
+    .wx-h i{display:block;font-style:normal;font-size:1.3rem;margin:2px 0}
+    .wx-days{display:grid;gap:8px}
+    .wx-day{display:grid;grid-template-columns:78px 34px minmax(0,1fr) auto;gap:10px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:14px;padding:10px 12px;box-shadow:0 3px 10px rgba(7,43,75,.05);font-size:.84rem}
+    .wx-day .d b{display:block;color:#0b3954}.wx-day .d small{color:#64748b}
+    .wx-day .ic{font-size:1.5rem;text-align:center}
+    .wx-day .m{color:#334155;line-height:1.55}
+    .wx-src{font-size:.74rem;color:#64748b;margin-top:10px}
+    @media(max-width:820px){.wx-day{grid-template-columns:60px 30px minmax(0,1fr);}.wx-day .wx-badge{grid-column:1/-1;justify-self:start;margin:0}}
     /* 熊寶分類圖（沒有圖資時）：保留熊寶臉部 */
     img.cat-pic{object-position:center 28%!important}
     .m-pic img.cat-pic{object-position:center 30%!important}
@@ -875,7 +896,7 @@
       #view-map.m-map .map-wrap{display:flex!important;flex:1;min-height:0}
       #view-map.m-map .topbar .map-chip{display:none}
       #view-map.m-map .legend{max-width:100%;font-size:.7rem;padding:6px 8px}
-      #view-map.m-map .ev-toggle{display:block!important}
+      #view-map.m-map .ev-toggle:not([hidden]){display:block!important}
       #view-map.m-map .nearby-panel{max-height:46%}
       #view-map.m-map #subFilters{max-height:72px;overflow-y:auto}
       .ev-btn[data-place-key]{display:inline-block!important}
@@ -1080,6 +1101,10 @@
             <div id="homeLive"></div>
           </article>
           <article class="h-card">
+            <div class="h-head"><h3><i>🌬️</i>今日風浪</h3><button type="button" class="h-more" data-go="tide" data-tm-go="wx">7 天預報 ›</button></div>
+            <div id="homeWx" class="h-muted">正在讀取風浪天氣…</div>
+          </article>
+          <article class="h-card">
             <div class="h-head"><h3><i>🔔</i>重要資訊提醒</h3><button type="button" class="h-more" data-go="remind">全部提醒 ›</button></div>
             <div id="homeRemind" class="h-muted">正在讀取提醒…</div>
           </article>
@@ -1179,8 +1204,8 @@
     <!-- ================= 潮汐分海（奎壁山分海＋30天潮汐預報） ================= -->
     <section class="view" id="view-tide" aria-label="潮汐分海" hidden>
       <div class="page wide">
-        <div class="page-head"><h2>🌊 潮汐分海</h2><p>奎壁山摩西分海時間・澎湖各區未來 30 天潮汐</p></div>
-        <div class="seg" id="tideSeg" role="tablist" aria-label="潮汐分海內容"><button type="button" class="active" data-tm="split">🌊 奎壁山分海</button><button type="button" data-tm="forecast">📈 30 天潮汐預報</button></div>
+        <div class="page-head"><h2>🌊 潮汐分海</h2><p>奎壁山摩西分海・未來 30 天潮汐・風浪天氣</p></div>
+        <div class="seg" id="tideSeg" role="tablist" aria-label="潮汐分海內容"><button type="button" class="active" data-tm="split">🌊 奎壁山分海</button><button type="button" data-tm="forecast">📈 30 天潮汐預報</button><button type="button" data-tm="wx">🌬️ 風浪天氣</button></div>
         <div id="splitPane">
         <div class="tide-toolbar"><label for="tideMonth">選擇查詢月份</label><select id="tideMonth"></select></div>
         <div id="tideStatus" class="tide-status">尚未載入分海資料</div>
@@ -1207,6 +1232,7 @@
           </div>
         </div>
         </div>
+        <div id="wxPane" hidden></div>
       </div>
     </section>
 
@@ -2105,13 +2131,16 @@ tideMonth.addEventListener('change', () => renderTideMonth(tideMonth.value));
 /* 潮汐分海分頁：奎壁山分海／30 天潮汐預報切換 */
 var tideMode = 'split';
 function setTideMode(mode) {
-  tideMode = mode === 'forecast' ? 'forecast' : 'split';
+  tideMode = ['forecast', 'wx'].includes(mode) ? mode : 'split';
   $('splitPane').hidden = tideMode !== 'split';
   $('fcPane').hidden = tideMode !== 'forecast';
+  $('wxPane').hidden = tideMode !== 'wx';
+  if (tideMode === 'wx' && typeof Wx !== 'undefined') Wx.render();
   document.querySelectorAll('#tideSeg [data-tm]').forEach(b => b.classList.toggle('active', b.dataset.tm === tideMode));
   if (tideMode === 'forecast' && currentView === 'tide') onForecastShown();
 }
 $('tideSeg').addEventListener('click', e => { const b = e.target.closest('[data-tm]'); if (b) setTideMode(b.dataset.tm); });
+document.addEventListener('click', e => { const g = e.target.closest('[data-tm-go]'); if (g) setTimeout(() => setTideMode(g.dataset.tmGo), 0); });
 
 /* =====================================================================
    未來 30 天潮汐預報（「澎湖縣-未來30天潮汐預報」工作表）
@@ -4364,6 +4393,7 @@ const Helper = (() => {
       const pts = info.points.filter(p => p.type === 'sep' || p.type === 'mer');
       if (pts.length) list.push(`🌊 今天奎壁山：${pts.map(p => `${p.label} <b>${p.t}</b>`).join('、')}`);
     }
+    if (typeof Wx !== 'undefined' && Wx.loaded) { const n = document.querySelector('#homeWx .wx-badge'); if (n) list.push(`🌊 今天${document.querySelector('#homeWx .h-sub')?.textContent || ''}海況：<b>${esc(n.textContent)}</b>，到「潮汐分海 → 風浪天氣」看 7 天預報`); }
     if (typeof Cal !== 'undefined' && Cal.loaded) {
       const act = Events.active();
       if (act.length) list.push(`🎉 14 天內有 <b>${act.length}</b> 個活動，到「活動資訊」看看吧`);
@@ -4406,6 +4436,94 @@ const Helper = (() => {
   setTimeout(() => { if (!wrap.classList.contains('hide')) { msgs = build(); show(0); } }, 2500);
   return { say, refresh, show };
 })();
+
+/* ---------------------------------------------------------------------
+   風浪天氣（Open-Meteo 公開資料，不需金鑰）：馬公附近海域
+   --------------------------------------------------------------------- */
+const Wx = (() => {
+  /* 五鄉一市：天氣用鄉市中心，浪高用該鄉市外海的海上格點 */
+  const AREAS = {
+    '馬公市': { lat: 23.5667, lng: 119.5833, sea: [23.55, 119.54] },
+    '湖西鄉': { lat: 23.5833, lng: 119.6600, sea: [23.60, 119.72] },
+    '白沙鄉': { lat: 23.6660, lng: 119.5860, sea: [23.72, 119.60] },
+    '西嶼鄉': { lat: 23.6020, lng: 119.5078, sea: [23.60, 119.45] },
+    '望安鄉': { lat: 23.3697, lng: 119.5039, sea: [23.37, 119.46] },
+    '七美鄉': { lat: 23.2017, lng: 119.4290, sea: [23.20, 119.39] }
+  };
+  let area = AREAS[lsGet('xb.wxArea')] ? lsGet('xb.wxArea') : '馬公市';
+  const FC = a => `https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lng}&timezone=Asia%2FTaipei&wind_speed_unit=ms&forecast_days=7`
+    + '&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant';
+  const MA = a => `https://marine-api.open-meteo.com/v1/marine?latitude=${a.sea[0]}&longitude=${a.sea[1]}&timezone=Asia%2FTaipei&forecast_days=7&hourly=wave_height&daily=wave_height_max`;
+  let fc = null, ma = null, loading = null, error = '';
+  const DIRS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+  const dirOf = d => DIRS[Math.round((((Number(d) || 0) % 360) + 360) % 360 / 45) % 8];
+  const LIM = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
+  const bft = ms => { const i = LIM.findIndex(x => ms < x); return i < 0 ? 12 : i; };
+  const ICON = c => c === 0 ? ['☀️', '晴'] : c <= 2 ? ['🌤️', '晴時多雲'] : c === 3 ? ['☁️', '陰'] : c <= 48 ? ['🌫️', '有霧'] : c <= 57 ? ['🌦️', '毛毛雨'] : c <= 67 ? ['🌧️', '雨'] : c <= 77 ? ['🌨️', '雪'] : c <= 82 ? ['🌦️', '陣雨'] : ['⛈️', '雷雨'];
+  const waveTxt = h => h == null ? '—' : h < 0.5 ? '平穩' : h < 1.25 ? '小浪' : h < 2.5 ? '中浪' : h < 4 ? '大浪' : '巨浪';
+  function risk(windMs, gustMs, wave) {
+    const w = bft(windMs), g = bft(gustMs);
+    if (w >= 6 || g >= 8 || (wave ?? 0) >= 2.5) return ['bad', '風浪大・不宜出海'];
+    if (w >= 5 || g >= 7 || (wave ?? 0) >= 1.25) return ['warn', '注意風浪'];
+    return ['ok', '適合出海'];
+  }
+  async function getJSON(url) { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }
+  let req = 0;
+  function load(force = false) {
+    if (loading && !force) return loading;
+    const my = ++req, a = AREAS[area];
+    loading = (async () => {
+      const [x, y] = await Promise.allSettled([getJSON(FC(a)), getJSON(MA(a))]);
+      if (my !== req) return;
+      if (x.status === 'fulfilled') { fc = x.value; error = ''; } else { fc = null; error = '天氣資料讀取失敗，請稍後再試'; }
+      ma = y.status === 'fulfilled' ? y.value : null;
+      render(); renderHome();
+    })();
+    return loading;
+  }
+  function setArea(v) { if (!AREAS[v]) return; area = v; lsSet('xb.wxArea', v); fc = null; ma = null; render(); renderHome(); load(true); }
+  const picker = () => `<div class="tide-toolbar"><label for="wxArea">區域（鄉市）</label><select id="wxArea">${Object.keys(AREAS).map(k => `<option${k === area ? ' selected' : ''}>${k}</option>`).join('')}</select></div>`;
+  const nowIdx = () => { if (!fc) return 0; const k = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hour12: false }).format(new Date()).replace(' ', 'T').slice(0, 13); const i = fc.hourly.time.findIndex(t => t.slice(0, 13) === k); return i < 0 ? 0 : i; };
+  const waveAt = t => { if (!ma?.hourly) return null; const i = ma.hourly.time.indexOf(t); return i < 0 ? null : ma.hourly.wave_height[i]; };
+  function nowHtml() {
+    const H = fc.hourly, i = nowIdx(), [ic, tx] = ICON(H.weather_code[i]);
+    const wave = waveAt(H.time[i]), [rc, rt] = risk(H.wind_speed_10m[i], H.wind_gusts_10m[i], wave);
+    return `<div class="wx-now"><span class="ic">${ic}</span><b>現在 ${Math.round(H.temperature_2m[i])}°C・${tx}<span class="wx-badge ${rc}">${rt}</span></b>
+      <p>💨 ${dirOf(H.wind_direction_10m[i])}風 ${bft(H.wind_speed_10m[i])} 級（${H.wind_speed_10m[i].toFixed(1)} m/s）・陣風 ${bft(H.wind_gusts_10m[i])} 級　🌊 浪高 ${wave == null ? '—' : `${wave.toFixed(1)} m（${waveTxt(wave)}）`}　☔ 降雨 ${H.precipitation_probability[i] ?? '—'}%</p></div>`;
+  }
+  function render() {
+    const box = $('wxPane');
+    if (!box) return;
+    if (!fc) { box.innerHTML = `${picker()}<div class="xb-empty">${error ? esc(error) : `正在讀取${area}風浪天氣…`}</div>`; return; }
+    const H = fc.hourly, D = fc.daily, i0 = nowIdx();
+    const hours = [];
+    for (let i = i0; i < Math.min(H.time.length, i0 + 25); i += 3) {
+      const wave = waveAt(H.time[i]);
+      hours.push(`<div class="wx-h"><b>${H.time[i].slice(11, 16)}</b><i>${ICON(H.weather_code[i])[0]}</i>${Math.round(H.temperature_2m[i])}°<br>${dirOf(H.wind_direction_10m[i])}風 ${bft(H.wind_speed_10m[i])} 級<br>陣風 ${bft(H.wind_gusts_10m[i])} 級<br>浪 ${wave == null ? '—' : wave.toFixed(1) + 'm'}</div>`);
+    }
+    const days = D.time.map((t, i) => {
+      const k = t.replace(/-/g, '/'), [ic, tx] = ICON(D.weather_code[i]);
+      const wave = ma?.daily?.wave_height_max?.[i] ?? null, [rc, rt] = risk(D.wind_speed_10m_max[i], D.wind_gusts_10m_max[i], wave);
+      return `<div class="wx-day"><span class="d"><b>${i === 0 ? '今天' : i === 1 ? '明天' : `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`}</b><small>星期${WEEK[weekdayOf(k)]}</small></span><span class="ic">${ic}</span>
+        <span class="m">${tx}・${Math.round(D.temperature_2m_min[i])}～${Math.round(D.temperature_2m_max[i])}°C・☔ ${D.precipitation_probability_max[i] ?? '—'}%<br>💨 ${dirOf(D.wind_direction_10m_dominant[i])}風 最大 ${bft(D.wind_speed_10m_max[i])} 級・陣風 ${bft(D.wind_gusts_10m_max[i])} 級　🌊 浪高 ${wave == null ? '—' : `${wave.toFixed(1)} m（${waveTxt(wave)}）`}</span>
+        <span class="wx-badge ${rc}">${rt}</span></div>`;
+    }).join('');
+    box.innerHTML = `${picker()}${nowHtml()}<div class="tide-label">${area}・未來 24 小時（每 3 小時）</div><div class="wx-hours">${hours.join('')}</div><div class="tide-label">未來 7 天</div><div class="wx-days">${days}</div>
+      <p class="wx-src">資料：Open-Meteo 公開氣象模式（${area}及外海），僅供參考；出海請以中央氣象署與港務單位公告為準。<button type="button" class="ev-link-btn" id="wxReload">🔄 重新整理</button></p>`;
+  }
+  function renderHome() {
+    const box = $('homeWx');
+    if (!box) return;
+    if (!fc) { box.innerHTML = `<span class="h-muted">${error ? esc(error) : '正在讀取風浪天氣…'}</span>`; return; }
+    box.className = '';
+    box.innerHTML = `<div class="h-sub" style="margin-top:0">${area}</div>` + nowHtml().replace('class="wx-now"', 'class="wx-now" style="box-shadow:none;border:0;padding:0;margin:0"');
+  }
+  document.addEventListener('click', e => { if (e.target.closest('#wxReload')) load(true); });
+  document.addEventListener('change', e => { if (e.target.id === 'wxArea') setArea(e.target.value); });
+  return { load, render, renderHome, get loaded() { return Boolean(fc); } };
+})();
+Wx.load();
 
 /* 啟動：讀取財務資料 */
 Remind.renderHome();
