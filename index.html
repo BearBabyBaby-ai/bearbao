@@ -966,7 +966,9 @@
     .xb-item .amt{text-align:right;font-weight:900;font-size:1rem;font-variant-numeric:tabular-nums;white-space:nowrap}
     .xb-item .amt.out{color:#c2410c}.xb-item .amt.in{color:#15803d}
     .xb-item .acts{display:flex;gap:5px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap}
+    .xb-item.rem{grid-template-columns:auto minmax(0,1fr)}
     @media(max-width:820px){
+      .xb-item.rem>div:last-child{grid-column:auto;display:block;border-top:0;padding-top:0}
       .xb-item{grid-template-columns:40px minmax(0,1fr);gap:8px 10px;padding:11px 12px}
       .xb-item>div:last-child{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:8px;border-top:1px dashed #e2ecef;padding-top:8px}
       .xb-item>div:last-child:not(:has(.amt)){justify-content:flex-end}
@@ -3827,8 +3829,7 @@ const Remind = (() => {
     const r = x.r, c = COLOR[r['類別']] || '#0a6fb3';
     const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）${r['時間'] && r['時間'] !== '09:00' ? ` ${r['時間']}` : ''}` : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
     const tagCls = { overdue: 'win', today: 'win', soon: 'late', later: 'wait', done: 'ok', nodate: 'miss' }[x.state];
-    return `<div class="xb-item" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div>
-      <div><div class="acts">${x.state !== 'done' ? `<button type="button" class="xb-btn sm" data-rem-done="${esc(r.ID)}">✔ 完成</button>` : ''}<button type="button" class="xb-btn sm" data-rem-edit="${esc(r.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-rem-del="${esc(r.ID)}">刪除</button></div></div></div>`;
+    return `<div class="xb-item rem" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div></div>`;
   }
   function render() {
     const list = $('remList');
