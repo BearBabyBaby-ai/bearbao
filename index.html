@@ -22,7 +22,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
   <style>
     /* =====================================================================
-       熊熊綜合系統｜全域版面
+       熊寶系統｜全域版面
        ===================================================================== */
     :root{--navy:#082f49;--blue:#075985;--sea:#0f8d96;--gold:#f4c430;--paper:#f7fbfc;--ink:#102a43;--muted:#607d8b;--line:#cfe4ea;--bg:#eef5f7;--shadow:0 18px 42px rgba(7,43,75,.2);--nav-h:62px}
     *{box-sizing:border-box}*[hidden]{display:none!important}
@@ -1153,7 +1153,7 @@
     </section>
 
     <!-- ================= 地圖 ================= -->
-    <section class="view" id="view-map" aria-label="熊熊的互動地圖" hidden>
+    <section class="view" id="view-map" aria-label="互動地圖" hidden>
       <aside class="panel">
         <section id="placeControls" class="controls">
           <input id="search" class="search" type="search" placeholder="搜尋名稱、分類、村里或地址" aria-label="搜尋地圖資料" autocomplete="off">
@@ -1304,7 +1304,7 @@
           </div>
 
           <section id="apPanel" class="panel" aria-live="polite">
-            <div class="empty">正在由熊熊綜合系統試算表自動載入班表…</div>
+            <div class="empty">正在載入航班…</div>
           </section>
 
           <section id="apMapSection" class="live-map-section" aria-label="班機即時地圖" hidden>
@@ -1375,10 +1375,9 @@
     <section class="view" id="view-remind" aria-label="重要資訊提醒" hidden>
       <div class="xb-page">
         <div class="xb-head">
-          <div><h2>🔔 重要資訊提醒</h2><p>繳費、證件到期、保養、預約…都記在「財務管理」試算表</p></div>
+          <div><h2>🔔 重要資訊提醒</h2><p>繳費、證件到期、保養、預約…</p></div>
           <div class="xb-row"><button type="button" class="xb-btn ghost" data-fin-sync>🔄 重新整理</button><button type="button" class="xb-btn" id="remCal">📅 同步到日曆</button><button type="button" class="xb-btn pri" id="remAdd">＋ 新增提醒</button></div>
         </div>
-        <p class="xb-note" style="margin:-6px 2px 10px">📱 提醒、熊熊綜合系統的「機票搶票」和「生日」會同步到 Google 日曆「熊寶系統提醒」，由手機的 Google 日曆準時通知（App 沒開也會提醒）。</p>
         <div id="remStatus" class="xb-status" aria-live="polite"></div>
         <div id="remChips" class="xb-chips" role="group" aria-label="提醒篩選"></div>
         <div id="remList" class="xb-list"></div>
@@ -1488,10 +1487,10 @@ async function loadSheetRows(spreadsheetId, { gid, sheet }, ms) {
 }
 
 /* =====================================================================
-   中央設定（熊熊綜合系統資料夾內的「熊熊綜合系統」試算表）
+   中央設定（熊寶系統資料夾內的「熊寶系統」試算表）
    讀不到時使用下方預設值，系統照常運作
    ===================================================================== */
-/* 所有資料都已統整在「熊熊綜合系統」試算表（熊熊綜合系統資料夾內），網頁只讀這一份 */
+/* 所有資料都已統整在「熊寶系統」試算表（熊寶系統資料夾內），網頁只讀這一份 */
 const HUB_ID = '1LOr4_3ugTHvTIi4UIfgVz2atVFh2K32zh7YKrrHxTwk';
 const HUB_SHEETS = { settings: { gid: '0', sheet: '系統設定' }, notices: { gid: '101', sheet: '公告' }, links: { gid: '102', sheet: '快速連結' } };
 /* 各工作表的 gid（gid 失效時會改用工作表名稱讀取） */
@@ -2012,7 +2011,7 @@ async function loadData() {
   const failed = [...new Set(results.map((r, i) => r.status === 'rejected' ? sheetConfigs[i].key : '').filter(Boolean))];
   const sets = results.filter(r => r.status === 'fulfilled').map(r => r.value);
   mapDataLoaded = true;
-  if (!sets.length) { resultCount.textContent = '資料讀取失敗'; regionCards.innerHTML = '<div class="empty">請確認來源試算表可讀取後重新整理</div>'; Home.renderPlaces(true); return; }
+  if (!sets.length) { resultCount.textContent = '資料讀取失敗'; regionCards.innerHTML = '<div class="empty">暫時無法讀取，請稍後重新整理</div>'; Home.renderPlaces(true); return; }
   allData = sets.flat();
   dataByKey = new Map(allData.map(d => [keyOf(d), d]));
   applyFilter();
@@ -2718,9 +2717,8 @@ const Flights = (() => {
   function showError(error) {
     dataStatus.textContent = '資料讀取失敗';
     panel.innerHTML = `<div class="error">
-      <h2>無法讀取「熊熊綜合系統」航班資料</h2>
-      <p>${escapeHTML(error.message || error)}</p>
-      <p>請確認試算表已設為「知道連結的任何人可檢視」，或使用「檔案 → 共用 → 發布到網路」發布；分頁名稱必須維持 <code>抵達航班</code> 與 <code>出發航班</code>；若表格顯示 #REF!，請開啟試算表並按上方「允許存取」。</p>
+      <h2>暫時無法讀取航班資料</h2>
+            <p>請稍後再試。</p>
       <p><button class="refresh" type="button" onclick="document.getElementById('apRefresh').click()">重新讀取</button></p>
     </div>`;
   }
@@ -2883,7 +2881,7 @@ const Cal = (() => {
       if (ac.status === 'fulfilled') list.push(...parseActivity(ac.value));
       items = list.sort((a, b) => a.start.localeCompare(b.start) || (a.time || '').localeCompare(b.time || ''));
       loaded = true;
-      if (sp.status === 'rejected' && ac.status === 'rejected') error = '月曆讀取失敗：請將「熊熊綜合系統」試算表設為「知道連結的任何人可檢視」';
+      if (sp.status === 'rejected' && ac.status === 'rejected') error = '月曆暫時無法讀取，請稍後再試';
       else if (sp.status === 'rejected' || ac.status === 'rejected') error = `部分未載入：${sp.status === 'rejected' ? '特殊日期' : '活動列表'}`;
       render();
       Home.renderCalendar();
@@ -3836,7 +3834,7 @@ const Remind = (() => {
   function render() {
     const list = $('remList');
     if (!list) return;
-    if (!Fin.ready()) { list.innerHTML = '<div class="xb-empty">請先到「財務管理」完成連線設定，提醒資料會存在財務管理試算表。<br><button type="button" class="xb-btn pri" data-go="finance" style="margin-top:10px">前往設定</button></div>'; $('remChips').innerHTML = ''; return; }
+    if (!Fin.ready()) { list.innerHTML = '<div class="xb-empty">請先到「財務管理」完成連線設定。<br><button type="button" class="xb-btn pri" data-go="finance" style="margin-top:10px">前往設定</button></div>'; $('remChips').innerHTML = ''; return; }
     if (!Fin.data) { list.innerHTML = `<div class="xb-empty">${Fin.error ? esc(Fin.error) : '正在讀取提醒…'}</div>`; return; }
     const items = all();
     const groups = { active: items.filter(x => x.state !== 'done'), alert: items.filter(x => ['overdue', 'today', 'soon'].includes(x.state)), done: items.filter(x => x.state === 'done'), all: items };
@@ -4002,7 +4000,7 @@ const Invoice = (() => {
     if (!Fin.ready()) { showView('finance'); return; }
     const sheet = Modal.open('📷 掃描電子發票', `<div class="xb-scan"><video playsinline muted></video><div class="frame"></div><p id="scanMsg">把發票左右兩個 QR Code 放進框內</p></div>
       <div class="xb-form-acts" style="justify-content:space-between"><label class="xb-btn">🖼 改選相片<input type="file" accept="image/*" id="scanFile" hidden></label><button type="button" class="xb-btn" data-xb-close>關閉</button></div>
-      <p class="xb-note">掃到後會自動帶出發票號碼、日期、金額與店家，確認後存到「發票存放」資料夾與財務管理試算表。</p>`, stopCamera);
+      <p class="xb-note">掃到後會自動帶出發票號碼、日期、金額與店家，確認後儲存。</p>`, stopCamera);
     const video = sheet.querySelector('video'), msg = sheet.querySelector('#scanMsg');
     sheet.querySelector('#scanFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) { stopCamera(); fromQRPhoto(f); } });
     try {
