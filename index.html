@@ -3812,7 +3812,7 @@ const Remind = (() => {
   }
   function itemHtml(x) {
     const r = x.r, c = COLOR[r['類別']] || '#0a6fb3';
-    const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）${r['時間'] && r['時間'] !== '09:00' ? ` ${r['時間']}` : ''}` : '', r['備註'] === '來源：熊熊綜合系統 特殊日期' ? '熊熊綜合系統' : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
+    const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）${r['時間'] && r['時間'] !== '09:00' ? ` ${r['時間']}` : ''}` : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
     const tagCls = { overdue: 'win', today: 'win', soon: 'late', later: 'wait', done: 'ok', nodate: 'miss' }[x.state];
     return `<div class="xb-item" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div>
       <div><div class="acts">${x.state !== 'done' ? `<button type="button" class="xb-btn sm" data-rem-done="${esc(r.ID)}">✔ 完成</button>` : ''}<button type="button" class="xb-btn sm" data-rem-edit="${esc(r.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-rem-del="${esc(r.ID)}">刪除</button></div></div></div>`;
