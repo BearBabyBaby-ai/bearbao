@@ -3864,14 +3864,14 @@ const Remind = (() => {
   /* 日曆同步結果 */
   function calMsg(c, ok) {
     if (!c) return ok;
-    if (c.error) return `${ok}，但 Google 日曆同步失敗：${c.error}（請在 Apps Script 選 syncCalendar_ 執行一次授權日曆）`;
+    if (c.error) return `${ok}，但 Google 日曆同步失敗：${c.error}（請在 Apps Script 選 syncCalendar 按「執行」授權日曆）`;
     return `${ok}・已同步到 Google 日曆「${c.calendar}」`;
   }
   async function syncCal(btn) {
     if (!Fin.ready()) { showView('finance'); return; }
     btn.disabled = true;
     try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步 ${c.total} 筆到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）`); }
-    catch (err) { toast('remStatus', `日曆同步失敗：${err.message}（請在 Apps Script 選 syncCalendar_ 執行一次授權日曆）`, true); }
+    catch (err) { toast('remStatus', `日曆同步失敗：${err.message}（請在 Apps Script 選 syncCalendar 按「執行」授權日曆）`, true); }
     finally { btn.disabled = false; }
   }
   document.addEventListener('click', e => {
