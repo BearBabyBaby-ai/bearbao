@@ -989,7 +989,7 @@
     #xbHelper{position:fixed;right:16px;bottom:18px;z-index:8000;display:flex;align-items:flex-end;gap:8px;pointer-events:none}
     #xbHelper.hide{display:none}
     .xb-bear{pointer-events:auto;position:relative;width:76px;height:76px;border:0;padding:0;background:transparent;border-radius:50%;animation:xbBob 3.2s ease-in-out infinite;filter:drop-shadow(0 8px 14px rgba(0,0,0,.28));-webkit-tap-highlight-color:transparent}
-    .xb-bear img{width:100%;height:100%;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px var(--tod-accent);display:block}
+    .xb-bear img{width:100%;height:100%;object-fit:cover;border-radius:50%;border:3px solid #fff;box-shadow:0 0 0 3px var(--tod-accent);display:block}
     .xb-bear::before,.xb-bear::after{content:"✦";position:absolute;color:var(--tod-accent);font-size:15px;text-shadow:0 0 6px #fff;animation:xbTwinkle 2.4s ease-in-out infinite}
     .xb-bear::before{top:-6px;left:-4px}
     .xb-bear::after{right:-6px;top:10px;animation-delay:1.2s;font-size:11px}
@@ -1004,6 +1004,8 @@
     .xb-bubble .xb-bnav{display:flex;justify-content:space-between;align-items:center;margin-top:7px;gap:8px}
     .xb-bubble .xb-bnav button{border:0;background:#fff7e6;color:#b45309;border-radius:8px;padding:4px 9px;font-weight:900;font-size:.74rem}
     .xb-bubble .xb-bnav small{color:#94a3b8;font-weight:800;font-size:.7rem}
+    .xb-bubble .xb-bbtns{display:flex;gap:6px}
+    .xb-bear img.sleep{object-view-box:inset(10% 12% 24% 22%)}
     .xb-bubble .xb-bx{position:absolute;right:6px;top:4px;border:0;background:none;color:#94a3b8;font-size:1rem;padding:2px 4px}
     @keyframes xbBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-7px) rotate(-3deg)}}
     @keyframes xbWave{0%,100%{transform:rotate(0)}25%{transform:rotate(-14deg)}75%{transform:rotate(14deg)}}
@@ -4300,8 +4302,8 @@ Fin.on(() => {
 const Helper = (() => {
   const wrap = document.createElement('div');
   wrap.id = 'xbHelper';
-  wrap.innerHTML = `<div class="xb-bubble" id="xbBubble" role="status" aria-live="polite" hidden><button type="button" class="xb-bx" aria-label="收起對話">✕</button><div id="xbBubbleText"></div><div class="xb-bnav"><small id="xbBubbleIdx"></small><button type="button" id="xbBubbleNext">下一則 ›</button></div></div>
-    <button type="button" class="xb-bear" id="xbBear" aria-label="小幫手熊寶"><img src="icons/bear-helper.png" alt=""><span class="zz">Zz</span><span class="dot"></span></button>`;
+  wrap.innerHTML = `<div class="xb-bubble" id="xbBubble" role="status" aria-live="polite" hidden><button type="button" class="xb-bx" aria-label="收起對話">✕</button><div id="xbBubbleText"></div><div class="xb-bnav"><small id="xbBubbleIdx"></small><span class="xb-bbtns"><button type="button" id="xbBubblePrev">‹ 上一則</button><button type="button" id="xbBubbleNext">下一則 ›</button></span></div></div>
+    <button type="button" class="xb-bear" id="xbBear" aria-label="小幫手熊寶"><img src="icons/bear-helper.png" alt="" referrerpolicy="no-referrer"><span class="zz">Zz</span><span class="dot"></span></button>`;
   document.body.appendChild(wrap);
   const bubble = wrap.querySelector('#xbBubble'), text = wrap.querySelector('#xbBubbleText'), bear = wrap.querySelector('#xbBear');
   let msgs = [], idx = 0, hideTimer = null, urgent = null;
@@ -4359,6 +4361,13 @@ const Helper = (() => {
   }
   bear.addEventListener('click', () => { bear.classList.remove('has-news'); urgent = null; if (bubble.hidden) { msgs = build(); show(0); } else show(idx + 1); });
   wrap.querySelector('#xbBubbleNext').addEventListener('click', () => show(idx + 1));
+  wrap.querySelector('#xbBubblePrev').addEventListener('click', () => show(idx - 1));
+  
+  const pic = bear.querySelector('img');
+  const DAY_PIC = 'icons/bear-helper.png', NIGHT_PIC = 'https://drive.google.com/thumbnail?id=1B4FiE5BU0UeEsaCmYKfWt2DSv4QZUARW&sz=w240';
+  pic.addEventListener('error', () => { if (pic.getAttribute('src') !== DAY_PIC) { pic.src = DAY_PIC; pic.classList.remove('sleep'); } });
+  const setPic = () => { const want = Tod.current() === 'night' ? NIGHT_PIC : DAY_PIC; if (pic.getAttribute('src') !== want) pic.src = want; pic.classList.toggle('sleep', want === NIGHT_PIC); };
+  setPic(); setInterval(setPic, 60000);
   wrap.querySelector('.xb-bx').addEventListener('click', () => { bubble.hidden = true; });
   
   let press = null;
