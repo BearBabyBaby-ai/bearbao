@@ -3800,7 +3800,8 @@ const Remind = (() => {
     const state = done ? 'done' : days === null ? 'nodate' : days < 0 ? 'overdue' : days === 0 ? 'today' : days <= Math.max(lead, 0) ? 'soon' : 'later';
     return { r, d, days, state };
   }
-  const all = () => (Fin.data?.reminders || []).map(decorate).sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999'));
+  /* 過期（不重複且日期已過）的提醒直接遮蔽，不顯示 */
+  const all = () => (Fin.data?.reminders || []).map(decorate).filter(x => x.state !== 'overdue').sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999'));
   const alerting = () => all().filter(x => ['overdue', 'today', 'soon'].includes(x.state));
   function cdText(x) {
     if (x.state === 'done') return '已完成';
@@ -3870,7 +3871,7 @@ const Remind = (() => {
   async function syncCal(btn) {
     if (!Fin.ready()) { showView('finance'); return; }
     btn.disabled = true;
-    try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步 ${c.total} 筆到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）`); }
+    try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）${c.note ? `・${c.note}，可再按一次` : `・共 ${c.total} 筆`}`); }
     catch (err) { toast('remStatus', `日曆同步失敗：${err.message}（請在 Apps Script 選 syncCalendar 按「執行」授權日曆）`, true); }
     finally { btn.disabled = false; }
   }
