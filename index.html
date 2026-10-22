@@ -806,6 +806,9 @@
     .ev-panel .ev-mode-btn[data-ev-mode="lantern"].active{background:linear-gradient(135deg,#991b1b,#d97706)!important;color:#fff;box-shadow:0 4px 12px rgba(153,27,27,.28)!important}
     .ev-panel .ev-mode-btn[data-ev-mode="fire"].active{background:linear-gradient(135deg,#1e1b4b,#6d28d9)!important;color:#fff;box-shadow:0 4px 12px rgba(76,29,149,.3)!important}
     .ev-tools{display:grid;gap:12px}
+    /* 統計磚與下方類別、標題重複，不顯示 */
+    #evLive{display:none!important}
+    .ev-filterbar{border-top:0!important;padding-top:0!important}
     .ev-tools[hidden]{display:none!important}
     .ev-panel .ev-live{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px;margin:0}
     .ev-panel .ev-live button{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;align-items:end;background:linear-gradient(135deg,color-mix(in srgb,var(--c) 10%,#fff),#fff)!important;color:#102a43;border:1px solid color-mix(in srgb,var(--c) 30%,#fff)!important;border-left:5px solid var(--c)!important;border-radius:14px;padding:10px 12px;text-align:left;box-shadow:none!important}
