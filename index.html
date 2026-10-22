@@ -3783,9 +3783,9 @@ function periodDates(code) {
    重要資訊提醒
    --------------------------------------------------------------------- */
 const Remind = (() => {
-  const CATS = ['一般', '繳費', '證件', '保險', '車輛保養', '稅務', '醫療', '預約', '生日紀念', '其他'];
-  const ICON = { '繳費': '💳', '證件': '🪪', '保險': '🛡️', '車輛保養': '🔧', '稅務': '🧾', '醫療': '🏥', '預約': '📌', '生日紀念': '🎂', '其他': '📎', '一般': '🔔' };
-  const COLOR = { '繳費': '#ea580c', '證件': '#7c3aed', '保險': '#0891b2', '車輛保養': '#2563eb', '稅務': '#b45309', '醫療': '#dc2626', '預約': '#16a34a', '生日紀念': '#db2777' };
+  const CATS = ['一般', '繳費', '證件', '保險', '車輛保養', '稅務', '醫療', '預約', '生日紀念', '機票搶票', '節日', '其他'];
+  const ICON = { '繳費': '💳', '證件': '🪪', '保險': '🛡️', '車輛保養': '🔧', '稅務': '🧾', '醫療': '🏥', '預約': '📌', '生日紀念': '🎂', '機票搶票': '🎫', '節日': '🎉', '其他': '📎', '一般': '🔔' };
+  const COLOR = { '繳費': '#ea580c', '證件': '#7c3aed', '保險': '#0891b2', '車輛保養': '#2563eb', '稅務': '#b45309', '醫療': '#dc2626', '預約': '#16a34a', '生日紀念': '#db2777', '機票搶票': '#ea580c', '節日': '#dc2626' };
   let filter = 'active';
   function next(r, k = todayKey()) {
     let d = dateKeyOf(r['提醒日期']);
@@ -3812,7 +3812,7 @@ const Remind = (() => {
   }
   function itemHtml(x) {
     const r = x.r, c = COLOR[r['類別']] || '#0a6fb3';
-    const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）` : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
+    const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）${r['時間'] && r['時間'] !== '09:00' ? ` ${r['時間']}` : ''}` : '', /^S-/.test(r.ID) ? '熊熊綜合系統' : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
     const tagCls = { overdue: 'win', today: 'win', soon: 'late', later: 'wait', done: 'ok', nodate: 'miss' }[x.state];
     return `<div class="xb-item" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div>
       <div><div class="acts">${x.state !== 'done' ? `<button type="button" class="xb-btn sm" data-rem-done="${esc(r.ID)}">✔ 完成</button>` : ''}<button type="button" class="xb-btn sm" data-rem-edit="${esc(r.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-rem-del="${esc(r.ID)}">刪除</button></div></div></div>`;
@@ -3834,6 +3834,7 @@ const Remind = (() => {
       ${field({ name: '標題', label: '標題', value: r['標題'], required: true, full: true, placeholder: '例如：汽車保險到期、繳房屋稅' })}
       ${field({ name: '類別', label: '類別', type: 'select', options: CATS, value: r['類別'] || '一般' })}
       ${field({ name: '提醒日期', label: '日期', type: 'date', value: dateInput(dateKeyOf(r['提醒日期']) || todayKey()) })}
+      ${field({ name: '時間', label: '時間', type: 'time', value: r['時間'] || '09:00' })}
       ${field({ name: '提前提醒天數', label: '提前幾天提醒', type: 'number', value: r['提前提醒天數'] ?? 3, inputmode: 'numeric' })}
       ${field({ name: '重複', label: '重複', type: 'select', options: ['不重複', '每月', '每年'], value: r['重複'] || '不重複' })}
       ${field({ name: '內容', label: '內容', type: 'textarea', value: r['內容'], full: true })}
@@ -3871,7 +3872,7 @@ const Remind = (() => {
   async function syncCal(btn) {
     if (!Fin.ready()) { showView('finance'); return; }
     btn.disabled = true;
-    try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）${c.note ? `・${c.note}，可再按一次` : `・共 ${c.total} 筆`}`); }
+    try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）${c.note ? `・${c.note}，可再按一次` : `・共 ${c.total} 筆`}`); await Fin.sync(true); }
     catch (err) { toast('remStatus', `日曆同步失敗：${err.message}（請在 Apps Script 選 syncCalendar 按「執行」授權日曆）`, true); }
     finally { btn.disabled = false; }
   }
