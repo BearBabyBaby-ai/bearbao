@@ -1590,24 +1590,10 @@ const PAGE_SIZE = 150, NEARBY_LIMIT = 40;
 const MAP_HOME = [23.49, 119.555];
 
 const map = L.map('map', { zoomControl: true, minZoom: 9, maxZoom: 20, preferCanvas: true }).setView(MAP_HOME, 10);
-/* 底圖：CARTO → OpenStreetMap → Esri，前一個讀不到就自動換下一個 */
-const BASEMAPS = [
-  { url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', opt: { subdomains: 'abcd', maxZoom: 20, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>' } },
-  { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', opt: { maxZoom: 19, maxNativeZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' } },
-  { url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', opt: { maxZoom: 19, maxNativeZoom: 19, attribution: 'Tiles &copy; Esri' } }
-];
-let baseIdx = 0, baseLayer = null;
-function useBasemap(i) {
-  if (baseLayer) map.removeLayer(baseLayer);
-  baseIdx = i;
-  const b = BASEMAPS[i];
-  let ok = 0, bad = 0;
-  baseLayer = L.tileLayer(b.url, { ...b.opt, crossOrigin: false }).addTo(map);
-  baseLayer.on('tileload', () => { ok++; });
-  baseLayer.on('tileerror', () => { bad++; if (!ok && bad >= 3 && baseIdx + 1 < BASEMAPS.length) useBasemap(baseIdx + 1); });
-  baseLayer.bringToBack();
-}
-useBasemap(0);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png?key=cb1_3qao_1_baf91fd3ee5516cb4c7af7dd', {
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, &copy; <a href="https://carto.com/attributions">CARTO</a>',
+  subdomains: 'abcd', maxZoom: 20
+}).addTo(map);
 L.control.scale({ imperial: false, position: 'bottomright' }).addTo(map);
 const dataLayer = (typeof L.markerClusterGroup === 'function')
   ? L.markerClusterGroup({ disableClusteringAtZoom: 17, maxClusterRadius: 45, chunkedLoading: true, showCoverageOnHover: false })
@@ -4144,7 +4130,7 @@ const Finance = (() => {
         <div class="xb-card"><h3>📈 近 6 個月支出</h3><div class="xb-bars">${months.map((mm, i) => `<div class="xb-bar" style="--c:#f59e0b"><span>${Number(mm.slice(5))} 月</span><i style="width:${Math.round(mOut[i] / maxM * 100)}%"></i><span>$${money(mOut[i])}</span></div>`).join('')}</div>
           <h3 style="margin-top:14px">🧩 本月支出類別</h3>${cats.length ? `<div class="xb-bars">${cats.map(([c, v], i) => `<div class="xb-bar" style="--c:${PAL[i % PAL.length]}"><span>${esc(c)}</span><i style="width:${Math.round(v / maxC * 100)}%"></i><span>$${money(v)}</span></div>`).join('')}</div>` : '<p class="xb-note">本月還沒有支出紀錄</p>'}</div>
         <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="scan">📷 掃描電子發票</button><button type="button" class="xb-btn" data-fin-act="paper">🧾 紙本發票</button><button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
-          ${oil ? `<p class="xb-note">今日中油牌價（${esc(oil['生效日期'])} 起）：92 <b>${esc(oil['92無鉛'])}</b>・95 <b>${esc(oil['95無鉛'])}</b>・98 <b>${esc(oil['98無鉛'])}</b>・柴油 <b>${esc(oil['超級柴油'])}</b></p>` : ''}
+          ${oil ? `<p class="xb-note">中油馬公站油價（${esc(oil['生效日期'])} 起）：92 <b>${esc(oil['92無鉛'])}</b>・95 <b>${esc(oil['95無鉛'])}</b>・98 <b>${esc(oil['98無鉛'])}</b>・柴油 <b>${esc(oil['超級柴油'])}</b></p>` : ''}
           <p class="xb-note">資料更新：${esc(D().time || '—')}</p></div>
       </div>`;
   }
@@ -4202,7 +4188,7 @@ const Finance = (() => {
     const cur = list[0], prev = list[1];
     const diff = key => { if (!cur || !prev) return ''; const d = Math.round((numOf(cur[key]) - numOf(prev[key])) * 10) / 10; return d > 0 ? `▲ ${d}` : d < 0 ? `▼ ${-d}` : '持平'; };
     const tiles = [['92無鉛', '#16a34a'], ['95無鉛', '#2563eb'], ['98無鉛', '#7c3aed'], ['超級柴油', '#b45309']];
-    return `<div class="xb-row" style="margin-bottom:12px"><span class="xb-note" style="margin:0">中油自營站參考牌價（元／公升）${cur ? `・${esc(cur['生效日期'])} 起` : ''}</span><button type="button" class="xb-btn pri" data-fin-act="oil" style="margin-left:auto">🔄 更新油價</button></div>
+    return `<div class="xb-row" style="margin-bottom:12px"><span class="xb-note" style="margin:0">中油馬公站零售價（元／公升）${cur ? `・${esc(cur['生效日期'])} 起` : ''}</span><button type="button" class="xb-btn pri" data-fin-act="oil" style="margin-left:auto">🔄 更新油價</button></div>
       ${cur ? `<div class="xb-oil">${tiles.map(([k, c]) => `<div style="--c:${c}"><small>${k}</small><b>${esc(cur[k])}</b><em>${diff(k)}</em></div>`).join('')}</div>` : '<div class="xb-empty">尚未抓取油價，請按「更新油價」（每天第一次打開 App 也會自動更新）</div>'}
       ${list.length > 1 ? `<div class="xb-card xb-wrap" style="margin-top:14px"><h3>📜 油價歷史</h3><table class="xb-table"><thead><tr><th>生效日期</th><th>92</th><th>95</th><th>98</th><th>柴油</th></tr></thead><tbody>${list.slice(0, 30).map(o => `<tr><td>${esc(o['生效日期'])}</td><td>${esc(o['92無鉛'])}</td><td>${esc(o['95無鉛'])}</td><td>${esc(o['98無鉛'])}</td><td>${esc(o['超級柴油'])}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
   }
