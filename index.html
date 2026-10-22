@@ -862,14 +862,10 @@
     @media(max-width:820px){.ev-grid{grid-template-columns:1fr!important}.ev-ticket{grid-template-columns:66px minmax(0,1fr)}.ev-date b{font-size:1.12rem}}
 
     
-    .map-mode{display:none}
     @media(max-width:820px){
-      .map-mode{display:flex;gap:6px;margin-top:9px}
-      .map-mode button{flex:1;border:1px solid var(--line);background:#fff;border-radius:11px;padding:9px 6px;font-weight:900;color:#315767;font-size:.86rem}
-      .map-mode button.active{background:#16a34a;border-color:#15803d;color:#fff}
       #view-map .card-table{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;background:transparent!important;border:0!important}
       #view-map .regions .card-table{background:transparent;border:0}
-      .m-card{display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(7,43,75,.08);color:inherit;text-align:left;min-width:0}
+      .m-card{text-decoration:none;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 4px 12px rgba(7,43,75,.08);color:inherit;text-align:left;min-width:0}
       .m-card.is-closed{opacity:.75}
       .m-pic{position:relative;display:flex;align-items:center;justify-content:center;height:120px;flex:none;overflow:hidden;background:linear-gradient(135deg,#d9f1f2,#e9effc);color:#fff;font-size:1.6rem;font-weight:900}
       .m-pic img{display:block;flex:none;width:100%;height:100%;object-fit:cover}
@@ -877,26 +873,10 @@
       .m-body{padding:8px 9px 9px;display:flex;flex-direction:column;gap:3px;min-width:0;flex:1}
       .m-body b{font-size:.88rem;line-height:1.35;color:#102a43;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
       .m-body small{font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      .m-btns{display:flex;gap:5px;margin-top:auto;padding-top:5px}
-      .m-btns a,.m-btns span{flex:1;text-align:center;border-radius:8px;padding:6px 2px;font-size:.74rem;font-weight:900;text-decoration:none}
-      .m-btns span{background:#e7f6ec;color:#15803d}
-      .m-btns a{background:#0ea5e9;color:#fff}
+      .m-body small.m-food{color:#7c2d12;white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
       #view-map .load-more{grid-column:1/-1;border-radius:12px;border:1px solid var(--line)}
       #view-map .card-table .empty{grid-column:1/-1}
-      #view-map.m-map .content{display:none}
-      #view-map.m-map .controls{padding:9px 10px 8px}
-      #view-map.m-map .type-filters{display:flex;overflow-x:auto;gap:6px;margin-top:7px;scrollbar-width:none}
-      #view-map.m-map .filter{flex:0 0 auto;padding:7px 13px}
-      #view-map.m-map .summary{display:none}
-      #view-map.m-map .region-picker{margin-top:7px}
-      #view-map.m-map .panel{flex:0 0 auto;height:auto}
-      #view-map.m-map .map-wrap{display:flex!important;flex:1;min-height:0}
-      #view-map.m-map .topbar .map-chip{display:none}
-      #view-map.m-map .legend{max-width:100%;font-size:.7rem;padding:6px 8px}
-      #view-map.m-map .ev-toggle:not([hidden]){display:block!important}
-      #view-map.m-map .nearby-panel{max-height:46%}
-      #view-map.m-map #subFilters{max-height:72px;overflow-y:auto}
-      .ev-btn[data-place-key]{display:inline-block!important}
+      #mapState{display:none}
     }
 
     
@@ -1134,7 +1114,6 @@
           <div id="subFilters" class="sub-filters" hidden></div>
           <div class="summary"><span id="resultCount">正在讀取資料…</span><span id="mapState">圖釘預設隱藏</span></div>
           <button type="button" id="evPinToggle" class="ev-toggle" hidden></button>
-          <div class="map-mode" id="mapMode" role="tablist" aria-label="顯示方式"><button type="button" class="active" data-mm="list">🗂 卡片清單</button><button type="button" data-mm="map">🗺 地圖模式</button></div>
         </section>
         <div class="content" id="contentPane">
           <div id="regionCards" class="regions"></div>
@@ -1793,7 +1772,7 @@ map.on('zoomend moveend', debounce(refreshLabels, 150));
 function renderMarkers() {
   dataLayer.clearLayers();
   markerMap = new Map();
-  const showPins = Boolean(activeRegion || activeType || searchInput.value.trim() || (isMobile() && mobileMap));
+  const showPins = Boolean(activeRegion || activeType || searchInput.value.trim());
   if (showPins) {
     if (typeof dataLayer.addLayers === 'function') {
       const markers = visibleData.map(d => { const m = buildMarker(d); markerMap.set(keyOf(d), m); return m; });
@@ -1807,7 +1786,6 @@ function renderMarkers() {
 }
 
 function focusPlace(d, source = 'list') {
-  if (isMobile() && !mobileMap) setMapMode('map');
   const marker = createMarker(d);
   if (!isMobile()) mapState.textContent = `目前定位：${d.name}`;
   if (source === 'list') { map.closePopup(); renderNearby(d); }
@@ -1823,7 +1801,7 @@ function selectRegion(region) {
   nearbyPanel.hidden = true;
   map.closePopup();
   applyFilter();
-  if (!isMobile() || mobileMap) {
+  if (!isMobile()) {
     const cfg = regionConfig[region];
     if (cfg) map.flyTo(cfg.center, cfg.zoom); else map.flyTo(MAP_HOME, 10);
   }
@@ -1840,7 +1818,8 @@ function rowHtml(d) {
     const km = mapUserPos ? distanceKm(mapUserPos, d) : null;
     const dist = km === null ? '' : `・${km < 1 ? `${Math.round(km * 1000)} m` : `${km.toFixed(1)} km`}`;
     const pic = src ? `<img${isCatPic(src) ? ' class="cat-pic"' : ''} src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc(typeGlyph[d.type] || '點');
-    return `<div class="m-card${isClosed(d) ? ' is-closed' : ''}" data-key="${esc(keyOf(d))}" role="button" tabindex="0"><span class="m-pic" style="${src ? '' : `background:${color};`}--tc:${color}">${pic}<i>${esc(d.type)}</i></span><span class="m-body"><b>${esc(d.name)}${closed}</b><small>${esc([d.region, d.village].filter(Boolean).join('・'))}${dist}</small><small>${esc(rowMeta(d))}</small><span class="m-btns"><span>🗺 地圖</span><a href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer">導航</a></span></span></div>`;
+    const food = d.type === '美食' ? [d.recommendation && `推薦：${d.recommendation}`, d.hours && `營業：${d.hours}`, d.phone && `電話：${d.phone}`].filter(Boolean).map(x => `<small class="m-food">${esc(x)}</small>`).join('') : '';
+    return `<a class="m-card${isClosed(d) ? ' is-closed' : ''}" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer"><span class="m-pic" style="${src ? '' : `background:${color};`}--tc:${color}">${pic}<i>${esc(d.type)}</i></span><span class="m-body"><b>${esc(d.name)}${closed}</b><small>${esc([d.region, d.village].filter(Boolean).join('・'))}${dist}</small><small>${esc(rowMeta(d))}</small>${food}</span></a>`;
   }
   return `<div class="${cls}" data-key="${esc(keyOf(d))}" role="button" tabindex="0">${content}</div>`;
 }
@@ -1864,8 +1843,6 @@ function appendCards() {
 }
 regionCards.addEventListener('click', e => {
   if (e.target.closest('.load-more')) { appendCards(); return; }
-  const mc = e.target.closest('.m-card');
-  if (mc) { if (e.target.closest('a')) return; const d = dataByKey.get(mc.dataset.key); if (d) { setMapMode('map'); setTimeout(() => focusPlace(d), 150); } return; }
   const row = e.target.closest('div.data-row');
   if (row) { const d = dataByKey.get(row.dataset.key); if (d) focusPlace(d); }
 });
@@ -1997,23 +1974,6 @@ subFilters.addEventListener('click', e => {
 });
 searchInput.addEventListener('input', debounce(applyFilter, 220));
 regionSelect.addEventListener('change', e => selectRegion(e.target.value));
-
-var mobileMap = false;
-function setMapMode(mode) {
-  mobileMap = mode === 'map';
-  $('view-map').classList.toggle('m-map', mobileMap);
-  document.querySelectorAll('#mapMode [data-mm]').forEach(b => b.classList.toggle('active', (b.dataset.mm === 'map') === mobileMap));
-  if (!isMobile()) return;
-  renderMarkers();
-  if (mobileMap) setTimeout(() => {
-    map.invalidateSize();
-    const cfg = regionConfig[activeRegion];
-    if (cfg) map.setView(cfg.center, cfg.zoom);
-    else if (mapUserPos) map.setView([mapUserPos.lat, mapUserPos.lng], 14);
-  }, 80);
-  else { nearbyPanel.hidden = true; map.closePopup(); }
-}
-$('mapMode').addEventListener('click', e => { const b = e.target.closest('[data-mm]'); if (b) setMapMode(b.dataset.mm); });
 window.addEventListener('resize', debounce(() => {
   const mobile = isMobile();
   if (mobile !== lastMobile) { lastMobile = mobile; renderCards(); }
@@ -3180,6 +3140,7 @@ const Events = (() => {
   function goPlace(key) {
     const d = dataByKey.get(key);
     if (!d) return;
+    if (isMobile()) { window.open(getTargetUrl(d), '_blank', 'noopener'); return; }
     showView('map');
     setTimeout(() => focusPlace(d), 220);
   }
@@ -4530,10 +4491,19 @@ if (Fin.ready()) Fin.sync().catch(() => {});
       else if (!open && modalPushed) { modalPushed = false; skipPop = true; try { history.back(); } catch (_) { skipPop = false; } }
     }).observe(modal, { attributes: true, attributeFilter: ['class'] });
   }
+  let xbPushed = false;
+  const xbBox = document.querySelector('.xb-modal');
+  if (xbBox) {
+    new MutationObserver(() => {
+      const open = !xbBox.hidden;
+      if (open && !xbPushed) { xbPushed = true; try { history.pushState({ modal: 2 }, '', location.hash); } catch (_) {} }
+      else if (!open && xbPushed) { xbPushed = false; skipPop = true; try { history.back(); } catch (_) { skipPop = false; } }
+    }).observe(xbBox, { attributes: true, attributeFilter: ['hidden'] });
+  }
   window.addEventListener('popstate', () => {
     if (skipPop) { skipPop = false; return; }
     if (modalPushed) { modalPushed = false; closeImageModal(); return; }
-    if (typeof Modal !== 'undefined' && Modal.isOpen) { Modal.close(); }
+    if (xbPushed) { xbPushed = false; Modal.close(); return; }
     const view = (location.hash || '').replace('#', '') || 'home';
     if (view === currentView) return;
     restoring = true;
