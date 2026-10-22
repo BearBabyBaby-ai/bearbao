@@ -789,6 +789,14 @@
     .ev-desc-more{align-self:flex-start;border:0;background:none;color:var(--blue);font-weight:900;font-size:.76rem;padding:0}
     .ev-ticket .ev-place{margin-top:2px;border-radius:12px}
     .ev-ticket .ev-actions{border-top:1px dashed #e3edf0;padding-top:7px}
+    /* 風浪天氣（首頁卡片） */
+    .wx-area{border:1px solid #b9d5dc;border-radius:9px;padding:5px 8px;background:#fff;font-weight:800;color:#0b3954;font-size:.82rem}
+    .wx-toggle{display:block;width:100%;border:0;background:transparent;padding:0;text-align:left;color:inherit}
+    .wx-toggle:hover .wx-more{text-decoration:underline}
+    .wx-now.wx-flat{box-shadow:none;border:0;padding:0;margin:0;background:transparent}
+    .wx-more{display:block;margin-top:8px;color:var(--blue);font-weight:900;font-size:.8rem}
+    #homeWx .wx-hours{margin-top:4px}
+    #homeWx .wx-h{flex-basis:78px}
     /* 風浪天氣 */
     .wx-now{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 16px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:0 8px 22px rgba(7,43,75,.08);margin-bottom:12px}
     .wx-now .ic{font-size:2.6rem;line-height:1;grid-row:span 2}
@@ -807,6 +815,16 @@
     .wx-day .m{color:#334155;line-height:1.55}
     .wx-src{font-size:.74rem;color:#64748b;margin-top:10px}
     @media(max-width:820px){.wx-day{grid-template-columns:60px 30px minmax(0,1fr);}.wx-day .wx-badge{grid-column:1/-1;justify-self:start;margin:0}}
+    /* 首頁（電腦版）：3 欄等高卡片，活動整列 */
+    .h-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:16px!important;align-items:stretch}
+    .h-grid>.h-card{display:flex;flex-direction:column;border-radius:20px;padding:16px 18px 18px;box-shadow:0 10px 26px rgba(7,43,75,.09)}
+    .h-grid>.h-card.h-full{grid-column:1/-1}
+    #homeLive .h-live-chips{display:none}
+    .h-grid>.h-card>.h-head{padding-bottom:10px;margin-bottom:12px;border-bottom:1px dashed #e2ecef}
+    .h-hero{border-radius:22px!important;padding:22px 24px!important;margin-bottom:16px!important}
+    .home{max-width:1360px!important}
+    @media(max-width:1100px){.h-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+    @media(max-width:820px){.h-grid{grid-template-columns:1fr!important;gap:12px!important}.h-grid>.h-card{padding:14px 15px 15px}}
     /* 熊寶分類圖（沒有圖資時）：保留熊寶臉部 */
     img.cat-pic{object-position:center 28%!important}
     .m-pic img.cat-pic{object-position:center 30%!important}
@@ -1086,6 +1104,10 @@
         </section>
         <div class="h-grid">
           <article class="h-card">
+            <div class="h-head"><h3><i>🌬️</i>今日風浪</h3><button type="button" class="h-more" data-go="tide" data-tm-go="wx">7 天預報 ›</button></div>
+            <div id="homeWx" class="h-muted">正在讀取風浪天氣…</div>
+          </article>
+          <article class="h-card">
             <div class="h-head"><h3><i>🌊</i>奎壁山今日分海</h3><button type="button" class="h-more" data-go="tide">潮汐分海 ›</button></div>
             <div id="homeTide" class="h-muted">正在讀取分海資料…</div>
           </article>
@@ -1094,24 +1116,20 @@
             <div id="homeFlight" class="h-muted">正在讀取航班資料…</div>
           </article>
           <article class="h-card">
-            <div class="h-head"><h3><i>🎫</i>機票搶票提醒</h3><button type="button" class="h-more" data-go="calendar">月曆 ›</button></div>
-            <div id="homeTicket" class="h-muted">正在讀取月曆…</div>
-          </article>
-          <article class="h-card h-full" id="hcEvents" hidden>
-            <div class="h-head"><h3><i>🎉</i>進行中／即將開始的活動（14 天內）</h3><button type="button" class="h-more" data-go="events">活動專區 ›</button></div>
-            <div id="homeLive"></div>
-          </article>
-          <article class="h-card">
-            <div class="h-head"><h3><i>🌬️</i>今日風浪</h3><button type="button" class="h-more" data-go="tide" data-tm-go="wx">7 天預報 ›</button></div>
-            <div id="homeWx" class="h-muted">正在讀取風浪天氣…</div>
-          </article>
-          <article class="h-card">
             <div class="h-head"><h3><i>🔔</i>重要資訊提醒</h3><button type="button" class="h-more" data-go="remind">全部提醒 ›</button></div>
             <div id="homeRemind" class="h-muted">正在讀取提醒…</div>
           </article>
-          <article class="h-card wide2">
+          <article class="h-card">
+            <div class="h-head"><h3><i>🎫</i>機票搶票提醒</h3><button type="button" class="h-more" data-go="calendar">月曆 ›</button></div>
+            <div id="homeTicket" class="h-muted">正在讀取月曆…</div>
+          </article>
+          <article class="h-card">
             <div class="h-head"><h3><i>💰</i>財務摘要</h3><button type="button" class="h-more" data-go="finance">財務管理 ›</button></div>
             <div id="homeFinance" class="h-muted">正在讀取…</div>
+          </article>
+          <article class="h-card h-full" id="hcEvents" hidden>
+            <div class="h-head"><h3><i>🎉</i>進行中／即將開始的活動（14 天內）</h3><button type="button" class="h-more" data-go="events">活動資訊 ›</button></div>
+            <div id="homeLive"></div>
           </article>
         </div>
       </div>
@@ -1341,8 +1359,9 @@
       <div class="xb-page">
         <div class="xb-head">
           <div><h2>🔔 重要資訊提醒</h2><p>繳費、證件到期、保養、預約…都記在「財務管理」試算表</p></div>
-          <div class="xb-row"><button type="button" class="xb-btn ghost" data-fin-sync>🔄 重新整理</button><button type="button" class="xb-btn pri" id="remAdd">＋ 新增提醒</button></div>
+          <div class="xb-row"><button type="button" class="xb-btn ghost" data-fin-sync>🔄 重新整理</button><button type="button" class="xb-btn" id="remCal">📅 同步到日曆</button><button type="button" class="xb-btn pri" id="remAdd">＋ 新增提醒</button></div>
         </div>
+        <p class="xb-note" style="margin:-6px 2px 10px">📱 提醒、熊熊綜合系統的「機票搶票」和「生日」會同步到 Google 日曆「熊寶系統提醒」，由手機的 Google 日曆準時通知（App 沒開也會提醒）。</p>
         <div id="remStatus" class="xb-status" aria-live="polite"></div>
         <div id="remChips" class="xb-chips" role="group" aria-label="提醒篩選"></div>
         <div id="remList" class="xb-list"></div>
@@ -3826,7 +3845,7 @@ const Remind = (() => {
       v['提醒日期'] = v['提醒日期'].replace(/-/g, '/');
       if (id) v.ID = id;
       e.target.disabled = true; e.target.textContent = '儲存中…';
-      try { await Fin.call('saveReminder', { item: v }); Modal.close(); toast('remStatus', '✅ 已儲存提醒'); await Fin.sync(true); }
+      try { const r = await Fin.call('saveReminder', { item: v }); Modal.close(); toast('remStatus', calMsg(r._calendar, '✅ 已儲存提醒'), Boolean(r._calendar && r._calendar.error)); await Fin.sync(true); }
       catch (err) { e.target.disabled = false; e.target.textContent = '儲存'; alert(err.message); }
     });
   }
@@ -3836,14 +3855,28 @@ const Remind = (() => {
     const item = { ...r };
     if (r['重複'] && r['重複'] !== '不重複') item['提醒日期'] = addMonthsKey(next(r), r['重複'] === '每月' ? 1 : 12);   /* 重複提醒：完成後換到下一次 */
     else item['狀態'] = '已完成';
-    try { await Fin.call('saveReminder', { item }); toast('remStatus', '✅ 已更新'); await Fin.sync(true); } catch (err) { toast('remStatus', err.message, true); }
+    try { const r = await Fin.call('saveReminder', { item }); toast('remStatus', calMsg(r._calendar, '✅ 已更新'), Boolean(r._calendar && r._calendar.error)); await Fin.sync(true); } catch (err) { toast('remStatus', err.message, true); }
   }
   async function del(id) {
     if (!confirm('確定刪除這筆提醒？')) return;
-    try { await Fin.call('deleteReminder', { id }); toast('remStatus', '🗑 已刪除'); await Fin.sync(true); } catch (err) { toast('remStatus', err.message, true); }
+    try { const r = await Fin.call('deleteReminder', { id }); toast('remStatus', calMsg(r._calendar, '🗑 已刪除'), Boolean(r._calendar && r._calendar.error)); await Fin.sync(true); } catch (err) { toast('remStatus', err.message, true); }
+  }
+  /* 日曆同步結果 */
+  function calMsg(c, ok) {
+    if (!c) return ok;
+    if (c.error) return `${ok}，但 Google 日曆同步失敗：${c.error}（請在 Apps Script 選 syncCalendar_ 執行一次授權日曆）`;
+    return `${ok}・已同步到 Google 日曆「${c.calendar}」`;
+  }
+  async function syncCal(btn) {
+    if (!Fin.ready()) { showView('finance'); return; }
+    btn.disabled = true;
+    try { const c = await Fin.call('syncCalendar', {}, 90000); toast('remStatus', `✅ 已同步 ${c.total} 筆到 Google 日曆「${c.calendar}」（新增或更新 ${c.created}、移除 ${c.removed}）`); }
+    catch (err) { toast('remStatus', `日曆同步失敗：${err.message}（請在 Apps Script 選 syncCalendar_ 執行一次授權日曆）`, true); }
+    finally { btn.disabled = false; }
   }
   document.addEventListener('click', e => {
     const t = e.target;
+    if (t.closest('#remCal')) { syncCal(t.closest('#remCal')); return; }
     if (t.closest('#remAdd')) { if (!Fin.ready()) { showView('finance'); return; } edit(''); return; }
     const f = t.closest('[data-rem-f]'); if (f) { filter = f.dataset.remF; render(); return; }
     const ed = t.closest('[data-rem-edit]'); if (ed) { edit(ed.dataset.remEdit); return; }
