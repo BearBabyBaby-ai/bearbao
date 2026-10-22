@@ -5,7 +5,7 @@
    ・外部程式庫（地圖、圖表）：存一份在手機，加快開啟速度
    只有更換圖示或 manifest.json 時，才需要把下面的 VERSION 改一個新名稱
    ===================================================================== */
-const VERSION = 'bearbao-2026-10-22-v0';
+const VERSION = 'bearbao-2026-10-22-v1';
 const SHELL_CACHE = `bearbao-shell-${VERSION}`;
 const DATA_CACHE = 'bearbao-sheet-data';
 const LIB_CACHE = 'bearbao-libs';
