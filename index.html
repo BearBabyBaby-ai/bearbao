@@ -2740,7 +2740,7 @@ const Flights = (() => {
 
 const Cal = (() => {
   const SOURCES = { special: { gid: HUB_GIDS.special, sheet: '特殊日期' }, activity: { gid: HUB_GIDS.activity, sheet: '活動列表' } };
-  const FIXED_COLORS = { '節日': '#dc2626', '特殊': '#db2777', '機票搶票': '#ea580c', '活動': '#0284c7', '元宵活動': '#9333ea', '節慶活動': '#16a34a', '縣府政策': '#0f766e', '重要提醒': '#e11d48', '支出': '#b45309' };
+  const FIXED_COLORS = { '節日': '#dc2626', '特殊': '#db2777', '機票搶票': '#ea580c', '活動': '#2563eb', '元宵活動': '#9333ea', '節慶活動': '#16a34a', '重要提醒': '#0d9488', '支出': '#92400e' };
   const PALETTE = ['#0369a1', '#7c3aed', '#15803d', '#0f766e', '#be185d', '#a16207', '#4338ca', '#b45309'];
   const LONG_SPAN = 7; 
   let items = [], loaded = false, loadPromise = null, error = '', extraItems = [];
@@ -2752,9 +2752,9 @@ const Cal = (() => {
   }
   let month = todayKey().slice(0, 7), selected = todayKey(), filter = '';
 
-  const colorOf = cat => FIXED_COLORS[cat] || (/花火|煙火/.test(cat) ? '#f59e0b' : PALETTE[[...cat].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTE.length]);
+  const colorOf = cat => FIXED_COLORS[cat] || (/花火|煙火/.test(cat) ? '#eab308' : PALETTE[[...cat].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTE.length]);
   const spanOf = it => daysBetween(it.start, it.end) + 1;
-  const isHidden = it => CFG.calendarHidden.includes(it.cat) || (isMobile() && !it.yearly && it.end < todayKey());   
+  const isHidden = it => CFG.calendarHidden.includes(it.cat) || it.cat === '縣府政策' || (!it.yearly && it.end < todayKey());   
   function occurs(it, key) {
     if (it.yearly) return key.slice(5) === it.start.slice(5) && key >= it.start.slice(0, 4);
     return it.start <= key && key <= it.end;
