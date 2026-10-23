@@ -973,6 +973,11 @@
     .xb-form fieldset{grid-column:1/-1;border:1px dashed #93c5fd;border-radius:12px;padding:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:0}
     .xb-form legend{font-weight:900;color:#1d4ed8;font-size:.82rem;padding:0 4px}
     .xb-form-acts{display:flex;justify-content:flex-end;gap:8px;margin-top:14px}
+    .xb-kinds{display:grid;gap:10px}
+    .xb-kind{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;border:1px solid #d5e3ea;background:#fff;border-radius:14px;padding:13px 15px;cursor:pointer}
+    .xb-kind b{font-size:1rem;color:#0b3954}
+    .xb-kind small{font-size:.8rem;color:#475569}
+    .xb-kind:hover,.xb-kind:focus-visible{border-color:#0a6fb3;background:#f0f8fd}
     .xb-preview{grid-column:1/-1;display:flex;gap:10px;align-items:center;background:#f6fafb;border-radius:12px;padding:8px}
     .xb-preview img{width:84px;height:84px;object-fit:cover;border-radius:10px;cursor:zoom-in}
     .xb-preview small{font-size:.78rem;color:#475569;line-height:1.5}
@@ -2918,11 +2923,16 @@ const Cal = (() => {
   $('calGrid').addEventListener('click', e => {
     const cell = e.target.closest('.cal-cell');
     if (!cell) return;
-    selected = cell.dataset.date;
+    const key = cell.dataset.date, now = Date.now();
+    clearTimeout(tapScroll);
+    if (lastTap.key === key && now - lastTap.t < 450) { lastTap = {}; if (typeof CalAdd !== 'undefined') CalAdd.open(key); return; }
+    lastTap = { key, t: now };
+    selected = key;
     if (selected.slice(0, 7) !== month) month = selected.slice(0, 7);
     renderGrid(); renderDetail();
-    if (isMobile()) $('calDetail').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (isMobile()) tapScroll = setTimeout(() => $('calDetail').scrollIntoView({ behavior: 'smooth', block: 'start' }), 450);
   });
+  let lastTap = {}, tapScroll = null;
   $('calFilters').addEventListener('click', e => {
     const chip = e.target.closest('.cal-chip');
     if (!chip) return;
@@ -2939,7 +2949,15 @@ const Cal = (() => {
     itemsOn: key => itemsOn(key, items.filter(it => !isHidden(it))),
     shownInCell, spanOf, colorOf,
     onShown() { load(); render(); },
-    openDate(key) { selected = key; month = key.slice(0, 7); render(); showView('calendar'); }
+    openDate(key) { selected = key; month = key.slice(0, 7); render(); showView('calendar'); },
+    addRow(kind, head, row) {
+      const it = (kind === 'special' ? parseSpecial : parseActivity)([head, row])[0];
+      if (!it) return;
+      items.push(it);
+      items.sort((a, b) => a.start.localeCompare(b.start) || (a.time || '').localeCompare(b.time || ''));
+      selected = it.start; month = it.start.slice(0, 7);
+      render(); Home.renderCalendar(); Events.refresh();
+    }
   };
 })();
 
@@ -3736,8 +3754,8 @@ const Remind = (() => {
     const shown = groups[filter];
     list.innerHTML = shown.length ? shown.map(itemHtml).join('') : '<div class="xb-empty">目前沒有提醒，按「＋ 新增提醒」開始記錄重要資訊</div>';
   }
-  function edit(id) {
-    const r = (Fin.data?.reminders || []).find(x => x.ID === id) || {};
+  function edit(id, preset = {}) {
+    const r = (Fin.data?.reminders || []).find(x => x.ID === id) || preset;
     const sheet = Modal.open(id ? '編輯提醒' : '新增重要資訊提醒', `<form class="xb-form" id="remForm">
       ${field({ name: '標題', label: '標題', value: r['標題'], required: true, full: true, placeholder: '例如：汽車保險到期、繳房屋稅' })}
       ${field({ name: '類別', label: '類別', type: 'select', options: CATS, value: r['類別'] || '一般' })}
@@ -4292,6 +4310,44 @@ const Finance = (() => {
       <div class="xb-row" style="margin-top:10px"><button type="button" class="xb-btn sm pri" data-fin-act="scan">📷 掃發票</button><button type="button" class="xb-btn sm" data-fin-act="ledger">💵 記帳</button><button type="button" class="xb-btn sm" data-fin-act="fuel">⛽ 加油</button></div>`;
   }
   return { render, renderHome, claimInfo, invoices, set tab(v) { tab = v; } };
+})();
+
+
+const CalAdd = (() => {
+  const KINDS = [['special', '⭐ 特殊日期', '回診、生日等重要日子'], ['activity', '🎈 一般活動', '一般行程、活動'], ['remind', '🔔 重要資訊提醒', '搶票、繳費等需要提醒的事']];
+  function open(key) {
+    if (!Fin.ready()) { showView('finance'); return; }
+    const sheet = Modal.open(`新增 ${esc(key)}`, `<div class="xb-kinds">${KINDS.map(([k, t, d]) => `<button type="button" class="xb-kind" data-kind="${k}"><b>${t}</b><small>${d}</small></button>`).join('')}</div>`);
+    sheet.querySelector('.xb-kinds').addEventListener('click', e => {
+      const b = e.target.closest('[data-kind]');
+      if (!b) return;
+      if (b.dataset.kind === 'remind') Remind.edit('', { '提醒日期': key });
+      else form(b.dataset.kind, key);
+    });
+  }
+  function form(kind, key) {
+    const sp = kind === 'special';
+    const sheet = Modal.open(sp ? '⭐ 新增特殊日期' : '🎈 新增活動', `<form class="xb-form" id="calAddForm">
+      ${field({ name: '名稱', label: '名稱', required: true, full: true, placeholder: sp ? '例如：回診、老媽生日' : '例如：同學聚餐' })}
+      ${field({ name: '日期', label: '日期', type: 'date', value: dateInput(key) })}
+      ${field({ name: '時間', label: '時間（可不填）', type: 'time' })}
+      ${sp ? '' : field({ name: '地點', label: '地點', full: true }) + field({ name: '內容', label: '內容', type: 'textarea', full: true })}
+      </form><div class="xb-form-acts"><button type="button" class="xb-btn" data-xb-close>取消</button><button type="button" class="xb-btn pri" id="calAddSave">儲存</button></div>`);
+    sheet.querySelector('#calAddSave').addEventListener('click', async e => {
+      const v = formValues(sheet.querySelector('#calAddForm'));
+      if (!v['名稱']) { alert('請輸入名稱'); return; }
+      if (!v['日期']) { alert('請選擇日期'); return; }
+      v['日期'] = v['日期'].replace(/-/g, '/');
+      e.target.disabled = true; e.target.textContent = '儲存中…';
+      try {
+        const r = await Fin.call('addCalendarItem', { kind, item: v });
+        Modal.close();
+        Cal.addRow(kind, r.head, r.row);
+        if (sp) Fin.sync(true).catch(() => {});
+      } catch (err) { e.target.disabled = false; e.target.textContent = '儲存'; alert(err.message); }
+    });
+  }
+  return { open };
 })();
 
 
