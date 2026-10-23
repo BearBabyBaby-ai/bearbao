@@ -2740,10 +2740,16 @@ const Flights = (() => {
 
 const Cal = (() => {
   const SOURCES = { special: { gid: HUB_GIDS.special, sheet: '特殊日期' }, activity: { gid: HUB_GIDS.activity, sheet: '活動列表' } };
-  const FIXED_COLORS = { '節日': '#dc2626', '特殊': '#db2777', '機票搶票': '#ea580c', '活動': '#0284c7', '元宵活動': '#9333ea', '節慶活動': '#16a34a', '縣府政策': '#0f766e' };
+  const FIXED_COLORS = { '節日': '#dc2626', '特殊': '#db2777', '機票搶票': '#ea580c', '活動': '#0284c7', '元宵活動': '#9333ea', '節慶活動': '#16a34a', '縣府政策': '#0f766e', '重要提醒': '#e11d48', '支出': '#b45309' };
   const PALETTE = ['#0369a1', '#7c3aed', '#15803d', '#0f766e', '#be185d', '#a16207', '#4338ca', '#b45309'];
   const LONG_SPAN = 7; 
-  let items = [], loaded = false, loadPromise = null, error = '';
+  let items = [], loaded = false, loadPromise = null, error = '', extraItems = [];
+  function withExtra(base) {
+    const yearly = new Set(base.filter(it => it.yearly).map(it => plainText(it.name)));
+    const keys = new Set(base.map(it => plainText(it.name) + '|' + it.start));
+    return base.concat(extraItems.filter(x => !yearly.has(plainText(x.name)) && !keys.has(plainText(x.name) + '|' + x.start)))
+      .sort((a, b) => a.start.localeCompare(b.start) || (a.time || '').localeCompare(b.time || ''));
+  }
   let month = todayKey().slice(0, 7), selected = todayKey(), filter = '';
 
   const colorOf = cat => FIXED_COLORS[cat] || (/花火|煙火/.test(cat) ? '#f59e0b' : PALETTE[[...cat].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTE.length]);
@@ -2791,7 +2797,7 @@ const Cal = (() => {
       const list = [];
       if (sp.status === 'fulfilled') list.push(...parseSpecial(sp.value));
       if (ac.status === 'fulfilled') list.push(...parseActivity(ac.value));
-      items = list.sort((a, b) => a.start.localeCompare(b.start) || (a.time || '').localeCompare(b.time || ''));
+      items = withExtra(list);
       loaded = true;
       if (sp.status === 'rejected' && ac.status === 'rejected') error = '月曆暫時無法讀取，請稍後再試';
       else if (sp.status === 'rejected' || ac.status === 'rejected') error = `部分未載入：${sp.status === 'rejected' ? '特殊日期' : '活動列表'}`;
@@ -2950,6 +2956,11 @@ const Cal = (() => {
     shownInCell, spanOf, colorOf,
     onShown() { load(); render(); },
     openDate(key) { selected = key; month = key.slice(0, 7); render(); showView('calendar'); },
+    setExtra(list) {
+      extraItems = list.map(x => ({ ...x, _rem: true }));
+      items = withExtra(items.filter(it => !it._rem));
+      if (loaded) { render(); Home.renderCalendar(); }
+    },
     addRow(kind, head, row) {
       const it = (kind === 'special' ? parseSpecial : parseActivity)([head, row])[0];
       if (!it) return;
@@ -2963,7 +2974,7 @@ const Cal = (() => {
 
 
 const Events = (() => {
-  const EXCLUDE = ['節日', '特殊', '機票搶票'];
+  const EXCLUDE = ['節日', '特殊', '機票搶票', '重要提醒', '支出'];
   const TYPE_RANK = { '廟宇': 4, '景點': 3, '其他店家': 2, '美食': 1 };
   const GROUP_LIMIT = 24;
   const eventLayer = L.layerGroup().addTo(map);
@@ -4309,12 +4320,12 @@ const Finance = (() => {
       <div><small>最久可兌換</small><b style="font-size:.9rem">${ci.oldest ? `${esc(ci.oldest['期別'])}<br><small>至 ${esc(ci.oldest['領獎截止'])}</small>` : '—'}</b></div><div><small>95 無鉛</small><b>${oil ? `${esc(oil['95無鉛'])} 元` : '—'}</b></div></div>
       <div class="xb-row" style="margin-top:10px"><button type="button" class="xb-btn sm pri" data-fin-act="scan">📷 掃發票</button><button type="button" class="xb-btn sm" data-fin-act="ledger">💵 記帳</button><button type="button" class="xb-btn sm" data-fin-act="fuel">⛽ 加油</button></div>`;
   }
-  return { render, renderHome, claimInfo, invoices, set tab(v) { tab = v; } };
+  return { render, renderHome, claimInfo, invoices, ledgerForm, set tab(v) { tab = v; } };
 })();
 
 
 const CalAdd = (() => {
-  const KINDS = [['special', '⭐ 特殊日期', '回診、生日等重要日子'], ['activity', '🎈 一般活動', '一般行程、活動'], ['remind', '🔔 重要資訊提醒', '搶票、繳費等需要提醒的事']];
+  const KINDS = [['special', '⭐ 特殊日期', '回診、生日等重要日子'], ['activity', '🎈 一般活動', '一般行程、活動'], ['remind', '🔔 重要資訊提醒', '搶票、繳費等需要提醒的事'], ['expense', '💵 支出', '記一筆花費，同時記進財務管理']];
   function open(key) {
     if (!Fin.ready()) { showView('finance'); return; }
     const sheet = Modal.open(`新增 ${esc(key)}`, `<div class="xb-kinds">${KINDS.map(([k, t, d]) => `<button type="button" class="xb-kind" data-kind="${k}"><b>${t}</b><small>${d}</small></button>`).join('')}</div>`);
@@ -4322,6 +4333,7 @@ const CalAdd = (() => {
       const b = e.target.closest('[data-kind]');
       if (!b) return;
       if (b.dataset.kind === 'remind') Remind.edit('', { '提醒日期': key });
+      else if (b.dataset.kind === 'expense') Finance.ledgerForm('', { '收支': '支出', '日期': key });
       else form(b.dataset.kind, key);
     });
   }
@@ -4351,7 +4363,43 @@ const CalAdd = (() => {
 })();
 
 
+function remindersForCal() {
+  const out = [], t = todayKey();
+  const pad = n => String(n).padStart(2, '0');
+  (Fin.data?.reminders || []).forEach(r => {
+    if (r['狀態'] === '已完成') return;
+    const d = dateKeyOf(r['提醒日期']);
+    if (!d || !r['標題']) return;
+    const base = { src: 'remind', cat: '重要提醒', name: String(r['標題']), time: String(r['時間'] || ''), content: [r['類別'], r['內容']].filter(Boolean).join('・'), note: String(r['備註'] || ''), yearly: false };
+    if (r['重複'] === '每年') out.push({ ...base, start: d, end: d, yearly: true });
+    else if (r['重複'] === '每月') {
+      const ty = Number(t.slice(0, 4)), tm = Number(t.slice(5, 7)), dd = Number(d.slice(8, 10));
+      for (let i = -12; i <= 12; i++) {
+        const first = new Date(ty, tm - 1 + i, 1), y = first.getFullYear(), m = first.getMonth() + 1;
+        const k = `${y}/${pad(m)}/${pad(Math.min(dd, new Date(y, m, 0).getDate()))}`;
+        if (k >= d) out.push({ ...base, start: k, end: k });
+      }
+    }
+    else out.push({ ...base, start: d, end: d });
+  });
+  const days = {};
+  (Fin.data?.ledger || []).forEach(l => {
+    if (l['收支'] !== '支出') return;
+    const d = dateKeyOf(l['日期']), amt = numOf(l['金額']);
+    if (!d || !amt) return;
+    (days[d] = days[d] || []).push(l);
+  });
+  Object.entries(days).forEach(([d, list]) => {
+    const total = list.reduce((s, l) => s + numOf(l['金額']), 0);
+    out.push({ src: 'expense', cat: '支出', name: `支出 $${money(total)}`, time: '', start: d, end: d, yearly: false,
+      content: list.map(l => `${l['項目'] || l['類別'] || '支出'} $${money(l['金額'])}`).join('、') });
+  });
+  return out;
+}
+
+
 Fin.on(() => {
+  Cal.setExtra(remindersForCal());
   if (currentView === 'finance') Finance.render();
   if (currentView === 'remind') Remind.render();
   Remind.renderHome();
@@ -4525,6 +4573,7 @@ const Wx = (() => {
 Wx.load();
 
 
+Cal.setExtra(remindersForCal());
 Remind.renderHome();
 Finance.renderHome();
 if (Fin.ready()) Fin.sync().catch(() => {});
