@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 22;
-const VERSION_NAME = '2.2.0';
+const VERSION_CODE = 23;
+const VERSION_NAME = '2.3.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
@@ -80,12 +80,12 @@ public class MainActivity extends BridgeActivity {
         openView(intent);
     }
 
-    /* 從桌面小工具點分海或風浪時，切換到對應分頁 */
+    /* 從桌面小工具點提醒、分海或風浪時，切換到對應分頁 */
     private void openView(Intent intent) {
         if (intent == null) return;
         String view = intent.getStringExtra("xbView");
         intent.removeExtra("xbView");
-        if ("split".equals(view) || "wx".equals(view)) goView(view, 0);
+        if ("split".equals(view) || "wx".equals(view) || "remind".equals(view)) goView(view, 0);
     }
 
     private void goView(final String view, final int tries) {
