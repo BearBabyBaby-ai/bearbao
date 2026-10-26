@@ -30,7 +30,7 @@
             android:layout_marginLeft="6dp"
             android:text="@string/widget_title"
             android:textColor="#075985"
-            android:textSize="15sp"
+            android:textSize="16.5sp"
             android:textStyle="bold" />
     </LinearLayout>
 
@@ -56,7 +56,7 @@
             android:layout_marginTop="6dp"
             android:paddingLeft="2dp"
             android:textColor="#374151"
-            android:textSize="14sp" />
+            android:textSize="15sp" />
     </FrameLayout>
 
     <LinearLayout
@@ -87,7 +87,7 @@
                     android:layout_weight="1"
                     android:maxLines="1"
                     android:text="@string/widget_tide"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -95,7 +95,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:maxLines="1"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <TextView
@@ -104,7 +104,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:lineSpacingMultiplier="1.1"
-                android:textSize="11.5sp" />
+                android:textSize="12.5sp" />
         </LinearLayout>
 
         <LinearLayout
@@ -129,7 +129,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:maxLines="1"
-                    android:textSize="12sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
 
                 <TextView
@@ -137,7 +137,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:maxLines="1"
-                    android:textSize="10sp" />
+                    android:textSize="11sp" />
             </LinearLayout>
 
             <TextView
@@ -146,7 +146,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:lineSpacingMultiplier="1.1"
-                android:textSize="11.5sp" />
+                android:textSize="12.5sp" />
         </LinearLayout>
     </LinearLayout>
 </LinearLayout>
