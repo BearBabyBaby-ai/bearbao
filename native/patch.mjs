@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 21;
-const VERSION_NAME = '2.1.0';
+const VERSION_CODE = 22;
+const VERSION_NAME = '2.2.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
@@ -70,8 +70,28 @@ public class MainActivity extends BridgeActivity {
             }
         });
     }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        ReminderWidget.refresh(this);   // 離開 App 時更新桌面小工具
+    }
 }
 `);
+
+// 3-1. 桌面小工具：顯示 30 天內的重要資訊提醒
+fs.copyFileSync('widget/ReminderWidget.java', `${javaDir}/ReminderWidget.java`);
+for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_bg.xml', 'drawable'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
+  fs.mkdirSync(`${RES}/${to}`, { recursive: true });
+  fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
+}
+edit(`${A}/src/main/AndroidManifest.xml`, s => must(s, '    </application>', `        <receiver android:name=".ReminderWidget" android:exported="false" android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/reminder_widget_info" />
+        </receiver>
+    </application>`));
 
 // 4. 狀態列顏色（與原本安裝檔相同的藍色），內容不延伸到狀態列底下
 const styles = (v35) => `<?xml version="1.0" encoding="utf-8"?>

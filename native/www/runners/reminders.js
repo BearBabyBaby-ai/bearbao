@@ -2,7 +2,7 @@
 var DAY = 86400000, TZ = 8 * 3600000, HORIZON = 35 * DAY, MAX = 60, FETCH_EVERY = 3 * 3600000;
 var ICON = { '機票搶票': '🎫', '生日紀念': '🎂', '節日': '🎉', '繳費': '💳', '證件': '🪪', '保險': '🛡️', '車輛保養': '🔧', '稅務': '🧾', '醫療': '🏥', '預約': '📌', '其他': '📎' };
 
-function kvGet(k) { try { var r = CapacitorKV.get(k); return r && r.value ? r.value : ''; } catch (e) { return ''; } }
+function kvGet(k) { try { var r = CapacitorKV.get(k); if (typeof r === 'string') return r; return r && r.value ? String(r.value) : ''; } catch (e) { return ''; } }
 function kvSet(k, v) { try { CapacitorKV.set(k, v); } catch (e) {} }
 function str(v) { return v == null ? '' : String(v).trim(); }
 function pad(n) { return (n < 10 ? '0' : '') + n; }
