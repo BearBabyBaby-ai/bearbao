@@ -1,4 +1,4 @@
-const VERSION = 'bearbao-2026-10-26-v12';
+const VERSION = 'bearbao-2026-10-26-v13';
 const SHELL_CACHE = `bearbao-shell-${VERSION}`;
 const DATA_CACHE = 'bearbao-sheet-data';
 const LIB_CACHE = 'bearbao-libs';
@@ -27,7 +27,8 @@ function dataKey(url) {
 async function networkFirst(request, cacheName, key, fresh) {
   const cache = await caches.open(cacheName);
   try {
-        const response = fresh ? await fetch(request.url, { cache: 'no-store', credentials: 'same-origin' }) : await fetch(request);
+    /* 網頁本身要帶 Accept: text/html，手機 App 外殼才會加上與手機溝通的程式（通知、桌面小工具） */
+    const response = fresh ? await fetch(new Request(request.url, { cache: 'no-store', credentials: 'same-origin', headers: { Accept: request.headers.get('Accept') || 'text/html' } })) : await fetch(request);
     if (response && response.ok) cache.put(key || request, response.clone());
     return response;
   } catch (err) {
