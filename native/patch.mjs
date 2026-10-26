@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 23;
-const VERSION_NAME = '2.3.0';
+const VERSION_CODE = 24;
+const VERSION_NAME = '2.4.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
