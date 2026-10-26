@@ -7,25 +7,43 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 20;
-const VERSION_NAME = '2.0.0';
+const VERSION_CODE = 21;
+const VERSION_NAME = '2.1.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
 const edit = (file, fn) => { const s = fs.readFileSync(file, 'utf8'); const t = fn(s); if (t === s) throw new Error(`未修改：${file}`); fs.writeFileSync(file, t); };
 
 // 1. 版本號（必須大於手機上原本安裝的版本，才能直接覆蓋）
-edit(`${A}/build.gradle`, s => s.replace(/versionCode \d+/, `versionCode ${VERSION_CODE}`).replace(/versionName "[^"]*"/, `versionName "${VERSION_NAME}"`));
+// 背景執行套件需要的程式庫路徑
+const must = (s, a, b) => { if (!s.includes(a)) throw new Error(`找不到：${a}`); return s.replace(a, b); };
+edit(`${A}/build.gradle`, s => must(
+  s.replace(/versionCode \d+/, `versionCode ${VERSION_CODE}`).replace(/versionName "[^"]*"/, `versionName "${VERSION_NAME}"`),
+  "flatDir{", "flatDir{\n        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs'"));
 
-// 2. 權限：相機（掃發票）、定位（地圖排序）
-edit(`${A}/src/main/AndroidManifest.xml`, s => s.replace('<uses-permission android:name="android.permission.INTERNET" />', [
-  '<uses-permission android:name="android.permission.INTERNET" />',
-  '    <uses-permission android:name="android.permission.CAMERA" />',
-  '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
-  '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
-  '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
-  '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />'
-].join('\n')));
+// 2. 權限：相機（掃發票）、定位（地圖排序）、通知與準時提醒（背景執行）；不要背景定位
+edit(`${A}/src/main/AndroidManifest.xml`, s => {
+  s = must(s, '<manifest xmlns:android="http://schemas.android.com/apk/res/android"', '<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools"');
+  s = must(s, '<uses-permission android:name="android.permission.INTERNET" />', [
+    '<uses-permission android:name="android.permission.INTERNET" />',
+    '    <uses-permission android:name="android.permission.CAMERA" />',
+    '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />',
+    '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
+    '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+    '    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />',
+    '    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />',
+    '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
+    '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />'
+  ].join('\n'));
+  // 點通知時打開 App
+  s = s.replace(/(<category android:name="android\.intent\.category\.LAUNCHER" \/>\s*<\/intent-filter>)/, `$1
+            <intent-filter>
+                <action android:name=".NOTIFICATION_CLICKED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>`);
+  if (!s.includes('NOTIFICATION_CLICKED')) throw new Error('通知點擊設定失敗');
+  return s;
+});
 
 // 3. 返回鍵：能回上一頁就回上一頁，沒有上一頁就離開 App（與原本相同）
 const javaDir = `${A}/src/main/java/io/github/bearbabybaby_ai/bearbao`;
@@ -113,4 +131,10 @@ for (const dir of fs.readdirSync(RES).filter(n => n.startsWith('drawable'))) {
   await sharp({ create: { width, height, channels: 3, background: BG } }).composite([{ input: icon, gravity: 'center' }]).png().toFile(f + '.tmp');
   fs.renameSync(f + '.tmp', f);
 }
+// 7. 通知小圖示（白色鈴鐺）
+fs.writeFileSync(`${RES}/drawable/ic_stat_bear.xml`, `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:fillColor="#FFFFFFFF" android:pathData="M12,22c1.1,0 2,-0.9 2,-2h-4c0,1.1 0.89,2 2,2zM18,16v-5c0,-3.07 -1.64,-5.64 -4.5,-6.32V4c0,-0.83 -0.67,-1.5 -1.5,-1.5s-1.5,0.67 -1.5,1.5v0.68C7.63,5.36 6,7.92 6,11v5l-2,2v1h16v-1l-2,-2z"/>
+</vector>
+`);
 console.log('原生專案調整完成');

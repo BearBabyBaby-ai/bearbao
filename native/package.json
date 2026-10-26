@@ -6,6 +6,7 @@
     "@capacitor/android": "7.6.9",
     "@capacitor/cli": "7.6.9",
     "@capacitor/core": "7.6.9",
-    "sharp": "0.33.5"
+    "sharp": "0.33.5",
+    "@capacitor/background-runner": "2.3.1"
   }
 }

@@ -9,5 +9,15 @@
   "android": {
     "allowMixedContent": false,
     "adjustMarginsForEdgeToEdge": "disable"
+  },
+  "plugins": {
+    "BackgroundRunner": {
+      "label": "io.github.bearbabybaby_ai.bearbao.reminders",
+      "src": "runners/reminders.js",
+      "event": "checkReminders",
+      "repeat": true,
+      "interval": 15,
+      "autoStart": true
+    }
   }
 }

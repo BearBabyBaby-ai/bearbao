@@ -4588,6 +4588,30 @@ const Wx = (() => {
 Wx.load();
 
 
+const Native = (() => {
+  const C = window.Capacitor;
+  const on = Boolean(C && C.isNativePlatform && C.isNativePlatform() && C.nativePromise);
+  let lastConn = '', lastRem = '', timer = null;
+  const call = (method, opts) => C.nativePromise('BackgroundRunner', method, opts).catch(() => null);
+  async function push() {
+    if (!on || !Fin.ready()) return;
+    if (!lsGet('xb.notifyAsked')) { lsSet('xb.notifyAsked', '1'); await call('requestPermissions', { apis: ['notifications'] }); }
+    const conn = Fin.url() + '\n' + Fin.token();
+    if (conn !== lastConn) { lastConn = conn; await call('dispatchEvent', { event: 'setConnection', details: { url: Fin.url(), token: Fin.token() } }); }
+    const list = Fin.data && Fin.data.reminders;
+    if (!list) return;
+    const s = JSON.stringify(list);
+    if (s === lastRem) return;
+    lastRem = s;
+    await call('dispatchEvent', { event: 'checkReminders', details: { reminders: list } });
+  }
+  const later = () => { if (!on) return; clearTimeout(timer); timer = setTimeout(push, 1500); };
+  Fin.on(later);
+  later();
+  return { on };
+})();
+
+
 Cal.setExtra(remindersForCal());
 Remind.renderHome();
 Finance.renderHome();
