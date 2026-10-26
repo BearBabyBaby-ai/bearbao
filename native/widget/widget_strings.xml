@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="widget_name">熊寶提醒</string>
-    <string name="widget_title">重要資訊提醒</string>
-    <string name="widget_desc">桌面顯示 30 天內的重要資訊提醒</string>
+    <string name="widget_name">熊寶貼心提醒</string>
+    <string name="widget_title">熊寶貼心提醒</string>
+    <string name="widget_tide">🌊 奎壁山分海</string>
+    <string name="widget_desc">桌面顯示 30 天內的提醒、今日分海與風浪</string>
 </resources>

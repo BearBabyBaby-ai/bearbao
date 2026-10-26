@@ -123,6 +123,16 @@ addEventListener('setConnection', function (resolve, reject, args) {
   } catch (e) { resolve({ ok: false }); }
 });
 
+// App 開著時把桌面小工具要用的資料（分海時間、風浪地區）存起來
+addEventListener('setWidget', function (resolve, reject, args) {
+  try {
+    if (args && args.tide) kvSet('xb.tide', String(args.tide));
+    if (args && args.appArea) kvSet('xb.appArea', str(args.appArea));
+    if (args && args.autoArea) kvSet('xb.autoArea', str(args.autoArea));
+    resolve({ ok: true });
+  } catch (e) { resolve({ ok: false }); }
+});
+
 // 檢查提醒並排定通知：App 開著時直接帶入最新資料；背景執行時每 3 小時向雲端取一次，其餘用上次的資料
 addEventListener('checkReminders', function (resolve, reject, args) {
   try {

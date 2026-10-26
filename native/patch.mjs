@@ -50,6 +50,7 @@ const javaDir = `${A}/src/main/java/io/github/bearbabybaby_ai/bearbao`;
 fs.mkdirSync(javaDir, { recursive: true });
 fs.writeFileSync(`${javaDir}/MainActivity.java`, `package io.github.bearbabybaby_ai.bearbao;
 
+import android.content.Intent;
 import android.os.Bundle;
 import androidx.activity.OnBackPressedCallback;
 import com.getcapacitor.BridgeActivity;
@@ -69,6 +70,30 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         });
+        openView(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openView(intent);
+    }
+
+    /* 從桌面小工具點分海或風浪時，切換到對應分頁 */
+    private void openView(Intent intent) {
+        if (intent == null) return;
+        String view = intent.getStringExtra("xbView");
+        intent.removeExtra("xbView");
+        if ("split".equals(view) || "wx".equals(view)) goView(view, 0);
+    }
+
+    private void goView(final String view, final int tries) {
+        if (bridge == null || bridge.getWebView() == null || tries > 80) return;
+        String js = "(function(){if(window.__xbInit&&typeof showView==='function'){showView('" + view + "');return 'ok';}return 'wait';})()";
+        bridge.getWebView().evaluateJavascript(js, result -> {
+            if (result == null || !result.contains("ok")) bridge.getWebView().postDelayed(() -> goView(view, tries + 1), 400);
+        });
     }
 
     @Override
@@ -79,11 +104,24 @@ public class MainActivity extends BridgeActivity {
 }
 `);
 
-// 3-1. 桌面小工具：顯示 30 天內的重要資訊提醒
-fs.copyFileSync('widget/ReminderWidget.java', `${javaDir}/ReminderWidget.java`);
-for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_bg_dawn.xml', 'drawable'], ['widget_bg_day.xml', 'drawable'], ['widget_bg_dusk.xml', 'drawable'], ['widget_bg_night.xml', 'drawable'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
+// 3-1. 桌面小工具「熊寶貼心提醒」
+for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
+for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_item.xml', 'layout'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
+}
+// 時段配色：整塊底色、分海區塊、風浪區塊
+const shape = (fill, stroke, r) => `<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">\n    <solid android:color="${fill}" />${stroke ? `\n    <stroke android:width="1dp" android:color="${stroke}" />` : ''}\n    <corners android:radius="${r}dp" />\n</shape>\n`;
+const PAL = {
+  dawn: ['#FFFFFBF5', '#59B45309', '#FFE6F4F1', '#FFFDF1E2'],
+  day: ['#FFF2F8FD', '#590A6FB3', '#FFE1F3EF', '#FFFDF5E1'],
+  dusk: ['#FF26132B', '#66F472B6', '#FF123039', '#FF3A1C2B'],
+  night: ['#FF0B1430', '#73818CF8', '#FF0F2A40', '#FF221D45']
+};
+for (const [k, [bg, line, tide, wx]] of Object.entries(PAL)) {
+  fs.writeFileSync(`${RES}/drawable/widget_bg_${k}.xml`, shape(bg, line, 22));
+  fs.writeFileSync(`${RES}/drawable/widget_tide_${k}.xml`, shape(tide, '', 14));
+  fs.writeFileSync(`${RES}/drawable/widget_wx_${k}.xml`, shape(wx, '', 14));
 }
 edit(`${A}/src/main/AndroidManifest.xml`, s => must(s, '    </application>', `        <receiver android:name=".ReminderWidget" android:exported="false" android:label="@string/widget_name">
             <intent-filter>
@@ -91,6 +129,8 @@ edit(`${A}/src/main/AndroidManifest.xml`, s => must(s, '    </application>', `  
             </intent-filter>
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/reminder_widget_info" />
         </receiver>
+        <service android:name=".ReminderListService" android:exported="false" android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <activity android:name=".AreaPickerActivity" android:exported="false" android:excludeFromRecents="true" android:noHistory="true" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>`));
 
 // 4. 狀態列顏色（與原本安裝檔相同的藍色），內容不延伸到狀態列底下
