@@ -1,5 +1,6 @@
 package io.github.bearbabybaby_ai.bearbao;
 
+import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
@@ -36,9 +37,71 @@ public class ReminderWidget extends AppWidgetProvider {
 
     private static class Item {
         long day;
+        long diff;
         int minutes;
+        String cat;
         String title;
         String due;
+    }
+
+    /* 時段配色（與熊寶系統相同）：清晨 05–07、白天 07–17、傍晚 17–19、晚上 19–05 */
+    private static final int DAWN = 0, DAY = 1, DUSK = 2, NIGHT = 3;
+    private static final int[] BG = {R.drawable.widget_bg_dawn, R.drawable.widget_bg_day, R.drawable.widget_bg_dusk, R.drawable.widget_bg_night};
+    private static final String[] HEAD = {"#C2577F", "#0A6FB3", "#6B2A5E", "#E0E7FF"};
+    private static final String[] MUTED = {"#7A5563", "#4B6478", "#6E5468", "#A5B4CF"};
+
+    private static int period(Calendar now) {
+        int h = now.get(Calendar.HOUR_OF_DAY);
+        return h >= 5 && h < 7 ? DAWN : h >= 7 && h < 17 ? DAY : h >= 17 && h < 19 ? DUSK : NIGHT;
+    }
+
+    /* 類別文字顏色：白天類時段用深色，晚上用亮色 */
+    private static int catColor(String cat, boolean night) {
+        String c;
+        switch (cat) {
+            case "繳費": case "機票搶票": c = night ? "#FDBA74" : "#C2410C"; break;
+            case "證件": c = night ? "#C4B5FD" : "#6D28D9"; break;
+            case "保險": c = night ? "#67E8F9" : "#0E7490"; break;
+            case "車輛保養": c = night ? "#93C5FD" : "#1D4ED8"; break;
+            case "稅務": c = night ? "#FCD34D" : "#92400E"; break;
+            case "醫療": case "節日": c = night ? "#FCA5A5" : "#B91C1C"; break;
+            case "預約": c = night ? "#86EFAC" : "#15803D"; break;
+            case "生日紀念": c = night ? "#F9A8D4" : "#BE185D"; break;
+            default: c = night ? "#E5E7EB" : "#1F2937";
+        }
+        return Color.parseColor(c);
+    }
+
+    private static int dueColor(long diff, boolean night) {
+        if (diff == 0) return Color.parseColor(night ? "#F87171" : "#B91C1C");
+        if (diff == 1) return Color.parseColor(night ? "#FB923C" : "#C2410C");
+        return Color.parseColor(night ? "#5EEAD4" : "#0F766E");
+    }
+
+    /* 到下一個時段交界時再更新一次，顏色才會準時切換 */
+    private static void scheduleNext(Context context, Calendar now) {
+        try {
+            int[] marks = {5, 7, 17, 19};
+            Calendar next = (Calendar) now.clone();
+            next.set(Calendar.MINUTE, 0);
+            next.set(Calendar.SECOND, 5);
+            next.set(Calendar.MILLISECOND, 0);
+            int h = now.get(Calendar.HOUR_OF_DAY), target = -1;
+            for (int m : marks) if (m > h) { target = m; break; }
+            if (target < 0) { next.add(Calendar.DAY_OF_MONTH, 1); target = 5; }
+            next.set(Calendar.HOUR_OF_DAY, target);
+            AppWidgetManager manager = AppWidgetManager.getInstance(context);
+            int[] ids = manager.getAppWidgetIds(new ComponentName(context, ReminderWidget.class));
+            Intent intent = new Intent(context, ReminderWidget.class);
+            intent.setAction(AppWidgetManager.ACTION_APPWIDGET_UPDATE);
+            intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS, ids);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) flags |= PendingIntent.FLAG_IMMUTABLE;
+            PendingIntent pi = PendingIntent.getBroadcast(context, 7, intent, flags);
+            AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+            if (alarm != null) alarm.set(AlarmManager.RTC, next.getTimeInMillis(), pi);
+        } catch (Exception ignored) {
+        }
     }
 
     @Override
@@ -123,6 +186,8 @@ public class ReminderWidget extends AppWidgetProvider {
                 String cat = r.optString("類別").trim();
                 Item it = new Item();
                 it.day = day;
+                it.diff = diff;
+                it.cat = cat;
                 it.minutes = hasTime ? Integer.parseInt(t.group(1)) * 60 + Integer.parseInt(t.group(2)) : 9 * 60;
                 it.title = icon(cat) + " " + r.optString("標題").trim() + ("機票搶票".equals(cat) ? " 開搶" : "");
                 String when = diff == 0 ? "今天" : diff == 1 ? "明天" : diff + " 天後";
@@ -144,6 +209,13 @@ public class ReminderWidget extends AppWidgetProvider {
 
     private static RemoteViews build(Context context) {
         RemoteViews v = new RemoteViews(context.getPackageName(), R.layout.reminder_widget);
+        Calendar now = Calendar.getInstance(TimeZone.getTimeZone("Asia/Taipei"));
+        int p = period(now);
+        boolean night = p == NIGHT;
+        v.setInt(R.id.root, "setBackgroundResource", BG[p]);
+        v.setTextColor(R.id.head, Color.parseColor(HEAD[p]));
+        v.setTextColor(R.id.empty, Color.parseColor(MUTED[p]));
+        scheduleNext(context, now);
         List<Item> list = items(context);
         int n = list == null ? 0 : Math.min(ROW.length, list.size());
         for (int i = 0; i < ROW.length; i++) {
@@ -152,7 +224,8 @@ public class ReminderWidget extends AppWidgetProvider {
                 v.setViewVisibility(ROW[i], View.VISIBLE);
                 v.setTextViewText(TITLE[i], it.title);
                 v.setTextViewText(DUE[i], it.due);
-                v.setTextColor(DUE[i], it.due.contains("今天") ? Color.parseColor("#B91C1C") : it.due.contains("明天") ? Color.parseColor("#C2410C") : Color.parseColor("#0F766E"));
+                v.setTextColor(TITLE[i], catColor(it.cat, night));
+                v.setTextColor(DUE[i], dueColor(it.diff, night));
             } else {
                 v.setViewVisibility(ROW[i], View.GONE);
             }

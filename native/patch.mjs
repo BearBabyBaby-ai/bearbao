@@ -81,7 +81,7 @@ public class MainActivity extends BridgeActivity {
 
 // 3-1. 桌面小工具：顯示 30 天內的重要資訊提醒
 fs.copyFileSync('widget/ReminderWidget.java', `${javaDir}/ReminderWidget.java`);
-for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_bg.xml', 'drawable'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
+for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_bg_dawn.xml', 'drawable'], ['widget_bg_day.xml', 'drawable'], ['widget_bg_dusk.xml', 'drawable'], ['widget_bg_night.xml', 'drawable'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
 }
