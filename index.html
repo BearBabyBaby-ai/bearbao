@@ -4610,7 +4610,7 @@ const Native = (() => {
   }, 15000);
   async function push() {
     if (!on || !Fin.ready()) return;
-    if (!lsGet('xb.notifyAsked')) { lsSet('xb.notifyAsked', '1'); await call('requestPermissions', { apis: ['notifications'] }); }
+    if (!lsGet('xb.notifyOk')) { const r = await call('requestPermissions', { apis: ['notifications'] }); if (r) lsSet('xb.notifyOk', '1'); }
     const conn = Fin.url() + '\n' + Fin.token();
     if (conn !== lastConn) { lastConn = conn; await call('dispatchEvent', { event: 'setConnection', details: { url: Fin.url(), token: Fin.token() } }); }
     const list = Fin.data && Fin.data.reminders;
