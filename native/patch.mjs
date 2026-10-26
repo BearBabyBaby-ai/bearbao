@@ -85,7 +85,7 @@ public class MainActivity extends BridgeActivity {
         if (intent == null) return;
         String view = intent.getStringExtra("xbView");
         intent.removeExtra("xbView");
-        if ("split".equals(view) || "wx".equals(view) || "remind".equals(view)) goView(view, 0);
+        if ("split".equals(view) || "wx".equals(view) || "calendar".equals(view)) goView(view, 0);
     }
 
     private void goView(final String view, final int tries) {

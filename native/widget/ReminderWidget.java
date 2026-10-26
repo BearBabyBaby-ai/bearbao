@@ -119,7 +119,7 @@ public class ReminderWidget extends AppWidgetProvider {
             int template = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
             Intent open = new Intent(context, MainActivity.class);
             open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            open.putExtra("xbView", "remind");   /* 點提醒：開到「提醒」分頁 */
+            open.putExtra("xbView", "calendar");   /* 點提醒：開到「月曆」分頁 */
             v.setPendingIntentTemplate(R.id.list, PendingIntent.getActivity(context, 4, open, template));
 
             /* 今日分海 */
@@ -166,7 +166,7 @@ public class ReminderWidget extends AppWidgetProvider {
             pick.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
             v.setOnClickPendingIntent(R.id.wxTitle, PendingIntent.getActivity(context, 3, pick, immutable()));
 
-            v.setOnClickPendingIntent(R.id.headRow, openApp(context, "remind", 0));
+            v.setOnClickPendingIntent(R.id.headRow, openApp(context, "calendar", 0));
             manager.updateAppWidget(id, v);
         }
         manager.notifyAppWidgetViewDataChanged(ids, R.id.list);
