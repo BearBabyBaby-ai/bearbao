@@ -1032,7 +1032,22 @@
     .h-fin div{background:#f8fafc;border-radius:12px;padding:9px 10px}
     .h-fin small{display:block;font-size:.74rem;color:var(--muted);font-weight:800}
     .h-fin b{font-size:1.08rem;color:#0b3954}
-  </style>
+      
+    @media(max-width:820px){
+      .ct-wrap{border:0;overflow:visible;margin-top:10px}
+      .ct-table{min-width:0}
+      .ct-table thead{display:none}
+      .ct-table tbody{display:grid;gap:10px}
+      .ct-table tbody tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;background:#fffaf5!important;border:1px solid #f1dcc8;border-left:4px solid #ea580c;border-radius:12px;padding:11px 12px}
+      .ct-table td{padding:0;border:0}
+      .ct-table td:nth-child(1){grid-column:1;font-size:.96rem;line-height:1.4}
+      .ct-table td:nth-child(4){grid-column:2;grid-row:1;align-self:start}
+      .ct-table td:nth-child(2),.ct-table td:nth-child(3){grid-column:1/-1;font-size:.86rem;color:#334155}
+      .ct-table td:nth-child(2)::before{content:"開搶：";color:#c2410c;font-weight:800}
+      .ct-table td:nth-child(3)::before{content:"適用範圍：";color:#c2410c;font-weight:800}
+      .ct-table td.ct-empty{grid-column:1/-1}
+    }
+</style>
 </head>
 <body>
 <div id="app">
