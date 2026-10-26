@@ -4594,20 +4594,7 @@ const Native = (() => {
   const C = window.Capacitor;
   const on = Boolean(C && C.isNativePlatform && C.isNativePlatform() && C.nativePromise);
   let lastConn = '', lastRem = '', timer = null;
-  
-  const diag = [];
-  const call = (method, opts) => C.nativePromise('CapacitorBackgroundRunner', method, opts)
-    .then(r => { diag.push(`${opts && opts.event || method}：成功`); return r; })
-    .catch(e => { diag.push(`${opts && opts.event || method}：失敗（${String(e && e.message || e).slice(0, 80)}）`); return null; });
-  if (/; wv\)/.test(navigator.userAgent)) setTimeout(() => {
-    const box = document.createElement('div');
-    box.style.cssText = 'position:fixed;left:8px;right:8px;bottom:70px;z-index:99999;background:#111827;color:#fff;font-size:13px;line-height:1.5;padding:10px 12px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.3)';
-    const plug = C && C.isPluginAvailable ? (C.isPluginAvailable('CapacitorBackgroundRunner') ? '有' : '沒有') : '—';
-    box.innerHTML = `<b>檢查訊息（截圖給 Claude）</b><br>手機溝通：${C ? '有' : '沒有'}・手機 App：${on ? '是' : '否'}・背景功能：${plug}・財務連線：${Fin.ready() ? '已設定' : '未設定'}・分海資料：${typeof tideLoaded !== 'undefined' && tideLoaded ? '已載入' : '未載入'}<br>${diag.join('<br>') || '尚未呼叫'}`;
-    box.onclick = () => box.remove();
-    document.body.appendChild(box);
-    setTimeout(() => box.remove(), 30000);
-  }, 15000);
+  const call = (method, opts) => C.nativePromise('CapacitorBackgroundRunner', method, opts).catch(() => null);
   async function push() {
     if (!on || !Fin.ready()) return;
     if (!lsGet('xb.notifyOk')) { const r = await call('requestPermissions', { apis: ['notifications'] }); if (r) lsSet('xb.notifyOk', '1'); }
