@@ -1,0 +1,13 @@
+{
+  "appId": "io.github.bearbabybaby_ai.bearbao",
+  "appName": "熊寶系統",
+  "webDir": "www",
+  "server": {
+    "url": "https://bearbabybaby-ai.github.io/bearbao/",
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "adjustMarginsForEdgeToEdge": "disable"
+  }
+}
