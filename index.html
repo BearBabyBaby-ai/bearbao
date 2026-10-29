@@ -1047,7 +1047,23 @@
       .ct-table td:nth-child(3)::before{content:"適用範圍：";color:#c2410c;font-weight:800}
       .ct-table td.ct-empty{grid-column:1/-1}
     }
-</style>
+    
+    #lnList .ln-card{cursor:pointer}
+    .tp{padding:4px 2px 6px}
+    .tp-pic{display:block;width:100%;max-height:220px;object-fit:cover;border-radius:14px;margin-bottom:12px}
+    .tp-tag{display:inline-block;padding:2px 12px;border:1px solid #a78bfa;border-radius:999px;color:#6d28d9;font-size:.85rem;font-weight:700;background:#f5f3ff}
+    .tp-name{margin:8px 0 6px;font-size:1.6rem;font-weight:800;color:#1f2937;line-height:1.3}
+    .tp-text{margin:0 0 10px;color:#374151;line-height:1.8;font-size:.98rem}
+    .tp-rows{display:grid;gap:8px;margin:6px 0 4px}
+    .tp-row{display:grid;grid-template-columns:4.5em 1fr;gap:10px;align-items:start;font-size:.97rem}
+    .tp-wide .tp-row{grid-template-columns:8.2em 1fr}
+    .tp-row span{color:#6b7280}
+    .tp-row b{font-weight:600;color:#111827;word-break:break-word}
+    .tp-row a{color:#0a6fb3;text-decoration:none}
+    .tp-sec{margin-top:14px;padding-top:12px;border-top:1px dashed #d1d5db}
+    .tp-sec h4{margin:0 0 6px;font-size:1.02rem;color:#7c2d12}
+    .tp-go{display:block;margin-top:16px;padding:12px;border-radius:12px;background:#0a6fb3;color:#fff;text-align:center;font-weight:700;text-decoration:none}
+  </style>
 </head>
 <body>
 <div id="app">
@@ -1931,6 +1947,7 @@ function normalizeSheetRow(row, config) {
     const byPrefix = prefix => { const key = Object.keys(row).find(k => k.startsWith(prefix)); return key ? clean(row[key]) : ''; };
     const lantern = { theme: byPrefix('元宵主題'), feature: byPrefix('元宵特色'), dates: byPrefix('元宵活動日期'), time: fmtTime(byPrefix('元宵活動時間')), content: byPrefix('元宵活動內容'), gov: byPrefix('參加政府單位活動') };
     if (Object.values(lantern).some(Boolean)) d.lantern = lantern;
+    d.history = byPrefix('廟宇史蹟'); d.legend = byPrefix('傳說');
   }
   if (config.match) { d.desc = pick('簡易說明'); d.legend = pick('傳說'); }   
   d.searchText = [d.name, d.region, d.village, d.mainCategory, d.category, d.service, d.recommendation, d.deity, d.address, d.hours, d.type, d.desc || ''].join(' ').toLowerCase();
@@ -4588,6 +4605,44 @@ const Wx = (() => {
   return { load, render, renderHome, get loaded() { return Boolean(fc); } };
 })();
 Wx.load();
+
+
+const TempleInfo = (() => {
+  const row = (k, v) => v ? `<div class="tp-row"><span>${k}</span><b>${v}</b></div>` : '';
+  const rowAll = (k, v) => `<div class="tp-row"><span>${k}</span><b>${v || '—'}</b></div>`;   
+  function open(d) {
+    const L = d.lantern || {};
+    const src = imageUrl(d.image);
+    const items = L.content ? L.content.split(/[│|｜]/).map(clean).filter(Boolean) : [];
+    const html = `<div class="tp">
+      ${src ? `<img class="tp-pic" src="${esc(src)}" alt="${esc(d.name)}" referrerpolicy="no-referrer">` : ''}
+      <span class="tp-tag">廟宇</span>
+      <h2 class="tp-name">${esc(d.name)}</h2>
+      ${d.history ? `<p class="tp-text">${richText(d.history)}</p>` : ''}
+      <div class="tp-rows">
+        ${row('所在地', esc([d.region, d.village].filter(Boolean).join('・')))}
+        ${row('地址', esc(d.address))}
+        ${row('電話', d.phone ? `<a href="tel:${esc(d.phone.replace(/[^\d+]/g, ''))}">${esc(d.phone)}</a>` : '')}
+        ${row('主祀', esc(d.deity))}
+        ${row('座標', `${d.lat.toFixed(7)}, ${d.lng.toFixed(7)}`)}
+      </div>
+      ${d.lantern ? `<div class="tp-sec"><h4>🏮 元宵活動</h4><div class="tp-rows tp-wide">
+        ${rowAll('元宵主題', esc(L.theme))}${rowAll('元宵特色', L.feature ? richText(L.feature) : '')}${rowAll('元宵活動日期', esc(L.dates))}${rowAll('元宵活動時間', esc(L.time))}${rowAll('元宵活動內容', items.map(t => richText(t)).join('、'))}${rowAll('參加政府單位活動', esc(L.gov))}
+      </div></div>` : ''}
+      ${d.legend ? `<div class="tp-sec"><h4>📜 傳說</h4><p class="tp-text">${richText(d.legend)}</p></div>` : ''}
+      <a class="tp-go" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer">開啟 Google 地圖</a>
+    </div>`;
+    Modal.open('廟宇資訊', html);
+  }
+  document.addEventListener('click', e => {
+    const card = e.target.closest('#lnList .ln-card');
+    if (!card || e.target.closest('a, button, .js-zoom-any')) return;
+    const key = card.querySelector('[data-place-key]')?.dataset.placeKey;
+    const d = key && allData.find(x => keyOf(x) === key);
+    if (d) open(d);
+  });
+  return { open };
+})();
 
 
 const Native = (() => {
