@@ -3339,10 +3339,24 @@ const Lantern = (() => {
     $('lnCount').textContent = `目前篩選 ${shown.length} 間（輸出內容＝目前畫面上的廟宇）`;
     document.querySelectorAll('.ln-export-btn').forEach(b => { b.disabled = !shown.length; });
     
-    const groups = [];
-    shown.forEach(d => { const r = d.region || '其他'; let g = groups.find(x => x.r === r); if (!g) groups.push(g = { r, list: [] }); g.list.push(d); });
-    groups.sort((a, b) => regionIdx(a.r) - regionIdx(b.r));
-    list.innerHTML = shown.length ? groups.map(g => `<section class="ln-group"><h3 class="ln-region" style="--rc:${regionConfig[g.r]?.color || '#b91c1c'}"><span>${esc(g.r)}</span><small>${g.list.length} 間</small></h3><div class="ln-grid">${g.list.map(card).join('')}</div></section>`).join('')
+    let groups = [];
+    if ($('lnSort').value === 'day') {
+      const map = new Map(), today = todayKey();
+      shown.forEach(d => {
+        const r = dateRange(d.lantern.dates), days = [];
+        if (r) for (let k = r.start, i = 0; k <= r.end && i < 120; k = addDays(k, 1), i++) { if (k >= today && (!day || k === day)) days.push(k); }
+        else days.push('');
+        days.forEach(k => { if (!map.has(k)) map.set(k, []); map.get(k).push(d); });
+      });
+      groups = [...map.keys()].sort((a, b) => (a || '9999').localeCompare(b || '9999')).map(k => ({
+        r: k ? `${k.slice(5)}（${WEEK[weekdayOf(k)]}）${k === today ? '・今天' : ''}` : '日期未定', c: k === today ? '#15803d' : '#b91c1c',
+        list: map.get(k).sort((a, b) => regionIdx(a.region) - regionIdx(b.region) || a.village.localeCompare(b.village, 'zh-Hant') || a.name.localeCompare(b.name, 'zh-Hant'))
+      }));
+    } else {
+      shown.forEach(d => { const r = d.region || '其他'; let g = groups.find(x => x.r === r); if (!g) groups.push(g = { r, list: [], c: regionConfig[r]?.color || '#b91c1c' }); g.list.push(d); });
+      groups.sort((a, b) => regionIdx(a.r) - regionIdx(b.r));
+    }
+    list.innerHTML = shown.length ? groups.map(g => `<section class="ln-group"><h3 class="ln-region" style="--rc:${g.c}"><span>${esc(g.r)}</span><small>${g.list.length} 間</small></h3><div class="ln-grid">${g.list.map(card).join('')}</div></section>`).join('')
       : `<div class="empty">${all.length ? '沒有符合條件的廟宇' : '目前沒有尚未結束的元宵活動'}</div>`;
   }
 
@@ -4642,7 +4656,7 @@ Wx.load();
 
 
 if (document.getElementById('lnSearch')) document.getElementById('lnSearch').placeholder = '搜尋廟宇、村里、主題、內容';
-if (document.getElementById('lnSort')) document.getElementById('lnSort').innerHTML = '<option value="village" selected>依村里</option><option value="date">依活動日期</option>';
+if (document.getElementById('lnSort')) document.getElementById('lnSort').innerHTML = '<option value="village" selected>依區域・村里</option><option value="date">依區域・活動日期</option><option value="day">依日期分組</option>';
 if (typeof Lantern !== 'undefined') Lantern.render();
 
 
