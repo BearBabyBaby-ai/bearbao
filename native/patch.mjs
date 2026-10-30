@@ -109,7 +109,7 @@ public class MainActivity extends BridgeActivity {
 `);
 
 // 3-1. 桌面小工具「熊寶貼心提醒」
-for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
+for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java', 'BgSync.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
 for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_item.xml', 'layout'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
