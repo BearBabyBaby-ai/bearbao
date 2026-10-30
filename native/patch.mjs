@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 24;
-const VERSION_NAME = '2.4.0';
+const VERSION_CODE = 25;
+const VERSION_NAME = '2.5.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
@@ -31,6 +31,8 @@ edit(`${A}/src/main/AndroidManifest.xml`, s => {
     '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />',
     '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
     '    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />',
+    '    <uses-permission android:name="android.permission.SET_WALLPAPER" />',
+    '    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
     '    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />',
     '    <uses-feature android:name="android.hardware.camera" android:required="false" />',
     '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />'
@@ -58,6 +60,7 @@ import com.getcapacitor.BridgeActivity;
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        registerPlugin(BearLockPlugin.class);   // 鎖屏月曆
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -100,12 +103,13 @@ public class MainActivity extends BridgeActivity {
     public void onPause() {
         super.onPause();
         ReminderWidget.refresh(this);   // 離開 App 時更新桌面小工具
+        LockCalendar.refreshAsync(this);   // 以及鎖屏月曆
     }
 }
 `);
 
 // 3-1. 桌面小工具「熊寶貼心提醒」
-for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
+for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
 for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_item.xml', 'layout'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
@@ -130,6 +134,11 @@ edit(`${A}/src/main/AndroidManifest.xml`, s => must(s, '    </application>', `  
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/reminder_widget_info" />
         </receiver>
         <service android:name=".ReminderListService" android:exported="false" android:permission="android.permission.BIND_REMOTEVIEWS" />
+        <receiver android:name=".LockCalReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <activity android:name=".AreaPickerActivity" android:exported="false" android:excludeFromRecents="true" android:noHistory="true" android:taskAffinity="" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
     </application>`));
 

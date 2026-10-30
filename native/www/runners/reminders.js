@@ -127,6 +127,8 @@ addEventListener('setConnection', function (resolve, reject, args) {
 addEventListener('setWidget', function (resolve, reject, args) {
   try {
     if (args && args.tide) kvSet('xb.tide', String(args.tide));
+    if (args && args.cal) kvSet('xb.cal', String(args.cal));
+    if (args && typeof args.calHidden === 'string') kvSet('xb.calHidden', args.calHidden);
     if (args && args.appArea) kvSet('xb.appArea', str(args.appArea));
     if (args && args.autoArea) kvSet('xb.autoArea', str(args.autoArea));
     resolve({ ok: true });

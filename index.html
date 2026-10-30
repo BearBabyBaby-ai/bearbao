@@ -1091,6 +1091,11 @@
       #evLanternMode .ln-card{max-width:100%}
       #evLanternMode .ln-items span,#evLanternMode .ln-feature{overflow-wrap:anywhere}
     }
+  
+    
+    .lk-p{margin:0 0 10px;line-height:1.7;color:#374151}
+    .lk-btns{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
+    .lk-msg{margin:10px 0 0;font-weight:800;color:#0f766e;min-height:1.2em}
   </style>
 </head>
 <body>
@@ -4725,21 +4730,88 @@ const Native = (() => {
     }
     return out;
   }
+  
+  const RC = { '繳費': ['繳費', '#854D0E', '💳'], '機票搶票': ['搶票', '#C2410C', '🎫'], '醫療': ['醫療', '#B91C1C', '🏥'], '生日紀念': ['生日', '#BE185D', '🎂'], '車輛保養': ['保養', '#1D4ED8', '🔧'], '證件': ['證件', '#6D28D9', '🪪'], '保險': ['保險', '#0E7490', '🛡️'], '預約': ['預約', '#15803D', '📌'], '稅務': ['稅務', '#4D7C0F', '🧾'], '節日': ['節日', '#A21CAF', '🎉'] };
+  function calLook(it) {
+    const name = String(it.name || '');
+    if (it.src === 'remind') { const cat = String(it.content || '').split('・')[0]; const r = RC[cat] || ['提醒', '#1F2937', '🔔']; return { t: r[0], c: r[1], i: r[2], cat }; }
+    if (it.src === 'activity') return { t: '活動', c: '#1D4ED8', i: '📅', cat: '活動' };
+    if (/生日/.test(name)) return { t: '生日', c: '#BE185D', i: '🎂', cat: '生日紀念' };
+    if (it.cat === '節日') return { t: name.slice(0, 2), c: '#A21CAF', i: '🎉', cat: '節日' };
+    if (it.cat === '機票搶票') return { t: '搶票', c: '#C2410C', i: '🎫', cat: '機票搶票' };
+    if (/回診/.test(name)) return { t: '回診', c: '#B91C1C', i: '🏥', cat: '醫療' };
+    return { t: name.slice(0, 2), c: '#0F766E', i: '📌', cat: it.cat };
+  }
+  function calData() {
+    if (typeof Cal === 'undefined' || !Cal.loaded) return null;
+    const today = todayKey(), marks = {}, list = [];
+    const startKey = today.slice(0, 8) + '01', endKey = addDays(today, 70);
+    const real = it => it.src !== 'expense';
+    for (let k = startKey, n = 0; k <= endKey && n < 80; k = addDays(k, 1), n++) {
+      const on = Cal.itemsOn(k).filter(real);
+      const cell = on.filter(it => it.yearly || daysBetween(it.start, it.end) < 7 || it.start === k).slice(0, 2).map(it => { const l = calLook(it); return { t: l.t, c: l.c }; });
+      if (cell.length) marks[k] = cell;
+      if (k >= today && list.length < 8) on.filter(it => it.yearly || it.start === k).forEach(it => {
+        if (list.length >= 8) return;
+        const l = calLook(it), allDay = l.cat === '生日紀念' || l.cat === '節日';
+        list.push({ d: k, n: `${l.i} ${plainText(it.name)}${l.cat === '機票搶票' ? ' 開搶' : ''}`, tm: allDay ? '' : String(it.time || ''), c: l.c });
+      });
+    }
+    return { marks, list };
+  }
+  let calTimer = null;
   function pushWidget(extra) {
     const details = { appArea: lsGet('xb.wxArea') || '馬公市', ...extra };
     const t = tideDays();
     if (t) details.tide = JSON.stringify(t);
+    const cd = calData();
+    if (cd) details.cal = JSON.stringify(cd);
+    details.calHidden = (CFG.calendarHidden || []).join(',');
     return call('dispatchEvent', { event: 'setWidget', details });
   }
   if (on) {
     let tries = 0;
-    const wait = setInterval(() => { if (tideDays() || ++tries > 40) { clearInterval(wait); pushWidget({}); } }, 1500);
+    const wait = setInterval(() => { if ((tideDays() && calData()) || ++tries > 40) { clearInterval(wait); pushWidget({}); } }, 1500);
+    Fin.on(() => { clearTimeout(calTimer); calTimer = setTimeout(() => { if (calData()) pushWidget({}); }, 2500); });
     if (navigator.geolocation) navigator.geolocation.getCurrentPosition(pos => {
       const a = nearest(pos.coords.latitude, pos.coords.longitude);
       if (a) pushWidget({ autoArea: a });
     }, () => {}, { maximumAge: 3600000, timeout: 20000 });
   }
-  return { on };
+  return { on, pushWidget };
+})();
+
+
+(() => {
+  const C = window.Capacitor;
+  const today = document.getElementById('calToday');
+  if (!Native.on || !today) return;
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.className = 'cal-btn'; btn.id = 'calLock'; btn.textContent = '🔒 鎖屏';
+  today.after(btn);
+  const has = () => Boolean(C.isPluginAvailable && C.isPluginAvailable('BearLock'));
+  const call = (m, o = {}) => C.nativePromise('BearLock', m, o);
+  async function open(note = '') {
+    if (!has()) { Modal.open('🔒 鎖屏月曆', '<p class="lk-p">請先安裝新版熊寶系統安裝檔（2.5.0 以上）。</p>'); return; }
+    let st = { on: false, hasPhoto: false };
+    try { st = await call('status'); } catch (_) {}
+    Modal.open('🔒 鎖屏月曆', `<div class="lk"><p class="lk-p">在手機鎖屏顯示熊寶月曆（國曆＋農曆）、今日分海、近期提醒・活動，換日或資料變動時自動更新。</p>
+      <p class="lk-p">目前：<b>${st.on ? '已開啟' : '未開啟'}</b></p>
+      <div class="lk-btns"><button type="button" class="xb-btn pri" data-lk="pick">${st.hasPhoto ? '更換鎖屏照片' : '選擇鎖屏照片並開啟'}</button>${st.hasPhoto && !st.on ? '<button type="button" class="xb-btn" data-lk="on">開啟</button>' : ''}${st.on ? '<button type="button" class="xb-btn" data-lk="off">關閉</button>' : ''}</div>
+      <p class="lk-msg" id="lkMsg">${note}</p></div>`);
+  }
+  document.addEventListener('click', async e => {
+    if (e.target.closest('#calLock')) { open(); return; }
+    const b = e.target.closest('[data-lk]');
+    if (!b) return;
+    const msg = document.getElementById('lkMsg'), act = b.dataset.lk;
+    b.disabled = true; msg.textContent = '處理中…';
+    try {
+      if (act !== 'off') await Native.pushWidget({});
+      if (act === 'pick') await call('pick'); else await call('enable', { on: act === 'on' });
+      open(act === 'off' ? '已關閉，鎖屏改回跟桌面相同的桌布。' : '✅ 已設定好，按電源鍵鎖屏就能看到。');
+    } catch (err) { msg.textContent = String(err && err.message || err || '設定失敗'); b.disabled = false; }
+  });
 })();
 
 
