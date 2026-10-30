@@ -119,13 +119,10 @@ final class LockCalendar {
         return new int[]{Math.max(w, 720), Math.max(h, 1280)};
     }
 
-    /* ---------- 要顯示哪個月：月底最後一週改顯示下個月 ---------- */
+    /* ---------- 顯示這個月（每月 1 日換月） ---------- */
     private static int[] shownMonth() {
         Calendar now = Calendar.getInstance(WidgetData.TPE);
-        int y = now.get(Calendar.YEAR), m = now.get(Calendar.MONTH) + 1, d = now.get(Calendar.DAY_OF_MONTH);
-        int last = now.getActualMaximum(Calendar.DAY_OF_MONTH);
-        if (d >= last - 6) { m++; if (m > 12) { m = 1; y++; } }
-        return new int[]{y, m};
+        return new int[]{now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1};
     }
 
     /** 資料沒變就不重設鎖屏，避免畫面閃動 */
