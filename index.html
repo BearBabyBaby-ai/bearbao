@@ -4034,48 +4034,10 @@ const Invoice = (() => {
       try { fromQRPhoto(await nativePhoto()); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); }
       return;
     }
-    const sheet = Modal.open('📷 掃描電子發票', `<div class="xb-scan"><video playsinline muted></video><div class="frame"></div><p id="scanMsg">把發票左右兩個 QR Code 放進框內</p></div>
-      <div class="xb-form-acts" style="justify-content:space-between"><label class="xb-btn pri">📸 拍照掃描<input type="file" accept="image/*" capture="environment" id="scanShot" hidden></label><label class="xb-btn">🖼 改選相片<input type="file" accept="image/*" id="scanFile" hidden></label><button type="button" class="xb-btn" data-xb-close>關閉</button></div>
-      <p class="xb-note">手機離發票約 15～20 公分，畫面模糊時點一下畫面對焦；還是讀不到就按「拍照掃描」。掃到後會自動帶出發票號碼、日期、金額與店家，確認後儲存。</p>`, stopCamera);
-    const video = sheet.querySelector('video'), msg = sheet.querySelector('#scanMsg');
-    sheet.querySelectorAll('#scanFile, #scanShot').forEach(inp => inp.addEventListener('change', e => { const f = e.target.files[0]; if (f) { stopCamera(); fromQRPhoto(f); } }));
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
-      video.srcObject = stream; await video.play();
-    } catch (err) { msg.textContent = '無法開啟相機，請允許相機權限，或按「拍照掃描」'; return; }
-    
-    const track = stream.getVideoTracks()[0];
-    const caps = track && track.getCapabilities ? track.getCapabilities() : {};
-    const fm = caps.focusMode || [];
-    const tune = async (c) => { try { await track.applyConstraints({ advanced: [c] }); } catch (_) {} };
-    if (fm.includes('continuous')) await tune({ focusMode: 'continuous' });
-    if (caps.zoom && caps.zoom.max > 1) await tune({ zoom: Math.min(2, caps.zoom.max) });
-    video.addEventListener('click', async e => {
-      const r = video.getBoundingClientRect(), pt = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
-      msg.textContent = '對焦中…';
-      if (fm.includes('single-shot')) await tune({ focusMode: 'single-shot', pointsOfInterest: [pt] });
-      else if (fm.includes('continuous')) { await tune({ focusMode: 'manual' }); await tune({ focusMode: 'continuous', pointsOfInterest: [pt] }); }
-      setTimeout(async () => { if (fm.includes('continuous')) await tune({ focusMode: 'continuous' }); msg.textContent = '把發票左右兩個 QR Code 放進框內'; }, 1500);
-    });
-    let busy = false, seenRight = '';
-    timer = setInterval(async () => {
-      if (busy || !video.videoWidth) return;
-      busy = true;
-      try {
-        const c = drawScaled(video, video.videoWidth, video.videoHeight, 1280);
-        const { left, right } = await detectAll(c);
-        if (right) seenRight = right;
-        if (left) {
-          const info = parseQR(left, right || seenRight);
-          if (info) {
-            const shot = drawScaled(video, video.videoWidth, video.videoHeight, 1600);
-            stopCamera();
-            if (navigator.vibrate) navigator.vibrate(80);
-            openForm({ ...info, method: '電子發票QR', image: canvasToB64(shot) });
-          }
-        } else if (right) msg.textContent = '找到右邊 QR，請讓左邊 QR 也入鏡';
-      } catch (_) {  } finally { busy = false; }
-    }, 350);
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.setAttribute('capture', 'environment');
+    input.onchange = () => { const f = input.files[0]; if (f) fromQRPhoto(f); };
+    input.click();
   }
   async function fromQRPhoto(file) {
     const sheet = Modal.open('🔍 判別發票資訊', '<div class="xb-empty">熊寶正在讀發票上的號碼、日期、金額…</div>');
