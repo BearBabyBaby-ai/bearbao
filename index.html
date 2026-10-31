@@ -4121,8 +4121,7 @@ const Invoice = (() => {
     const hit = (Fin.data?.invoices || []).find(s => String(s['發票號碼']).toUpperCase().replace(/[^A-Z0-9]/g, '') === no);
     if (!hit) return false;
     Modal.close();
-    if (navigator.vibrate) navigator.vibrate([120, 80, 120]);
-    Modal.open('⚠️ 發票重複', `<div class="xb-empty"><b>${esc(no)}</b> 已經記錄過了，這次不會再存入。<br>${esc(hit['購買日期'] || '')}・${esc(hit['資料來源'] || '')}・${money(hit['金額'])} 元・${esc(hit['兌獎狀態'] || '未開獎')}</div><div class="xb-form-acts"><button type="button" class="xb-btn pri" data-xb-close>知道了</button></div>`);
+    toast('finStatus', `⚠️ 發票重複：${no} 已經記錄過，這次不納入（${hit['購買日期'] || ''}・${hit['資料來源'] || ''}・${money(hit['金額'])} 元）`, true);
     return true;
   }
   async function autoSave(info) {
