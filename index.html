@@ -4468,7 +4468,14 @@ const Finance = (() => {
     if (del) {
       const [action, id] = del.dataset.invDel ? ['deleteInvoice', del.dataset.invDel] : del.dataset.ledDel ? ['deleteLedger', del.dataset.ledDel] : ['deleteFuel', del.dataset.fuelDel];
       if (!confirm(action === 'deleteInvoice' ? '確定刪除這張發票？（對應的收支與雲端圖片也會一併移除）' : '確定刪除？')) return;
-      Fin.call(action, { id }).then(() => { toast('finStatus', '🗑 已刪除'); return Fin.sync(true); }).catch(err => toast('finStatus', err.message, true));
+      Fin.call(action, { id }).then(async () => {
+        if (action === 'deleteInvoice') {
+          await Fin.sync(true);
+          const left = (D().ledger || []).filter(l => l['關聯ID'] === id);
+          for (const l of left) await Fin.call('deleteLedger', { id: l.ID });
+        }
+        toast('finStatus', '🗑 已刪除'); return Fin.sync(true);
+      }).catch(err => toast('finStatus', err.message, true));
       return;
     }
     const claim = t.closest('[data-inv-claim]');
