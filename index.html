@@ -4044,23 +4044,28 @@ const Invoice = (() => {
   
   let stream = null, timer = null;
   function stopCamera() { clearInterval(timer); timer = null; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+  /* 拍照後不用等：照片排進背景，依序判別 → 存入 → 比對中獎 */
+  let queue = Promise.resolve(), pending = 0;
+  function busy(msg) { const el = $('finStatus'); if (!el) return; clearTimeout(el._t); el.className = 'xb-status'; el.textContent = msg; }
+  function enqueue(file) {
+    pending++;
+    busy(`📥 已收到發票，背景處理中（${pending} 張）`);
+    queue = queue.then(() => fromQRPhoto(file)).catch(err => toast('finStatus', String(err && err.message || err), true)).finally(() => { pending--; });
+  }
   async function scanCamera() {
     if (!Fin.ready()) { showView('finance'); return; }
-    
     if (hasNative('Camera')) {
-      try { fromQRPhoto(await nativePhoto()); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); }
+      try { enqueue(await nativePhoto()); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); }
       return;
     }
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.setAttribute('capture', 'environment');
-    input.onchange = () => { const f = input.files[0]; if (f) fromQRPhoto(f); };
+    input.onchange = () => { const f = input.files[0]; if (f) enqueue(f); };
     input.click();
   }
   async function fromQRPhoto(file) {
-    const sheet = Modal.open('🔍 判別發票資訊', '<div class="xb-empty">熊寶正在讀發票上的號碼、日期、金額…</div>');
     try {
       const img = await fileToImage(file);
-      
       const W = img.naturalWidth, H = img.naturalHeight;
       const found = [], seen = new Set();
       const tries = [[0, 0, W, H, 2000], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400]];
@@ -4081,9 +4086,9 @@ const Invoice = (() => {
       }
       const info = parseQR(left, right);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
-      if (!info) { ocrFromImage(shot); return; }   
-      autoSave({ ...info, method: '拍照', image: shot, header });
-    } catch (err) { Modal.close(); alert(err.message); }
+      if (!info) { await ocrFromImage(shot); return; }
+      await autoSave({ ...info, method: '拍照', image: shot, header });
+    } catch (err) { toast('finStatus', String(err && err.message || err), true); }
   }
   
   async function pickPaper() { return scanCamera(); }
@@ -4103,61 +4108,71 @@ const Invoice = (() => {
     input.click();
   }
   async function ocrFromImage(b64) {
-    Modal.open('🔍 判別發票資訊', '<div class="xb-empty">熊寶正在讀發票上的號碼、日期、金額，約 5～15 秒…</div>');
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
-      autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: r.merchant, category: r.category, method: '拍照', image: b64, ocrText: r.text });
-    } catch (err) { Modal.close(); alert(`辨識失敗：${err.message}\n可以改用「手動輸入」。`); }
+      await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: r.merchant, category: r.category, method: '拍照', image: b64, ocrText: r.text });
+    } catch (err) { toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
+  const banOf = v => { const d = String(v || '').replace(/\D/g, ''); return d ? d.padStart(8, '0') : ''; };
+  function shopOf(ban) {
+    const hit = (Fin.data?.shops || []).find(s => /^\d+$/.test(String(s['關鍵字或統編'])) && banOf(s['關鍵字或統編']) === ban);
+    return hit ? { name: hit['顯示名稱'], category: hit['預設類別'] } : null;
+  }
   async function merchantOf(ban) {
-    const shops = Fin.data?.shops || [];
-    const hit = shops.find(s => String(s['關鍵字或統編']).replace(/\D/g, '').padStart(8, '0') === ban && /^\d+$/.test(String(s['關鍵字或統編'])));
-    if (hit) return { name: hit['顯示名稱'], category: hit['預設類別'] };
+    const hit = shopOf(ban);
+    if (hit) return hit;
     try { return await Fin.call('lookupMerchant', { ban }); } catch (_) { return null; }
+  }
+  /* 從發票最上面印的字找出店名 */
+  function nameFromText(text) {
+    const kw = (Fin.data?.shops || []).find(s => !/^\d+$/.test(String(s['關鍵字或統編'])) && String(s['關鍵字或統編']) && text.includes(String(s['關鍵字或統編'])));
+    if (kw) return { name: kw['顯示名稱'], category: kw['預設類別'] || '' };
+    for (const raw of text.split(/\n/)) {
+      const t = raw.replace(/\s*[A-Za-z][A-Za-z0-9\s.'&-]*$/, '').replace(/\s+/g, '').trim();
+      if (/[\u4e00-\u9fff]{2,}/.test(t) && !/發票|證明聯|\d{3}年|[A-Z]{2}-?\d{8}|隨機碼|總計|賣方/.test(t)) return { name: t.slice(0, 20), category: '' };
+    }
+    return null;
   }
   
   function alreadySaved(no) {
     const hit = (Fin.data?.invoices || []).find(s => String(s['發票號碼']).toUpperCase().replace(/[^A-Z0-9]/g, '') === no);
     if (!hit) return false;
-    Modal.close();
     toast('finStatus', `⚠️ 發票重複：${no} 已經記錄過，這次不納入（${hit['購買日期'] || ''}・${hit['資料來源'] || ''}・${money(hit['金額'])} 元）`, true);
     return true;
   }
   async function autoSave(info) {
     const no = String(info.invoiceNo || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^[A-Z]{2}\d{8}$/.test(no)) { openForm(info); return; }   
+    if (!/^[A-Z]{2}\d{8}$/.test(no)) { openForm(info); return; }
     if (alreadySaved(no)) return;
-    Modal.open('💾 存入中', '<div class="xb-empty">正在存入並比對是否中獎…</div>');
     const st = Fin.data?.settings || {};
     const cats = st.expense?.length ? st.expense : ['餐飲日用', '加油', '交通', '居家', '其他'];
+    const ban = banOf(info.ban);
     let merchant = info.merchant || '', category = info.category || '';
-    if (info.ban && (!merchant || !category)) { const m = await merchantOf(info.ban); if (m) { merchant = merchant || m.name || ''; category = category || m.category || ''; } }
-    if (!merchant && info.ban) {
-      const past = (Fin.data?.invoices || []).find(s => String(s['賣方統編']) === info.ban && s['資料來源']);
+    /* 店名：店家對照 → 以前記過的同統編 → 發票上印的店名 → 統編登記名稱 */
+    if (!merchant && ban) { const m = shopOf(ban); if (m) { merchant = m.name || ''; category = category || m.category || ''; } }
+    if (!merchant && ban) {
+      const past = (Fin.data?.invoices || []).find(s => banOf(s['賣方統編']) === ban && s['資料來源'] && s['資料來源'] !== '未知店家');
       if (past) { merchant = past['資料來源']; category = category || past['類別'] || ''; }
     }
     if (!merchant && info.header) {
       try {
         const r = await Fin.call('ocr', { image: info.header, mime: 'image/jpeg' }, 60000);
-        const text = String(r.text || '');
-        const kw = (Fin.data?.shops || []).find(s => !/^\d+$/.test(String(s['關鍵字或統編'])) && String(s['關鍵字或統編']) && text.includes(String(s['關鍵字或統編'])));
-        if (kw) { merchant = kw['顯示名稱']; category = category || kw['預設類別'] || ''; }
-        else merchant = r.merchant || (text.split(/\n/).map(t => t.trim()).find(t => t.length >= 2 && !/發票|證明聯|\d{3}年|[A-Z]{2}-?\d{8}/.test(t)) || '');
-        category = category || r.category || '';
+        const m = nameFromText(String(r.text || ''));
+        if (m) { merchant = m.name; category = category || m.category || ''; }
       } catch (_) {  }
     }
+    if (!merchant && ban) { const m = await merchantOf(ban); if (m) { merchant = m.name || ''; if (m.category && m.category !== '其他') category = category || m.category; } }
     if (fuelItem(info.items)) category = '加油';
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
-    const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': info.ban || '', '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
+    const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': ban, '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
     try {
       const saved = await Fin.call('saveInvoice', { invoice: inv, image: info.image || '', mime: 'image/jpeg', addLedger: true, fuel: null }, 90000);
-      Modal.close();
       const st2 = saved['兌獎狀態'];
       toast('finStatus', st2 === '中獎' ? `🎉 恭喜！${saved['發票號碼']} 中了${saved['中獎獎別']} ${money(saved['中獎金額'])} 元！` : `✅ 已存入 ${saved['發票號碼']}（${saved['資料來源'] || ''} ${money(saved['金額'])} 元・${st2}）`);
       if (st2 === '中獎') Helper.say(`🎉 恭喜中獎！<b>${esc(saved['中獎獎別'])} ${money(saved['中獎金額'])} 元</b>，記得在領獎期限內兌領喔！`, true);
       await Fin.sync(true);
-    } catch (err) { Modal.close(); alert(err.message); }
+    } catch (err) { toast('finStatus', err.message, true); }
   }
   function openForm(info = {}) {
     const st = Fin.data?.settings || {};
