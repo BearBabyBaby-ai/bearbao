@@ -3979,32 +3979,48 @@ const Invoice = (() => {
   
   async function detectAll(canvas) {
     const out = [];
+    const add = (text, pts) => {
+      if (!text || !pts || !pts.length) return;
+      const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+      out.push({ text, x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2, size: Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) });
+    };
     try {
       const ZX = await loadZX();
       const img = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
-      (await ZX.readBarcodes(img, { formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 4 })).forEach(b => out.push(b.text));
+      (await ZX.readBarcodes(img, { formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 16 })).forEach(b => { const q = b.position || {}; add(b.text, [q.topLeft, q.topRight, q.bottomRight, q.bottomLeft].filter(Boolean)); });
     } catch (_) {  }
     if ('BarcodeDetector' in window) {
-      try { const det = new BarcodeDetector({ formats: ['qr_code'] }); (await det.detect(canvas)).forEach(b => out.push(b.rawValue)); } catch (_) {  }
+      try { const det = new BarcodeDetector({ formats: ['qr_code'] }); (await det.detect(canvas)).forEach(b => add(b.rawValue, b.cornerPoints && b.cornerPoints.length ? b.cornerPoints : [{ x: b.boundingBox.x, y: b.boundingBox.y }, { x: b.boundingBox.x + b.boundingBox.width, y: b.boundingBox.y + b.boundingBox.height }])); } catch (_) {  }
     }
-    if (!out.some(v => QR_LEFT.test(v)) || !out.some(v => /^\*\*/.test(v))) {
+    if (!out.some(v => QR_LEFT.test(v.text))) {
       await loadJsQR();
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
-      for (let pass = 0; pass < 3; pass++) {
+      for (let pass = 0; pass < 10; pass++) {
         const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const r = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
         if (!r) break;
-        out.push(r.data);
-        if (out.some(v => QR_LEFT.test(v)) && out.some(v => /^\*\*/.test(v))) break;
-        
-        const p = r.location, xs = [p.topLeftCorner.x, p.topRightCorner.x, p.bottomLeftCorner.x, p.bottomRightCorner.x], ys = [p.topLeftCorner.y, p.topRightCorner.y, p.bottomLeftCorner.y, p.bottomRightCorner.y];
+        const p = r.location, pts = [p.topLeftCorner, p.topRightCorner, p.bottomLeftCorner, p.bottomRightCorner];
+        add(r.data, pts);
+        const xs = pts.map(q => q.x), ys = pts.map(q => q.y);
         ctx.fillStyle = '#fff'; ctx.fillRect(Math.min(...xs) - 6, Math.min(...ys) - 6, Math.max(...xs) - Math.min(...xs) + 12, Math.max(...ys) - Math.min(...ys) + 12);
       }
     }
-    return { left: out.find(v => QR_LEFT.test(v)) || '', right: out.find(v => /^\*\*/.test(v)) || '' };
+    return out;
   }
 
-  
+  /* 照片裡有好幾張發票時，以最靠近照片中間的那張為準 */
+  function pickMain(found, W, H) {
+    const cx = W / 2, cy = H / 2, diag = Math.hypot(W, H);
+    const lefts = found.filter(v => QR_LEFT.test(v.text));
+    if (!lefts.length) return { left: '', right: '', pos: null };
+    const maxSize = Math.max(...lefts.map(v => v.size)) || 1;
+    const score = v => Math.hypot(v.x - cx, v.y - cy) / diag - 0.15 * (v.size / maxSize);
+    const left = lefts.slice().sort((a, b) => score(a) - score(b))[0];
+    const rights = found.filter(v => /^\*\*/.test(v.text) && Math.hypot(v.x - left.x, v.y - left.y) < left.size * 4);
+    const right = rights.sort((a, b) => Math.hypot(a.x - left.x, a.y - left.y) - Math.hypot(b.x - left.x, b.y - left.y))[0];
+    return { left: left.text, right: right ? right.text : '', pos: left };
+  }
+
   const CapX = window.Capacitor;
   const hasNative = name => Boolean(CapX && CapX.isNativePlatform && CapX.isNativePlatform() && CapX.isPluginAvailable && CapX.isPluginAvailable(name));
   async function nativePhoto() {
@@ -4044,21 +4060,28 @@ const Invoice = (() => {
     try {
       const img = await fileToImage(file);
       
-      let left = '', right = '';
       const W = img.naturalWidth, H = img.naturalHeight;
-      const tries = [[0, 0, W, H, 2000], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400]];
-      for (const [x, y, w, h, max] of tries) {
+      const found = [], seen = new Set();
+      const tries = [[0, 0, W, H, 2000], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400]];
+      for (let i = 0; i < tries.length; i++) {
+        const [x, y, w, h, max] = tries[i];
         const sc = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
         c.width = Math.round(w * sc); c.height = Math.round(h * sc);
         c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
-        const r = await detectAll(c);
-        left = left || r.left; right = right || r.right;
-        if (left && right) break;
+        (await detectAll(c)).forEach(v => { if (seen.has(v.text)) return; seen.add(v.text); found.push({ text: v.text, x: x + v.x / sc, y: y + v.y / sc, size: v.size / sc }); });
+        if (i >= 1 && found.some(v => QR_LEFT.test(v.text))) break;
+      }
+      const { left, right, pos } = pickMain(found, W, H);
+      let header = '';
+      if (pos) {
+        const z = pos.size, hx = Math.max(0, pos.x - 1.6 * z), hy = Math.max(0, pos.y - 4.4 * z);
+        const hw = Math.min(W, pos.x + 3.6 * z) - hx, hh = Math.min(H, pos.y - 1.2 * z) - hy;
+        if (hw > 20 && hh > 20) { const c = document.createElement('canvas'), k = Math.min(1, 1200 / hw); c.width = Math.round(hw * k); c.height = Math.round(hh * k); c.getContext('2d').drawImage(img, hx, hy, hw, hh, 0, 0, c.width, c.height); header = canvasToB64(c, 0.9); }
       }
       const info = parseQR(left, right);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
       if (!info) { ocrFromImage(shot); return; }   
-      autoSave({ ...info, method: '拍照', image: shot });
+      autoSave({ ...info, method: '拍照', image: shot, header });
     } catch (err) { Modal.close(); alert(err.message); }
   }
   
@@ -4093,14 +4116,36 @@ const Invoice = (() => {
     try { return await Fin.call('lookupMerchant', { ban }); } catch (_) { return null; }
   }
   
+  function alreadySaved(no) {
+    const hit = (Fin.data?.invoices || []).find(s => String(s['發票號碼']).toUpperCase().replace(/[^A-Z0-9]/g, '') === no);
+    if (!hit) return false;
+    Modal.close();
+    toast('finStatus', `📌 這張發票已經記錄過：${no}（${hit['資料來源'] || ''} ${money(hit['金額'])} 元・${hit['兌獎狀態'] || '未開獎'}）`);
+    return true;
+  }
   async function autoSave(info) {
     const no = String(info.invoiceNo || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (!/^[A-Z]{2}\d{8}$/.test(no)) { openForm(info); return; }   
+    if (alreadySaved(no)) return;
     Modal.open('💾 存入中', '<div class="xb-empty">正在存入並比對是否中獎…</div>');
     const st = Fin.data?.settings || {};
     const cats = st.expense?.length ? st.expense : ['餐飲日用', '加油', '交通', '居家', '其他'];
     let merchant = info.merchant || '', category = info.category || '';
     if (info.ban && (!merchant || !category)) { const m = await merchantOf(info.ban); if (m) { merchant = merchant || m.name || ''; category = category || m.category || ''; } }
+    if (!merchant && info.ban) {
+      const past = (Fin.data?.invoices || []).find(s => String(s['賣方統編']) === info.ban && s['資料來源']);
+      if (past) { merchant = past['資料來源']; category = category || past['類別'] || ''; }
+    }
+    if (!merchant && info.header) {
+      try {
+        const r = await Fin.call('ocr', { image: info.header, mime: 'image/jpeg' }, 60000);
+        const text = String(r.text || '');
+        const kw = (Fin.data?.shops || []).find(s => !/^\d+$/.test(String(s['關鍵字或統編'])) && String(s['關鍵字或統編']) && text.includes(String(s['關鍵字或統編'])));
+        if (kw) { merchant = kw['顯示名稱']; category = category || kw['預設類別'] || ''; }
+        else merchant = r.merchant || (text.split(/\n/).map(t => t.trim()).find(t => t.length >= 2 && !/發票|證明聯|\d{3}年|[A-Z]{2}-?\d{8}/.test(t)) || '');
+        category = category || r.category || '';
+      } catch (_) {  }
+    }
     if (fuelItem(info.items)) category = '加油';
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
     const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': info.ban || '', '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
@@ -4162,6 +4207,7 @@ const Invoice = (() => {
       v['發票號碼'] = v['發票號碼'].toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (!/^[A-Z]{2}\d{8}$/.test(v['發票號碼'])) { alert('發票號碼格式：2 碼英文＋8 碼數字'); return; }
       if (!v['購買日期']) { alert('請選擇購買日期'); return; }
+      if (alreadySaved(v['發票號碼'])) return;
       const inv = { '發票號碼': v['發票號碼'], '購買日期': v['購買日期'].replace(/-/g, '/'), '金額': v['金額'], '資料來源': v['資料來源'], '類別': v['類別'], '付款方式': v['付款方式'], '賣方統編': v['賣方統編'], '隨機碼': v['隨機碼'], '備註': v['備註'], '品項': itemsText, '掃描方式': info.method || '手動' };
       const fuel = v['類別'] === '加油' && numOf(v['f里程數']) ? { '車輛': v['f車輛'], '里程數': v['f里程數'], '油品': v['f油品'], '公升': v['f公升'], '單價': v['f單價'], '加滿': v['f加滿'] } : null;
       e.target.disabled = true; e.target.textContent = '上傳中…';
@@ -4203,9 +4249,9 @@ const Finance = (() => {
   function invItem(s) {
     const c = s['兌獎狀態'] === '中獎' ? '#be123c' : s['類別'] === '加油' ? '#2563eb' : '#f59e0b';
     return `<div class="xb-item" style="--c:${c}"><span class="ic">${s['類別'] === '加油' ? '⛽' : '🧾'}</span>
-      <div><b>${esc(s['資料來源'] || '未知店家')}</b><small>${esc(s['購買日期'])}・${esc(s['發票號碼'])}・${esc(periodLabel(s['期別']))}</small>
+      <div><b>${esc(s['資料來源'] || '未知店家')}・${esc(s['發票號碼'])}</b><small>${esc(s['購買日期'])}・${esc(periodLabel(s['期別']))}・<span class="amt out" style="font-size:inherit">$${money(s['金額'])}</span></small>
       <span class="xb-tag">${esc(s['類別'] || '其他')}</span>${invStatusTag(s)}${s['掃描方式'] ? `<span class="xb-tag">${esc(s['掃描方式'])}</span>` : ''}</div>
-      <div><div class="amt out">$${money(s['金額'])}</div><div class="acts">${s['兌獎狀態'] === '中獎' ? `<button type="button" class="xb-btn sm warm" data-inv-claim="${esc(s.ID)}">領獎入帳</button>` : ''}${s['圖片連結'] ? `<a class="xb-btn sm" href="${esc(s['圖片連結'])}" target="_blank" rel="noopener noreferrer">圖片</a>` : ''}<button type="button" class="xb-btn sm danger" data-inv-del="${esc(s.ID)}">刪除</button></div></div></div>`;
+      <div><div class="acts">${s['兌獎狀態'] === '中獎' ? `<button type="button" class="xb-btn sm warm" data-inv-claim="${esc(s.ID)}">領獎入帳</button>` : ''}${s['圖片連結'] ? `<a class="xb-btn sm" href="${esc(s['圖片連結'])}" target="_blank" rel="noopener noreferrer">圖片</a>` : ''}<button type="button" class="xb-btn sm danger" data-inv-del="${esc(s.ID)}">刪除</button></div></div></div>`;
   }
   function claimInfo() {
     const k = todayKey();
