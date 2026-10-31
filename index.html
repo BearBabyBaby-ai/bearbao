@@ -4110,7 +4110,8 @@ const Invoice = (() => {
   async function ocrFromImage(b64) {
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
-      await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: r.merchant, category: r.category, method: '拍照', image: b64, ocrText: r.text });
+      const nm = nameFromText(String(r.text || ''));
+      await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: b64, ocrText: r.text });
     } catch (err) { toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
@@ -4119,11 +4120,7 @@ const Invoice = (() => {
     const hit = (Fin.data?.shops || []).find(s => /^\d+$/.test(String(s['關鍵字或統編'])) && banOf(s['關鍵字或統編']) === ban);
     return hit ? { name: hit['顯示名稱'], category: hit['預設類別'] } : null;
   }
-  async function merchantOf(ban) {
-    const hit = shopOf(ban);
-    if (hit) return hit;
-    try { return await Fin.call('lookupMerchant', { ban }); } catch (_) { return null; }
-  }
+  async function merchantOf(ban) { return shopOf(banOf(ban)); }
   /* 從發票最上面印的字找出店名 */
   function nameFromText(text) {
     const kw = (Fin.data?.shops || []).find(s => !/^\d+$/.test(String(s['關鍵字或統編'])) && String(s['關鍵字或統編']) && text.includes(String(s['關鍵字或統編'])));
@@ -4149,7 +4146,7 @@ const Invoice = (() => {
     const cats = st.expense?.length ? st.expense : ['餐飲日用', '加油', '交通', '居家', '其他'];
     const ban = banOf(info.ban);
     let merchant = info.merchant || '', category = info.category || '';
-    /* 店名：店家對照 → 以前記過的同統編 → 發票上印的店名 → 統編登記名稱 */
+    /* 店名：店家對照 → 以前記過的同統編 → 發票最上面印的店名 */
     if (!merchant && ban) { const m = shopOf(ban); if (m) { merchant = m.name || ''; category = category || m.category || ''; } }
     if (!merchant && ban) {
       const past = (Fin.data?.invoices || []).find(s => banOf(s['賣方統編']) === ban && s['資料來源'] && s['資料來源'] !== '未知店家');
@@ -4162,7 +4159,6 @@ const Invoice = (() => {
         if (m) { merchant = m.name; category = category || m.category || ''; }
       } catch (_) {  }
     }
-    if (!merchant && ban) { const m = await merchantOf(ban); if (m) { merchant = m.name || ''; if (m.category && m.category !== '其他') category = category || m.category; } }
     if (fuelItem(info.items)) category = '加油';
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
     const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': ban, '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
