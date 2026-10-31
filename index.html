@@ -1096,6 +1096,11 @@
     .lk-p{margin:0 0 10px;line-height:1.7;color:#374151}
     .lk-btns{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}
     .lk-msg{margin:10px 0 0;font-weight:800;color:#0f766e;min-height:1.2em}
+  
+    
+    .xb-scan .frame,.xb-scan p{pointer-events:none}
+    .xb-scan video{cursor:crosshair}
+    .xb-modal .xb-form-acts:has(#scanShot){flex-wrap:wrap;gap:8px}
   </style>
 </head>
 <body>
@@ -3927,6 +3932,13 @@ const Invoice = (() => {
     if (!jsqrPromise) jsqrPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; s.onload = ok; s.onerror = () => fail(new Error('掃描元件載入失敗')); document.head.appendChild(s); });
     return jsqrPromise;
   }
+  
+  let zxPromise = null;
+  function loadZX() {
+    if (window.ZXingWASM) return Promise.resolve(window.ZXingWASM);
+    if (!zxPromise) zxPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/iife/reader/index.js'; s.onload = () => { const ZX = window.ZXingWASM; try { ZX.prepareZXingModule({ overrides: { locateFile: (f, pre) => f.endsWith('.wasm') ? 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/reader/' + f : pre + f } }); } catch (_) {} ok(ZX); }; s.onerror = () => { zxPromise = null; fail(new Error('掃描元件載入失敗')); }; document.head.appendChild(s); });
+    return zxPromise;
+  }
   function b64utf8(s) { try { return new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0))); } catch (_) { return ''; } }
   
   function parseQR(left, right = '') {
@@ -3967,10 +3979,15 @@ const Invoice = (() => {
   
   async function detectAll(canvas) {
     const out = [];
+    try {
+      const ZX = await loadZX();
+      const img = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, canvas.width, canvas.height);
+      (await ZX.readBarcodes(img, { formats: ['QRCode'], tryHarder: true, maxNumberOfSymbols: 4 })).forEach(b => out.push(b.text));
+    } catch (_) {  }
     if ('BarcodeDetector' in window) {
       try { const det = new BarcodeDetector({ formats: ['qr_code'] }); (await det.detect(canvas)).forEach(b => out.push(b.rawValue)); } catch (_) {  }
     }
-    if (!out.some(v => QR_LEFT.test(v))) {
+    if (!out.some(v => QR_LEFT.test(v)) || !out.some(v => /^\*\*/.test(v))) {
       await loadJsQR();
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       for (let pass = 0; pass < 3; pass++) {
@@ -3978,7 +3995,7 @@ const Invoice = (() => {
         const r = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' });
         if (!r) break;
         out.push(r.data);
-        if (QR_LEFT.test(r.data)) break;
+        if (out.some(v => QR_LEFT.test(v)) && out.some(v => /^\*\*/.test(v))) break;
         
         const p = r.location, xs = [p.topLeftCorner.x, p.topRightCorner.x, p.bottomLeftCorner.x, p.bottomRightCorner.x], ys = [p.topLeftCorner.y, p.topRightCorner.y, p.bottomLeftCorner.y, p.bottomRightCorner.y];
         ctx.fillStyle = '#fff'; ctx.fillRect(Math.min(...xs) - 6, Math.min(...ys) - 6, Math.max(...xs) - Math.min(...xs) + 12, Math.max(...ys) - Math.min(...ys) + 12);
@@ -3993,14 +4010,28 @@ const Invoice = (() => {
   async function scanCamera() {
     if (!Fin.ready()) { showView('finance'); return; }
     const sheet = Modal.open('📷 掃描電子發票', `<div class="xb-scan"><video playsinline muted></video><div class="frame"></div><p id="scanMsg">把發票左右兩個 QR Code 放進框內</p></div>
-      <div class="xb-form-acts" style="justify-content:space-between"><label class="xb-btn">🖼 改選相片<input type="file" accept="image/*" id="scanFile" hidden></label><button type="button" class="xb-btn" data-xb-close>關閉</button></div>
-      <p class="xb-note">掃到後會自動帶出發票號碼、日期、金額與店家，確認後儲存。</p>`, stopCamera);
+      <div class="xb-form-acts" style="justify-content:space-between"><label class="xb-btn pri">📸 拍照掃描<input type="file" accept="image/*" capture="environment" id="scanShot" hidden></label><label class="xb-btn">🖼 改選相片<input type="file" accept="image/*" id="scanFile" hidden></label><button type="button" class="xb-btn" data-xb-close>關閉</button></div>
+      <p class="xb-note">手機離發票約 15～20 公分，畫面模糊時點一下畫面對焦；還是讀不到就按「拍照掃描」。掃到後會自動帶出發票號碼、日期、金額與店家，確認後儲存。</p>`, stopCamera);
     const video = sheet.querySelector('video'), msg = sheet.querySelector('#scanMsg');
-    sheet.querySelector('#scanFile').addEventListener('change', e => { const f = e.target.files[0]; if (f) { stopCamera(); fromQRPhoto(f); } });
+    sheet.querySelectorAll('#scanFile, #scanShot').forEach(inp => inp.addEventListener('change', e => { const f = e.target.files[0]; if (f) { stopCamera(); fromQRPhoto(f); } }));
     try {
       stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
       video.srcObject = stream; await video.play();
-    } catch (err) { msg.textContent = '無法開啟相機，請允許相機權限，或按「改選相片」'; return; }
+    } catch (err) { msg.textContent = '無法開啟相機，請允許相機權限，或按「拍照掃描」'; return; }
+    
+    const track = stream.getVideoTracks()[0];
+    const caps = track && track.getCapabilities ? track.getCapabilities() : {};
+    const fm = caps.focusMode || [];
+    const tune = async (c) => { try { await track.applyConstraints({ advanced: [c] }); } catch (_) {} };
+    if (fm.includes('continuous')) await tune({ focusMode: 'continuous' });
+    if (caps.zoom && caps.zoom.max > 1) await tune({ zoom: Math.min(2, caps.zoom.max) });
+    video.addEventListener('click', async e => {
+      const r = video.getBoundingClientRect(), pt = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+      msg.textContent = '對焦中…';
+      if (fm.includes('single-shot')) await tune({ focusMode: 'single-shot', pointsOfInterest: [pt] });
+      else if (fm.includes('continuous')) { await tune({ focusMode: 'manual' }); await tune({ focusMode: 'continuous', pointsOfInterest: [pt] }); }
+      setTimeout(async () => { if (fm.includes('continuous')) await tune({ focusMode: 'continuous' }); msg.textContent = '把發票左右兩個 QR Code 放進框內'; }, 1500);
+    });
     let busy = false, seenRight = '';
     timer = setInterval(async () => {
       if (busy || !video.videoWidth) return;
@@ -4025,8 +4056,18 @@ const Invoice = (() => {
     const sheet = Modal.open('🧾 讀取發票相片', '<div class="xb-empty">正在讀取 QR Code…</div>');
     try {
       const img = await fileToImage(file);
-      const c = drawScaled(img, img.naturalWidth, img.naturalHeight, 2000);
-      const { left, right } = await detectAll(c);
+      
+      let left = '', right = '';
+      const W = img.naturalWidth, H = img.naturalHeight;
+      const tries = [[0, 0, W, H, 2000], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400]];
+      for (const [x, y, w, h, max] of tries) {
+        const sc = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
+        c.width = Math.round(w * sc); c.height = Math.round(h * sc);
+        c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
+        const r = await detectAll(c);
+        left = left || r.left; right = right || r.right;
+        if (left && right) break;
+      }
       const info = parseQR(left, right);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
       if (!info) { sheet.innerHTML = ''; Modal.close(); if (confirm('相片裡找不到電子發票 QR Code。要改用「紙本發票文字辨識」嗎？')) ocrFromImage(shot); return; }
