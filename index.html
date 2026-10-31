@@ -1103,6 +1103,7 @@
     .xb-modal .xb-form-acts:has(#scanShot){flex-wrap:wrap;gap:8px}
   </style>
 <style>
+    #hcEvents{display:none!important}   /* 首頁不顯示活動，活動看月曆分頁 */
     #view-flight .fl-hist-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
     #view-flight .fl-hist-row #apNext{font-size:.85rem;font-weight:800;color:#475569;white-space:nowrap}
     @media(max-width:820px){#view-flight .fl-hist-row{grid-column:1/-1}}
@@ -3603,8 +3604,8 @@ const Home = (() => {
       ticketBox.innerHTML = `<span class="h-muted">${esc(msg)}</span>`;
       return;
     }
-    const tickets = Cal.all().filter(it => it.cat === '機票搶票' && it.start >= k).sort((a, b) => a.start.localeCompare(b.start) || a.time.localeCompare(b.time)).slice(0, 3);
-    ticketBox.innerHTML = tickets.length ? tickets.map(it => { const d = daysBetween(k, it.start); return `<div class="h-ticket"><b>${esc(plainText(it.name))}</b><span>${esc(it.start)} ${esc(it.time)} 開搶${it.range ? `・適用 ${esc(it.range)}` : ''}</span><span class="cd">${d === 0 ? '今天' : d === 1 ? '明天' : d === 2 ? '後天' : `${d} 天後`}</span></div>`; }).join('') : '<span class="h-muted">目前沒有即將開搶的項目</span>';
+    const tickets = Cal.all().filter(it => it.cat === '機票搶票' && it.start >= k && daysBetween(k, it.start) <= 60).sort((a, b) => a.start.localeCompare(b.start) || a.time.localeCompare(b.time));   /* 60 天內 */
+    ticketBox.innerHTML = tickets.length ? tickets.map(it => { const d = daysBetween(k, it.start); return `<div class="h-ticket"><b>${esc(plainText(it.name))}</b><span>${esc(it.start)} ${esc(it.time)} 開搶${it.range ? `・適用 ${esc(it.range)}` : ''}</span><span class="cd">${d === 0 ? '今天' : d === 1 ? '明天' : d === 2 ? '後天' : `${d} 天後`}</span></div>`; }).join('') : '<span class="h-muted">60 天內沒有開搶的項目</span>';
 
   }
 
