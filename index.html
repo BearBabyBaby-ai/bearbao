@@ -4005,10 +4005,31 @@ const Invoice = (() => {
   }
 
   
+  const CapX = window.Capacitor;
+  const hasNative = name => Boolean(CapX && CapX.isNativePlatform && CapX.isNativePlatform() && CapX.isPluginAvailable && CapX.isPluginAvailable(name));
+  async function nativePhoto() {
+    const r = await CapX.nativePromise('Camera', 'getPhoto', { quality: 85, resultType: 'base64', source: 'CAMERA', allowEditing: false, saveToGallery: false, correctOrientation: true, width: 2400 });
+    const bin = atob(r.base64String || ''), arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    return new Blob([arr], { type: 'image/' + (r.format || 'jpeg') });
+  }
+  const cancelled = err => /cancel|取消/i.test(String(err && err.message || err));
+  async function nativeScan(tries = 0) {
+    let text = '';
+    try { text = (await CapX.nativePromise('BearScan', 'scan', {})).text || ''; }
+    catch (err) { if (!cancelled(err)) alert(`${String(err && err.message || err)}\n可以改用「拍照」或「手動輸入」。`); return; }
+    const info = parseQR(text);
+    if (info) { if (navigator.vibrate) navigator.vibrate(80); openForm({ ...info, method: '電子發票QR' }); return; }
+    if (/^\*\*/.test(text) && tries < 2) { await new Promise(ok => { Modal.open('📷 再掃一次', '<div class="xb-empty">掃到的是右邊的 QR Code，請改對準<b>左邊</b>的 QR Code</div>'); setTimeout(() => { Modal.close(); ok(); }, 1400); }); return nativeScan(tries + 1); }
+    alert('這不是電子發票的 QR Code，請對準發票左邊的 QR Code。');
+  }
+
+  
   let stream = null, timer = null;
   function stopCamera() { clearInterval(timer); timer = null; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
   async function scanCamera() {
     if (!Fin.ready()) { showView('finance'); return; }
+    if (hasNative('BearScan')) return nativeScan();
     const sheet = Modal.open('📷 掃描電子發票', `<div class="xb-scan"><video playsinline muted></video><div class="frame"></div><p id="scanMsg">把發票左右兩個 QR Code 放進框內</p></div>
       <div class="xb-form-acts" style="justify-content:space-between"><label class="xb-btn pri">📸 拍照掃描<input type="file" accept="image/*" capture="environment" id="scanShot" hidden></label><label class="xb-btn">🖼 改選相片<input type="file" accept="image/*" id="scanFile" hidden></label><button type="button" class="xb-btn" data-xb-close>關閉</button></div>
       <p class="xb-note">手機離發票約 15～20 公分，畫面模糊時點一下畫面對焦；還是讀不到就按「拍照掃描」。掃到後會自動帶出發票號碼、日期、金額與店家，確認後儲存。</p>`, stopCamera);
@@ -4075,8 +4096,13 @@ const Invoice = (() => {
     } catch (err) { Modal.close(); alert(err.message); }
   }
   
-  function pickPaper() {
+  async function pickPaper() {
     if (!Fin.ready()) { showView('finance'); return; }
+    if (hasNative('Camera')) {
+      try { const f = await nativePhoto(); const img = await fileToImage(f); ocrFromImage(canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1800), 0.88)); }
+      catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); }
+      return;
+    }
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.setAttribute('capture', 'environment');
     input.onchange = async () => {

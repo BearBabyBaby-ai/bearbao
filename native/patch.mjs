@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 26;
-const VERSION_NAME = '2.5.1';
+const VERSION_CODE = 27;
+const VERSION_NAME = '2.6.0';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
@@ -19,7 +19,10 @@ const edit = (file, fn) => { const s = fs.readFileSync(file, 'utf8'); const t = 
 const must = (s, a, b) => { if (!s.includes(a)) throw new Error(`找不到：${a}`); return s.replace(a, b); };
 edit(`${A}/build.gradle`, s => must(
   s.replace(/versionCode \d+/, `versionCode ${VERSION_CODE}`).replace(/versionName "[^"]*"/, `versionName "${VERSION_NAME}"`),
-  "flatDir{", "flatDir{\n        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs'"));
+  "flatDir{", "flatDir{\n        dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs'")
+  .replace(/dependencies \{/, "dependencies {\n    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'"));
+// Google 掃描元件第一次使用時自動下載
+edit(`${A}/src/main/AndroidManifest.xml`, s => must(s, '    </application>', '        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES" android:value="barcode_ui" />\n    </application>'));
 
 // 2. 權限：相機（掃發票）、定位（地圖排序）、通知與準時提醒（背景執行）；不要背景定位
 edit(`${A}/src/main/AndroidManifest.xml`, s => {
@@ -61,6 +64,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(BearLockPlugin.class);   // 鎖屏月曆
+        registerPlugin(BearScanPlugin.class);   // 發票 QR 掃描
         super.onCreate(savedInstanceState);
         getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
             @Override
@@ -109,7 +113,7 @@ public class MainActivity extends BridgeActivity {
 `);
 
 // 3-1. 桌面小工具「熊寶貼心提醒」
-for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java', 'BgSync.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
+for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java', 'BgSync.java', 'BearScanPlugin.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
 for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_item.xml', 'layout'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);
