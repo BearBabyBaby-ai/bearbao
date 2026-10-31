@@ -3964,7 +3964,7 @@ const Invoice = (() => {
     return { invoiceNo: t.slice(0, 10), date, random: t.slice(17, 21), amount: total || sales, ban: seller === '00000000' ? '' : seller, items };
   }
   const fuelItem = items => (items || []).find(i => /汽油|柴油|無鉛|92|95|98/.test(i.name) && i.qty > 0 && i.qty < 200);
-  const productOf = name => /92/.test(name) ? '92無鉛' : /98/.test(name) ? '98無鉛' : /柴/.test(name) ? '超級柴油' : '95無鉛';
+  const productOf = name => /92|九二/.test(name) ? '92無鉛' : /98|九八/.test(name) ? '98無鉛' : /柴/.test(name) ? '超級柴油' : '95無鉛';
 
   
   function canvasToB64(canvas, q = 0.82) { return canvas.toDataURL('image/jpeg', q).split(',')[1]; }
@@ -4168,7 +4168,30 @@ const Invoice = (() => {
       toast('finStatus', st2 === '中獎' ? `🎉 恭喜！${saved['發票號碼']} 中了${saved['中獎獎別']} ${money(saved['中獎金額'])} 元！` : `✅ 已存入 ${saved['發票號碼']}（${saved['資料來源'] || ''} ${money(saved['金額'])} 元・${st2}）`);
       if (st2 === '中獎') Helper.say(`🎉 恭喜中獎！<b>${esc(saved['中獎獎別'])} ${money(saved['中獎金額'])} 元</b>，記得在領獎期限內兌領喔！`, true);
       await Fin.sync(true);
+      if (saved['類別'] === '加油' || inv['類別'] === '加油') askFuel(saved, info);
     } catch (err) { toast('finStatus', err.message, true); }
+  }
+  /* 加油發票：只補目前里程數，其餘從發票帶入，記到加油里程 */
+  function askFuel(saved, info) {
+    const st = Fin.data?.settings || {};
+    const vehicles = st.vehicles?.length ? st.vehicles : ['機車', '汽車'];
+    const last = (Fin.data?.fuel || []).slice(-1)[0];
+    const fi = fuelItem(info.items);
+    const product = fi ? productOf(fi.name) : (st.fuelDefault || '95無鉛');
+    const sheet = Modal.open('⛽ 加油里程', `<div class="xb-empty" style="margin-bottom:10px">${esc(saved['資料來源'] || '')}・${esc(saved['發票號碼'])}・${fi ? `${esc(fi.qty)} 公升・` : ''}$${money(saved['金額'])}</div>
+      <form class="xb-form" id="fuelQuick">
+        ${field({ name: '車輛', label: '車輛', type: 'select', options: vehicles, value: last?.['車輛'] || vehicles[0] })}
+        ${field({ name: '里程數', label: '目前里程數（km）', type: 'number', inputmode: 'numeric', required: true, placeholder: last ? `上次 ${last['里程數']}` : '' })}
+      </form>
+      <div class="xb-form-acts"><button type="button" class="xb-btn" data-xb-close>略過</button><button type="button" class="xb-btn pri" id="fuelQuickSave">記到加油里程</button></div>`);
+    sheet.querySelector('#fuelQuickSave').addEventListener('click', async e => {
+      const v = formValues(sheet.querySelector('#fuelQuick'));
+      if (!numOf(v['里程數'])) { alert('請輸入目前里程數'); return; }
+      e.target.disabled = true;
+      const item = { '日期': saved['購買日期'], '車輛': v['車輛'], '里程數': v['里程數'], '油品': product, '公升': fi ? fi.qty : '', '單價': fi ? fi.price : '', '金額': saved['金額'], '加油站': saved['資料來源'] || '', '加滿': '是', '發票號碼': saved['發票號碼'], '收支ID': saved['收支ID'] || ((Fin.data?.ledger || []).find(l => l['關聯ID'] === saved.ID) || {}).ID || '', addLedger: false };
+      try { const r = await Fin.call('saveFuel', { item }); Modal.close(); toast('finStatus', `✅ 已記到加油里程${r['油耗'] ? `・這次油耗 ${r['油耗']} km/L` : ''}`); await Fin.sync(true); }
+      catch (err) { e.target.disabled = false; alert(err.message); }
+    });
   }
   function openForm(info = {}) {
     const st = Fin.data?.settings || {};
