@@ -3777,6 +3777,7 @@ const Fin = (() => {
     get data() { return data; },
     get error() { return lastError; },
     get bad() { return bad; },
+    resetBad() { bad = false; },
     get loading() { return Boolean(loading); },
     setConn(u, t) { lsSet('xb.finUrl', u); lsSet('xb.finToken', t); },
     clear() { data = null; lsSet('xb.finCache', 'null'); }
@@ -4240,7 +4241,7 @@ const Finance = (() => {
         ${field({ name: 'url', label: '連線網址', value: Fin.url(), full: true })}
         ${field({ name: 'token', label: '連線密碼', type: 'password', value: Fin.token(), full: true })}
       </form>
-      <div class="xb-form-acts"><button type="button" class="xb-btn pri" id="finConnSave">連線測試並儲存</button></div>`;
+      <div class="xb-form-acts">${Fin.ready() ? '<button type="button" class="xb-btn" id="finConnClose">關閉</button>' : ''}<button type="button" class="xb-btn pri" id="finConnSave">連線測試並儲存</button></div>`;
   }
   function invStatusTag(s) {
     const st = s['兌獎狀態'] || '未開獎';
@@ -4450,15 +4451,17 @@ const Finance = (() => {
     const v = formValues($('finConn'));
     if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(v.url)) { alert('連線網址格式不正確'); return; }
     if (!v.token) { alert('請輸入連線密碼'); return; }
+    const oldUrl = Fin.url(), oldToken = Fin.token();
     Fin.setConn(v.url, v.token);
     btn.disabled = true; btn.textContent = '連線中…';
     try { await Fin.call('ping'); Fin.clear(); editConn = false; toast('finStatus', '✅ 連線成功'); render(); await Fin.sync(true); }
-    catch (err) { btn.disabled = false; btn.textContent = '連線測試並儲存'; toast('finStatus', `連線失敗：${err.message}`, true); }
+    catch (err) { if (oldUrl && oldToken) { Fin.setConn(oldUrl, oldToken); Fin.resetBad(); } btn.disabled = false; btn.textContent = '連線測試並儲存'; toast('finStatus', `連線失敗：${err.message}，已維持原本的連線`, true); }
   }
   document.addEventListener('click', e => {
     const t = e.target;
     const sync = t.closest('[data-fin-sync]'); if (sync) { sync.disabled = true; Fin.sync(true).catch(err => toast(currentView === 'remind' ? 'remStatus' : 'finStatus', err.message, true)).finally(() => { sync.disabled = false; }); return; }
     if (t.closest('#finConnSave')) { saveConn(t.closest('#finConnSave')); return; }
+    if (t.closest('#finConnClose')) { editConn = false; Fin.resetBad(); render(); return; }
     if (t.closest('#finConnEdit')) { editConn = !editConn; render(); if (editConn) $('finSetup').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const ft = t.closest('[data-ft]'); if (ft) { tab = ft.dataset.ft; render(); return; }
     const a = t.closest('[data-fin-act]'); if (a) { act(a.dataset.finAct, a); return; }
