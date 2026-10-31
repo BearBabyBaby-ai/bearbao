@@ -1409,7 +1409,7 @@
       <div class="xb-page">
         <div class="xb-head">
           <div><h2>💰 財務管理</h2><p id="finSub">發票・收支・里程・花費・油價</p></div>
-          <div class="xb-row"><button type="button" class="xb-btn ghost" data-fin-sync>🔄 重新整理</button></div>
+          <div class="xb-row"><button type="button" class="xb-btn ghost" data-fin-sync>🔄 重新整理</button><button type="button" class="xb-btn ghost" id="finConnEdit">🔐 連線設定</button></div>
         </div>
         <div id="finStatus" class="xb-status" aria-live="polite"></div>
         <div id="finSetup" class="xb-card xb-setup" hidden></div>
@@ -4226,6 +4226,7 @@ const Invoice = (() => {
 
 
 const Finance = (() => {
+  let editConn = false;
   let tab = 'overview', invPeriod = '', invFilter = '', ledMonth = todayKey().slice(0, 7), ledType = '', fuelCar = '';
   const D = () => Fin.data || {};
   const invoices = () => (D().invoices || []).slice().sort((a, b) => String(b['購買日期']).localeCompare(String(a['購買日期'])) || String(b['建立時間']).localeCompare(String(a['建立時間'])));
@@ -4370,7 +4371,7 @@ const Finance = (() => {
   function render() {
     const setup = $('finSetup'), main = $('finMain');
     if (!setup) return;
-    const need = !Fin.ready() || Fin.bad;   
+    const need = !Fin.ready() || Fin.bad || editConn;   
     setup.hidden = !need;
     if (need && !setup.contains(document.activeElement)) setup.innerHTML = setupHtml();
     if (!Fin.ready()) { main.hidden = true; return; }
@@ -4451,13 +4452,14 @@ const Finance = (() => {
     if (!v.token) { alert('請輸入連線密碼'); return; }
     Fin.setConn(v.url, v.token);
     btn.disabled = true; btn.textContent = '連線中…';
-    try { await Fin.call('ping'); Fin.clear(); toast('finStatus', '✅ 連線成功'); render(); await Fin.sync(true); }
+    try { await Fin.call('ping'); Fin.clear(); editConn = false; toast('finStatus', '✅ 連線成功'); render(); await Fin.sync(true); }
     catch (err) { btn.disabled = false; btn.textContent = '連線測試並儲存'; toast('finStatus', `連線失敗：${err.message}`, true); }
   }
   document.addEventListener('click', e => {
     const t = e.target;
     const sync = t.closest('[data-fin-sync]'); if (sync) { sync.disabled = true; Fin.sync(true).catch(err => toast(currentView === 'remind' ? 'remStatus' : 'finStatus', err.message, true)).finally(() => { sync.disabled = false; }); return; }
     if (t.closest('#finConnSave')) { saveConn(t.closest('#finConnSave')); return; }
+    if (t.closest('#finConnEdit')) { editConn = !editConn; render(); if (editConn) $('finSetup').scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
     const ft = t.closest('[data-ft]'); if (ft) { tab = ft.dataset.ft; render(); return; }
     const a = t.closest('[data-fin-act]'); if (a) { act(a.dataset.finAct, a); return; }
     const invF = t.closest('[data-inv-f]'); if (invF) { invFilter = invF.dataset.invF; render(); return; }
