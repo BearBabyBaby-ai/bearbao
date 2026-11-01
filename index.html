@@ -1109,7 +1109,8 @@
     .m-list-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
     .m-list-txt b{font-size:1rem;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .m-list-txt small{font-size:.82rem;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .m-list-go{flex:0 0 auto;font-size:1.4rem;color:#94a3b8}   /* 首頁不顯示活動，活動看月曆分頁 */
+    .m-list-dir{flex:0 0 auto;width:38px;height:38px;border-radius:50%;background:#fee2e2;color:#b91c1c;display:grid;place-items:center;font-size:1.35rem;font-weight:900}
+    .m-list-dir:empty{display:none}   /* 首頁不顯示活動，活動看月曆分頁 */
     #view-flight .fl-hist-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
     #view-flight .fl-hist-row #apNext{font-size:.85rem;font-weight:800;color:#475569;white-space:nowrap}
     @media(max-width:820px){#view-flight .fl-hist-row{grid-column:1/-1}}
@@ -1713,7 +1714,7 @@ function detailPairs(d) {
   if (d.type === '景點') return [['區域', area], ['分類', [d.mainCategory, d.category].filter(Boolean).join('・')], ['地址', d.address]];
   if (d.type === '廟宇') return [['區域', area], ['主祀', d.deity], ['地址', d.address], ['電話', d.phone]];
   if (d.type === '港口・遊客中心') return [['區域', area], ['類別', d.category], ['地址', d.address], ['說明', d.desc], ['傳說', d.legend]];
-  if (d.type === '測速・科技執法') return [['區域', area], ['類型', d.category], ['速限', d.speed ? `${d.speed} 公里` : ''], ['拍攝方向', d.dir], ['取締項目', d.items], ['科技執法種類', d.tech], ['管轄分局', d.unit]];
+  if (d.type === '測速・科技執法') return [['區域', area], ['類型', d.category], ['速限', d.speed ? `${d.speed} 公里` : ''], ['拍攝方向', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : ''], ['取締項目', d.items], ['科技執法種類', d.tech], ['管轄分局', d.unit]];
   return [['區域', area], ['類別', d.category], ['地址', d.address], ['電話', d.phone]];
 }
 function imageUrl(value) {
@@ -1809,11 +1810,13 @@ map.getContainer().addEventListener('click', e => {
   if (img) openImageModal(img.dataset.full);
 });
 
+const DIR_ARROW = { '北': '↑', '南': '↓', '東': '→', '西': '←', '東北': '↗', '西北': '↖', '東南': '↘', '西南': '↙' };
+const dirArrow = v => { const m = String(v || '').match(/向\s*(東北|西北|東南|西南|東|西|南|北)/); return m ? DIR_ARROW[m[1]] : ''; };
 function rowMeta(d) {
   if (d.type === '美食') return [d.mainCategory, d.category, d.service].filter(Boolean).join('・');
   if (d.type === '景點') return [d.village, d.mainCategory, d.category].filter(Boolean).join('・');
   if (d.type === '廟宇') return [d.village, d.deity ? `主祀：${d.deity}` : ''].filter(Boolean).join('・');
-  if (d.type === '測速・科技執法') return [d.category, d.speed ? `速限 ${d.speed}` : '', d.items].filter(Boolean).join('・');
+  if (d.type === '測速・科技執法') return [d.category, d.speed ? `速限 ${d.speed}` : '', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : '', d.items].filter(Boolean).join('・');
   return [d.village, d.category].filter(Boolean).join('・');
 }
 function pinIcon(d) {
@@ -1896,7 +1899,7 @@ function rowHtml(d) {
   const content = `<span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span><span class="data-name">${esc(d.name)}${closed}</span><span class="data-meta">${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</span></span><span class="locate" aria-hidden="true">⌖</span>`;
   const cls = `data-row${isClosed(d) ? ' is-closed' : ''}`;
   if (isMobile() && d.type === '測速・科技執法') {   /* 測速・科技執法：手機用列表顯示 */
-    return `<a class="m-list" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer"><span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span class="m-list-txt"><b>${esc(d.name)}</b><small>${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</small></span><span class="m-list-go" aria-hidden="true">›</span></a>`;
+    return `<a class="m-list" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer"><span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span class="m-list-txt"><b>${esc(d.name)}</b><small>${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</small></span><span class="m-list-dir" title="${esc(d.dir || '')}">${esc(dirArrow(d.dir))}</span></a>`;
   }
   if (isMobile()) {
     const src = placePic(d, 480);
