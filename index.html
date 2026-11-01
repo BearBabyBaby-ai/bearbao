@@ -4876,6 +4876,21 @@ const TempleInfo = (() => {
 })();
 
 if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('is-desktop');
+/* 電腦版：把提醒資料交給 Windows 程式跳通知，按通知切到月曆 */
+if (window.bearDesktop) {
+  window.bearDesktop.onOpen(v => showView(v));
+  let lastDesk = '';
+  const pushDesk = () => {
+    if (!Fin.ready()) return;
+    const list = (Fin.data && Fin.data.reminders) || null;
+    const s = Fin.url() + '\n' + Fin.token() + '\n' + JSON.stringify(list);
+    if (s === lastDesk) return;
+    lastDesk = s;
+    window.bearDesktop.setReminders({ url: Fin.url(), token: Fin.token(), reminders: list });
+  };
+  Fin.on(() => setTimeout(pushDesk, 1500));
+  setTimeout(pushDesk, 1500);
+}
   const Native = (() => {
   const C = window.Capacitor;
   const on = Boolean(C && C.isNativePlatform && C.isNativePlatform() && C.nativePromise);

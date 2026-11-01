@@ -1,7 +1,7 @@
 {
   "name": "bearbao-desktop",
   "productName": "熊寶系統",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "熊寶系統",
   "main": "main.js",
   "author": "BearBabyBaby-ai",
@@ -18,7 +18,7 @@
     "productName": "熊寶系統",
     "artifactName": "bearbao-setup.${ext}",
     "directories": { "output": "dist" },
-    "files": ["main.js", "package.json"],
+    "files": ["main.js", "preload.js", "reminders.js", "icon.png", "package.json"],
     "win": { "icon": "icon.png", "target": ["nsis"] },
     "nsis": {
       "oneClick": false,
