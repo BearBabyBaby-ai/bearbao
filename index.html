@@ -1104,6 +1104,9 @@
   </style>
 <style>
     #hcEvents{display:none!important}
+    .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
+    html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
+    html.is-desktop .h-flight-cols h4{display:none}
     .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 首頁航班：狀態放在時間右側 */
     .h-fl b{flex:0 0 auto}
     .h-fl span{flex:0 1 auto;min-width:0}
@@ -1167,7 +1170,7 @@
             <div id="homeTide" class="h-muted">正在讀取分海資料…</div>
           </article>
           <article class="h-card">
-            <div class="h-head"><h3><i>✈️</i>澎湖機場航班</h3><button type="button" class="h-more" data-go="flight">全部航班 ›</button></div>
+            <div class="h-head"><h3><i>✈️</i>澎湖機場航班<span class="h-fcount" id="homeFlightCount"></span></h3><button type="button" class="h-more" data-go="flight">全部航班 ›</button></div>
             <div id="homeFlight" class="h-muted">正在讀取航班資料…</div>
           </article>
           <article class="h-card">
@@ -3606,6 +3609,7 @@ const Home = (() => {
     const st = Flights.state;
     if (!st.loaded) { if (st.error) box.innerHTML = '<span class="h-muted">航班資料暫時無法讀取</span>'; return; }
     box.className = '';
+    $('homeFlightCount').textContent = `來程（抵達）${st.arrival.length} 班`;
     const bad = st.arrival.filter(r => ['Delayed', 'Cancelled'].includes(r.status.className));
     box.innerHTML = `<div class="h-flight-cols one">
       <div><h4>來程（抵達）<span>${st.arrival.length} 班</span></h4>${flightList(st.arrival, ['Arrived', 'Cancelled'], r => r.actualEnd || r.scheduledEnd)}</div>
@@ -4871,7 +4875,8 @@ const TempleInfo = (() => {
   row.append(lab, nx);
 })();
 
-const Native = (() => {
+if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('is-desktop');
+  const Native = (() => {
   const C = window.Capacitor;
   const on = Boolean(C && C.isNativePlatform && C.isNativePlatform() && C.nativePromise);
   let lastConn = '', lastRem = '', timer = null;
