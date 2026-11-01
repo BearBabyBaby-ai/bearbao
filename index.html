@@ -1103,7 +1103,13 @@
     .xb-modal .xb-form-acts:has(#scanShot){flex-wrap:wrap;gap:8px}
   </style>
 <style>
-    #hcEvents{display:none!important}   /* 首頁不顯示活動，活動看月曆分頁 */
+    #hcEvents{display:none!important}
+    .m-list{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:inherit;min-width:0}
+    .m-list .type-badge{flex:0 0 auto}
+    .m-list-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+    .m-list-txt b{font-size:1rem;color:#0f172a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .m-list-txt small{font-size:.82rem;color:#64748b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .m-list-go{flex:0 0 auto;font-size:1.4rem;color:#94a3b8}   /* 首頁不顯示活動，活動看月曆分頁 */
     #view-flight .fl-hist-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
     #view-flight .fl-hist-row #apNext{font-size:.85rem;font-weight:800;color:#475569;white-space:nowrap}
     @media(max-width:820px){#view-flight .fl-hist-row{grid-column:1/-1}}
@@ -1889,6 +1895,9 @@ function rowHtml(d) {
   const closed = isClosed(d) ? '<span class="closed-tag">歇業</span>' : '';
   const content = `<span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span><span class="data-name">${esc(d.name)}${closed}</span><span class="data-meta">${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</span></span><span class="locate" aria-hidden="true">⌖</span>`;
   const cls = `data-row${isClosed(d) ? ' is-closed' : ''}`;
+  if (isMobile() && d.type === '測速・科技執法') {   /* 測速・科技執法：手機用列表顯示 */
+    return `<a class="m-list" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer"><span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span class="m-list-txt"><b>${esc(d.name)}</b><small>${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</small></span><span class="m-list-go" aria-hidden="true">›</span></a>`;
+  }
   if (isMobile()) {
     const src = placePic(d, 480);
     const km = mapUserPos ? distanceKm(mapUserPos, d) : null;
