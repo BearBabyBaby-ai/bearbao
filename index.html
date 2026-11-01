@@ -1104,6 +1104,10 @@
   </style>
 <style>
     #hcEvents{display:none!important}
+    .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 首頁航班：狀態放在時間右側 */
+    .h-fl b{flex:0 0 auto}
+    .h-fl span{flex:0 1 auto;min-width:0}
+    .h-fl em{grid-column:auto!important;flex:0 0 auto;white-space:nowrap}
     .m-list{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:inherit;min-width:0}
     .m-list .type-badge{flex:0 0 auto}
     .m-list-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
