@@ -1128,6 +1128,10 @@
     html.is-desktop[data-view="flight"] #app::before,html.is-phone[data-view="flight"] #app::before{background:linear-gradient(120deg,#1e1b4b 0%,#3730a3 60%,#4f46e5 100%)!important}
     html.is-desktop[data-view="remind"] #app::before,html.is-phone[data-view="remind"] #app::before{background:linear-gradient(120deg,#7f1d1d 0%,#b91c1c 60%,#e04848 100%)!important}
     html.is-desktop[data-view="finance"] #app::before,html.is-phone[data-view="finance"] #app::before{background:linear-gradient(120deg,#78350f 0%,#b45309 60%,#d97706 100%)!important}
+    .pin-wrap{position:relative;width:30px;height:30px}   /* 電腦端測速圖釘 */
+    .pin-dir{position:absolute;left:19px;top:-15px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.35);display:grid;place-items:center;pointer-events:none}
+    .pin-dir svg{width:15px;height:15px;fill:currentColor;transform:rotate(var(--dir))}
+    .pin-limit{position:absolute;left:3px;top:33px;width:24px;height:24px;border-radius:50%;background:#fff;border:3px solid #dc2626;box-shadow:0 2px 6px rgba(0,0,0,.3);display:grid;place-items:center;color:#111;font:900 11px/1 system-ui,sans-serif;pointer-events:none}
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
@@ -1688,14 +1692,20 @@ window.addEventListener('pageshow', e => {
 });
 
 
+const MAP_DESK = /Electron/i.test(navigator.userAgent);   /* 電腦端（Windows 版） */
+const SPEED_T = MAP_DESK ? '測速執法' : '測速・科技執法';
+const isPortT = t => t === '港口・遊客中心' || t === '港口' || t === '遊客中心';
 const sheetConfigs = [
   { key: '美食清單', gid: HUB_GIDS.food, type: '美食', nameField: '名稱', glyph: '食', color: '#f97316' },
   { key: '景點', gid: HUB_GIDS.spot, type: '景點', nameField: '景點名稱', glyph: '景', color: '#0284c7' },
   { key: '廟宇', gid: HUB_GIDS.temple, type: '廟宇', nameField: '廟宇名稱', glyph: '廟', color: '#a855f7' },
   { key: '其他店家', gid: HUB_GIDS.shop, type: '其他店家', nameField: '名稱', glyph: '店', color: '#16a34a' },
   
-  { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '港口・遊客中心', nameField: '景點名稱', glyph: '港', color: '#0e7490', home: false },
-  { key: '測速與科技執法', gid: '777020', type: '測速・科技執法', nameField: '設置地點', glyph: '速', color: '#dc2626', home: false }
+  ...(MAP_DESK ? [   /* 電腦端：港口、遊客中心分開（同熊熊綜合系統） */
+    { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '港口', nameField: '景點名稱', glyph: '港', color: '#0e7490', home: false, match: row => clean(row['主類別']) === '交通設施' },
+    { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '遊客中心', nameField: '景點名稱', glyph: '遊', color: '#e11d48', home: false, match: row => clean(row['主類別']) !== '交通設施' }
+  ] : [{ key: '港口、遊客中心', gid: HUB_GIDS.port, type: '港口・遊客中心', nameField: '景點名稱', glyph: '港', color: '#0e7490', home: false }]),
+  { key: '測速與科技執法', gid: '777020', type: SPEED_T, nameField: '設置地點', glyph: '速', color: '#dc2626', home: false }
 ];
 const regionOrder = ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'];
 const typeGlyph = {}, typeColor = {};
@@ -1725,7 +1735,7 @@ const LABEL_ZOOM = 16;
 let allData = [], dataByKey = new Map(), visibleData = [], activeType = '', activeSub = '', activeRegion = '';
 let markerMap = new Map(), renderedCount = 0, lastMobile = isMobile(), mapShownOnce = false, mapDataLoaded = false;
 
-const keyOf = d => `${d.type}|${d.name}|${d.lat}|${d.lng}`;
+const keyOf = d => MAP_DESK && d.type === SPEED_T ? `${d.type}|${d.category}|${d.name}|${d.lat}|${d.lng}` : `${d.type}|${d.name}|${d.lat}|${d.lng}`;
 const isClosed = d => /歇業|停業|結束營業/.test(d.hours || '');
 
 
@@ -1745,8 +1755,8 @@ function detailPairs(d) {
   if (d.type === '美食') return [['區域', area], ['類別', [d.mainCategory, d.category].filter(Boolean).join('・')], ['餐食／服務', d.service], ['推薦', d.recommendation], ['地址', d.address], ['電話', d.phone], ['營業時間', d.hours]];
   if (d.type === '景點') return [['區域', area], ['分類', [d.mainCategory, d.category].filter(Boolean).join('・')], ['地址', d.address]];
   if (d.type === '廟宇') return [['區域', area], ['主祀', d.deity], ['地址', d.address], ['電話', d.phone]];
-  if (d.type === '港口・遊客中心') return [['區域', area], ['類別', d.category], ['地址', d.address], ['說明', d.desc], ['傳說', d.legend]];
-  if (d.type === '測速・科技執法') return [['區域', area], ['類型', d.category], ['速限', d.speed ? `${d.speed} 公里` : ''], ['拍攝方向', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : ''], ['取締項目', d.items], ['科技執法種類', d.tech], ['管轄分局', d.unit]];
+  if (isPortT(d.type)) return [['區域', area], ['類別', d.category], ['地址', d.address], ['說明', d.desc], ['傳說', d.legend]];
+  if (d.type === SPEED_T) return [['區域', area], ['類型', d.category], ['速限', d.speed ? `${d.speed} 公里` : ''], ['拍攝方向', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : ''], ['取締項目', d.items], ['科技執法種類', d.tech], ['管轄分局', d.unit]];
   return [['區域', area], ['類別', d.category], ['地址', d.address], ['電話', d.phone]];
 }
 function imageUrl(value) {
@@ -1778,7 +1788,7 @@ function catPic(d) {
   const cat = [d.mainCategory, d.category].join(' ');
   for (const [k, re] of CAT_RULES) if (re.test(cat)) return CAT_PICS[k];
   if (d.type === '其他店家' || d.type === '景點') for (const [k, re] of CAT_RULES) if (re.test(d.name)) return CAT_PICS[k];
-  return CAT_PICS[d.type] || (d.type === '港口・遊客中心' ? CAT_PICS[d.category] || '' : '');
+  return CAT_PICS[d.type] || (isPortT(d.type) ? CAT_PICS[d.category] || '' : '');
 }
 
 function placePic(d, width = 1200) { const src = imageUrl(d.image); return src ? src.replace('sz=w1200', `sz=w${width}`) : catPic(d); }
@@ -1848,16 +1858,31 @@ function rowMeta(d) {
   if (d.type === '美食') return [d.mainCategory, d.category, d.service].filter(Boolean).join('・');
   if (d.type === '景點') return [d.village, d.mainCategory, d.category].filter(Boolean).join('・');
   if (d.type === '廟宇') return [d.village, d.deity ? `主祀：${d.deity}` : ''].filter(Boolean).join('・');
-  if (d.type === '測速・科技執法') return [d.category, d.speed ? `速限 ${d.speed}` : '', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : '', d.items].filter(Boolean).join('・');
+  if (d.type === SPEED_T && MAP_DESK) return [d.village, d.category].filter(Boolean).join('・');   /* 電腦端：同熊熊綜合系統 */
+  if (d.type === SPEED_T) return [d.category, d.speed ? `速限 ${d.speed}` : '', d.dir ? `${dirArrow(d.dir)} ${d.dir}` : '', d.items].filter(Boolean).join('・');
   return [d.village, d.category].filter(Boolean).join('・');
+}
+/* 電腦端：拍攝方向「東南向西北」換成箭頭角度（北 0°、順時針） */
+function directionDeg(text) {
+  const m = String(text || '').replace(/\s/g, '').match(/^([東西南北]{1,2})[向往]([東西南北]{1,2})$/);
+  if (!m) return null;
+  const v = { 東: [1, 0], 西: [-1, 0], 南: [0, -1], 北: [0, 1] };
+  const [x, y] = [...m[2]].reduce((a, c) => [a[0] + v[c][0], a[1] + v[c][1]], [0, 0]);
+  return x || y ? Math.round(Math.atan2(x, y) * 180 / Math.PI) : null;
 }
 function pinIcon(d) {
   const color = typeColor[d.type] || '#64748b';
+  if (MAP_DESK && d.type === SPEED_T) {   /* 電腦端：測速圖釘加上方向箭頭與速限（同熊熊綜合系統） */
+    const deg = directionDeg(d.dir);
+    const arrow = deg === null ? '' : `<span class="pin-dir" style="--dir:${deg}deg;color:${color}" title="${esc(d.dir)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 20 10.5H14.5V22.5H9.5V10.5H4Z"/></svg></span>`;
+    const limit = d.speed ? `<span class="pin-limit" title="速限 ${esc(d.speed)}">${esc(d.speed)}</span>` : '';
+    return L.divIcon({ className: '', html: `<div class="pin-wrap"><div class="map-pin" style="background:${color}"><span>${esc(typeGlyph[d.type] || '點')}</span></div>${arrow}${limit}</div>`, iconSize: [30, 30], iconAnchor: [15 - (d.pinShift || 0), 30], popupAnchor: [d.pinShift || 0, -28] });
+  }
   return L.divIcon({ className: '', html: `<div class="map-pin" style="background:${color}"><span>${esc(typeGlyph[d.type] || '點')}</span></div>`, iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -28] });
 }
 function buildMarker(d) {
   const m = L.marker([d.lat, d.lng], { icon: pinIcon(d), title: d.name });
-  m.bindTooltip(esc(d.name), { permanent: false, direction: 'top', offset: [0, -28], className: 'marker-label' });
+  m.bindTooltip(esc(d.name), { permanent: false, direction: 'top', offset: [d.pinShift || 0, -28], className: 'marker-label' });
   m.bindPopup(() => popup(d), { maxWidth: 300 });
   m.on('popupopen', () => renderNearby(d));
   return m;
@@ -1930,7 +1955,7 @@ function rowHtml(d) {
   const closed = isClosed(d) ? '<span class="closed-tag">歇業</span>' : '';
   const content = `<span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span><span class="data-name">${esc(d.name)}${closed}</span><span class="data-meta">${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</span></span><span class="locate" aria-hidden="true">⌖</span>`;
   const cls = `data-row${isClosed(d) ? ' is-closed' : ''}`;
-  if (isMobile() && d.type === '測速・科技執法') {   /* 測速・科技執法：手機用列表顯示 */
+  if (isMobile() && d.type === SPEED_T) {   /* 測速・科技執法：手機用列表顯示 */
     return `<a class="m-list" href="${esc(getTargetUrl(d))}" target="_blank" rel="noopener noreferrer"><span class="type-badge" style="background:${color}18;color:${color}">${esc(typeGlyph[d.type] || '點')}</span><span class="m-list-txt"><b>${esc(d.name)}</b><small>${esc([d.region, rowMeta(d)].filter(Boolean).join('・'))}</small></span><span class="m-list-dir" title="${esc(d.dir || '')}">${esc(dirArrow(d.dir))}</span></a>`;
   }
   if (isMobile()) {
@@ -2038,7 +2063,7 @@ function normalizeSheetRow(row, config) {
     d.history = byPrefix('廟宇史蹟'); d.legend = byPrefix('傳說');
   }
   if (config.key === '港口、遊客中心') { d.desc = pick('簡易說明'); d.legend = pick('傳說'); d.category = clean(row['主類別']) === '交通設施' ? '港口' : '遊客中心'; }
-  if (config.type === '測速・科技執法') { d.category = pick('類型'); d.speed = pick('速限'); d.dir = pick('拍攝方向'); d.items = pick('取締項目'); d.tech = pick('科技執法種類'); d.unit = pick('管轄分局'); d.service = d.items; }   
+  if (config.type === SPEED_T) { d.category = pick('類型'); d.speed = pick('速限'); d.dir = pick('拍攝方向'); d.items = pick('取締項目'); d.tech = pick('科技執法種類'); d.unit = pick('管轄分局'); d.service = d.items; }   
   d.searchText = [d.name, d.region, d.village, d.mainCategory, d.category, d.service, d.recommendation, d.deity, d.address, d.hours, d.type, d.desc || ''].join(' ').toLowerCase();
   return d;
 }
@@ -2074,6 +2099,11 @@ async function loadData() {
   mapDataLoaded = true;
   if (!sets.length) { resultCount.textContent = '資料讀取失敗'; regionCards.innerHTML = '<div class="empty">暫時無法讀取，請稍後重新整理</div>'; Home.renderPlaces(true); return; }
   allData = sets.flat();
+  if (MAP_DESK) {   /* 電腦端：同一座標有多支測速時，圖釘左右錯開 */
+    const sameSpot = new Map();
+    allData.filter(d => d.type === SPEED_T).forEach(d => { const k = `${d.lat},${d.lng}`; if (!sameSpot.has(k)) sameSpot.set(k, []); sameSpot.get(k).push(d); });
+    sameSpot.forEach(list => list.forEach((d, i) => { d.pinShift = list.length > 1 ? Math.round((i - (list.length - 1) / 2) * 30) : 0; }));
+  }
   dataByKey = new Map(allData.map(d => [keyOf(d), d]));
   applyFilter();
   setRegionFromLocation();
