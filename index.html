@@ -1655,10 +1655,7 @@ const sheetConfigs = [
   { key: '廟宇', gid: HUB_GIDS.temple, type: '廟宇', nameField: '廟宇名稱', glyph: '廟', color: '#a855f7' },
   { key: '其他店家', gid: HUB_GIDS.shop, type: '其他店家', nameField: '名稱', glyph: '店', color: '#16a34a' },
   
-  { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '港口', nameField: '景點名稱', glyph: '港', color: '#0e7490', home: false,
-    match: row => clean(row['主類別']) === '交通設施' },
-  { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '遊客中心', nameField: '景點名稱', glyph: '遊', color: '#e11d48', home: false,
-    match: row => clean(row['主類別']) !== '交通設施' },
+  { key: '港口、遊客中心', gid: HUB_GIDS.port, type: '港口・遊客中心', nameField: '景點名稱', glyph: '港', color: '#0e7490', home: false },
   { key: '測速與科技執法', gid: '777020', type: '測速・科技執法', nameField: '設置地點', glyph: '速', color: '#dc2626', home: false }
 ];
 const regionOrder = ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'];
@@ -1709,7 +1706,7 @@ function detailPairs(d) {
   if (d.type === '美食') return [['區域', area], ['類別', [d.mainCategory, d.category].filter(Boolean).join('・')], ['餐食／服務', d.service], ['推薦', d.recommendation], ['地址', d.address], ['電話', d.phone], ['營業時間', d.hours]];
   if (d.type === '景點') return [['區域', area], ['分類', [d.mainCategory, d.category].filter(Boolean).join('・')], ['地址', d.address]];
   if (d.type === '廟宇') return [['區域', area], ['主祀', d.deity], ['地址', d.address], ['電話', d.phone]];
-  if (d.type === '港口' || d.type === '遊客中心') return [['區域', area], ['類別', d.category], ['地址', d.address], ['說明', d.desc], ['傳說', d.legend]];
+  if (d.type === '港口・遊客中心') return [['區域', area], ['類別', d.category], ['地址', d.address], ['說明', d.desc], ['傳說', d.legend]];
   if (d.type === '測速・科技執法') return [['區域', area], ['類型', d.category], ['速限', d.speed ? `${d.speed} 公里` : ''], ['拍攝方向', d.dir], ['取締項目', d.items], ['科技執法種類', d.tech], ['管轄分局', d.unit]];
   return [['區域', area], ['類別', d.category], ['地址', d.address], ['電話', d.phone]];
 }
@@ -1742,7 +1739,7 @@ function catPic(d) {
   const cat = [d.mainCategory, d.category].join(' ');
   for (const [k, re] of CAT_RULES) if (re.test(cat)) return CAT_PICS[k];
   if (d.type === '其他店家' || d.type === '景點') for (const [k, re] of CAT_RULES) if (re.test(d.name)) return CAT_PICS[k];
-  return CAT_PICS[d.type] || '';
+  return CAT_PICS[d.type] || (d.type === '港口・遊客中心' ? CAT_PICS[d.category] || '' : '');
 }
 
 function placePic(d, width = 1200) { const src = imageUrl(d.image); return src ? src.replace('sz=w1200', `sz=w${width}`) : catPic(d); }
@@ -1996,7 +1993,7 @@ function normalizeSheetRow(row, config) {
     if (Object.values(lantern).some(Boolean)) d.lantern = lantern;
     d.history = byPrefix('廟宇史蹟'); d.legend = byPrefix('傳說');
   }
-  if (config.match) { d.desc = pick('簡易說明'); d.legend = pick('傳說'); }
+  if (config.key === '港口、遊客中心') { d.desc = pick('簡易說明'); d.legend = pick('傳說'); d.category = clean(row['主類別']) === '交通設施' ? '港口' : '遊客中心'; }
   if (config.type === '測速・科技執法') { d.category = pick('類型'); d.speed = pick('速限'); d.dir = pick('拍攝方向'); d.items = pick('取締項目'); d.tech = pick('科技執法種類'); d.unit = pick('管轄分局'); d.service = d.items; }   
   d.searchText = [d.name, d.region, d.village, d.mainCategory, d.category, d.service, d.recommendation, d.deity, d.address, d.hours, d.type, d.desc || ''].join(' ').toLowerCase();
   return d;
