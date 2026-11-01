@@ -1122,10 +1122,10 @@
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
-    html.is-desktop .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 電腦版首頁航班：狀態放在時間右側 */
-    html.is-desktop .h-fl b{flex:0 0 auto}
-    html.is-desktop .h-fl span{flex:0 1 auto;min-width:0}
-    html.is-desktop .h-fl em{grid-column:auto!important;flex:0 0 auto;white-space:nowrap}
+    .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 首頁航班：狀態放在時間右側 */
+    .h-fl b{flex:0 0 auto}
+    .h-fl span{flex:0 1 auto;min-width:0}
+    .h-fl em{grid-column:auto!important;flex:0 0 auto;white-space:nowrap}
     .m-list{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:inherit;min-width:0}
     .m-list .type-badge{flex:0 0 auto}
     .m-list-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -4418,7 +4418,7 @@ const Finance = (() => {
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
       <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
-      <div class="xb-list">${list.length ? (IS_DESK ? ledgerDays(list) : list.map(l => ledgerItem(l)).join('')) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
+      <div class="xb-list">${list.length ? ledgerDays(list) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
   }
   /* 收支：每日一列，點了顯示當天的收支資料 */
   function ledgerDays(list) {
