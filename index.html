@@ -1104,6 +1104,17 @@
   </style>
 <style>
     #hcEvents{display:none!important}
+    .xb-day{background:#fff;border:1px solid #e1ecef;border-radius:14px;box-shadow:0 3px 10px rgba(7,43,75,.05);overflow:hidden}   /* 收支：每日紀錄 */
+    .xb-day-head{display:flex;align-items:center;gap:14px;width:100%;border:0;background:transparent;padding:12px 14px;font:inherit;text-align:left;cursor:pointer;color:#0b3954}
+    .xb-day-head b{font-size:.98rem;min-width:96px}
+    .xb-day-head span{font-weight:800;font-size:.9rem;white-space:nowrap}
+    .xb-day-head .out{color:#c2410c}.xb-day-head .in{color:#15803d}
+    .xb-day-head em{font-style:normal;color:var(--muted);font-weight:700;font-size:.84rem;margin-left:auto;white-space:nowrap}
+    .xb-day-head i{font-style:normal;color:var(--muted)}
+    .xb-day.open .xb-day-head{background:#f4f9fb;border-bottom:1px solid #e1ecef}
+    .xb-day-list{display:grid;gap:8px;padding:10px}
+    .xb-day-list .xb-item{box-shadow:none}
+    @media(max-width:520px){.xb-day-head{flex-wrap:wrap;gap:4px 12px}.xb-day-head b{min-width:0;width:100%}}
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
@@ -4291,7 +4302,7 @@ const Invoice = (() => {
 
 const Finance = (() => {
   let editConn = false;
-  let tab = 'overview', invPeriod = '', invFilter = '', ledMonth = todayKey().slice(0, 7), ledType = '', fuelCar = '';
+  let tab = 'overview', invPeriod = '', invFilter = '', ledMonth = todayKey().slice(0, 7), ledType = '', fuelCar = '', ledOpen = new Set();
   const D = () => Fin.data || {};
   const invoices = () => (D().invoices || []).slice().sort((a, b) => String(b['購買日期']).localeCompare(String(a['購買日期'])) || String(b['建立時間']).localeCompare(String(a['建立時間'])));
   const ledger = () => (D().ledger || []).slice().sort((a, b) => String(b['日期']).localeCompare(String(a['日期'])));
@@ -4385,11 +4396,11 @@ const Finance = (() => {
         <span class="xb-note" style="margin:0 0 0 auto">${shown.length} 張・$${money(total)}</span></div>
       <div class="xb-list">${shown.length ? shown.slice(0, 300).map(invItem).join('') : '<div class="xb-empty">還沒有發票，按「📸 拍發票」開始</div>'}</div>`;
   }
-  function ledgerItem(l) {
+  function ledgerItem(l, view) {
     const isIn = l['收支'] === '收入';
     return `<div class="xb-item" style="--c:${isIn ? '#16a34a' : '#ea580c'}"><span class="ic">${isIn ? '💰' : l['來源'] === '發票' ? '🧾' : l['類別'] === '加油' ? '⛽' : '💸'}</span>
       <div><b>${esc(l['項目'] || l['類別'])}</b><small>${esc(l['日期'])}・${esc(l['類別'])}${l['付款方式'] ? `・${esc(l['付款方式'])}` : ''}${l['來源'] && l['來源'] !== '手動' ? `・來自${esc(l['來源'])}` : ''}</small>${l['備註'] ? `<small>${esc(l['備註'])}</small>` : ''}</div>
-      <div><div class="amt ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}$${money(l['金額'])}</div><div class="acts">${l['來源'] === '發票' ? '' : `<button type="button" class="xb-btn sm" data-led-edit="${esc(l.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-led-del="${esc(l.ID)}">刪除</button>`}</div></div></div>`;
+      <div><div class="amt ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}$${money(l['金額'])}</div><div class="acts">${view || l['來源'] === '發票' ? '' : `<button type="button" class="xb-btn sm" data-led-edit="${esc(l.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-led-del="${esc(l.ID)}">刪除</button>`}</div></div></div>`;
   }
   function ledgerPane() {
     const list = ledger().filter(l => monthKey(l['日期']) === ledMonth.replace('-', '/') && (!ledType || l['收支'] === ledType));
@@ -4400,7 +4411,24 @@ const Finance = (() => {
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
       <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
-      <div class="xb-list">${list.length ? list.map(ledgerItem).join('') : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
+      <div class="xb-list">${list.length ? ledgerDays(list) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
+  }
+  /* 收支：每日一列，點了顯示當天的收支資料 */
+  function ledgerDays(list) {
+    const days = new Map();
+    list.forEach(l => { const k = String(l['日期'] || '').slice(0, 10); if (!days.has(k)) days.set(k, []); days.get(k).push(l); });
+    return [...days.keys()].sort().reverse().map(k => {
+      const rows = days.get(k);
+      const out = rows.filter(l => l['收支'] !== '收入').reduce((s, l) => s + numOf(l['金額']), 0);
+      const inc = rows.filter(l => l['收支'] === '收入').reduce((s, l) => s + numOf(l['金額']), 0);
+      const m = k.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
+      const wd = m ? '日一二三四五六'[new Date(+m[1], +m[2] - 1, +m[3]).getDay()] : '';
+      const open = ledOpen.has(k);
+      return `<div class="xb-day${open ? ' open' : ''}"><button type="button" class="xb-day-head" data-led-day="${esc(k)}">
+          <b>${m ? `${pad2(+m[2])}/${pad2(+m[3])}` : esc(k)}${wd ? `（${wd}）` : ''}</b>
+          <span class="out">支出 $${money(out)}</span><span class="in">收入 $${money(inc)}</span><em>${rows.length} 筆</em><i>${open ? '▴' : '▾'}</i></button>
+        ${open ? `<div class="xb-day-list">${rows.map(l => ledgerItem(l, true)).join('')}</div>` : ''}</div>`;
+    }).join('');
   }
   function fuelPane() {
     const all = (D().fuel || []).slice().sort((a, b) => numOf(b['里程數']) - numOf(a['里程數']));
@@ -4530,6 +4558,7 @@ const Finance = (() => {
     const a = t.closest('[data-fin-act]'); if (a) { act(a.dataset.finAct, a); return; }
     const invF = t.closest('[data-inv-f]'); if (invF) { invFilter = invF.dataset.invF; render(); return; }
     const ledF = t.closest('[data-led-f]'); if (ledF) { ledType = ledF.dataset.ledF; render(); return; }
+    const ledD = t.closest('[data-led-day]'); if (ledD) { const k = ledD.dataset.ledDay; if (ledOpen.has(k)) ledOpen.delete(k); else ledOpen.add(k); render(); return; }
     const fuelF = t.closest('[data-fuel-f]'); if (fuelF) { fuelCar = fuelF.dataset.fuelF; render(); return; }
     const led = t.closest('[data-led-edit]'); if (led) { ledgerForm(led.dataset.ledEdit); return; }
     const del = t.closest('[data-inv-del],[data-led-del],[data-fuel-del]');
