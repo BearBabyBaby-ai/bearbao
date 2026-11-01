@@ -1119,15 +1119,15 @@
     html.is-desktop .xb-item.rem b{color:var(--c)}
     html.is-desktop .xb-item.rem .ic{background:color-mix(in srgb,var(--c) 18%,#fff)}
     html.is-desktop .xb-item.rem .xb-tag.cat{background:var(--c);color:#fff}
-    /* 電腦版：每個分頁的 banner 顏色不同 */
-    html.is-desktop[data-view="home"] #app::before{background:linear-gradient(120deg,#0a4f8a 0%,#0a6fb3 60%,#1993c4 100%)!important}
-    html.is-desktop[data-view="calendar"] #app::before{background:linear-gradient(120deg,#4c1d95 0%,#6d28d9 60%,#8b5cf6 100%)!important}
-    html.is-desktop[data-view="events"] #app::before{background:linear-gradient(120deg,#9a3412 0%,#c2410c 60%,#ea580c 100%)!important}
-    html.is-desktop[data-view="tide"] #app::before{background:linear-gradient(120deg,#134e4a 0%,#0f766e 60%,#14b8a6 100%)!important}
-    html.is-desktop[data-view="map"] #app::before{background:linear-gradient(120deg,#14532d 0%,#15803d 60%,#22a352 100%)!important}
-    html.is-desktop[data-view="flight"] #app::before{background:linear-gradient(120deg,#1e1b4b 0%,#3730a3 60%,#4f46e5 100%)!important}
-    html.is-desktop[data-view="remind"] #app::before{background:linear-gradient(120deg,#7f1d1d 0%,#b91c1c 60%,#e04848 100%)!important}
-    html.is-desktop[data-view="finance"] #app::before{background:linear-gradient(120deg,#78350f 0%,#b45309 60%,#d97706 100%)!important}
+    /* 電腦版、手機端：每個分頁的 banner 顏色不同 */
+    html.is-desktop[data-view="home"] #app::before,html.is-phone[data-view="home"] #app::before{background:linear-gradient(120deg,#0a4f8a 0%,#0a6fb3 60%,#1993c4 100%)!important}
+    html.is-desktop[data-view="calendar"] #app::before,html.is-phone[data-view="calendar"] #app::before{background:linear-gradient(120deg,#4c1d95 0%,#6d28d9 60%,#8b5cf6 100%)!important}
+    html.is-desktop[data-view="events"] #app::before,html.is-phone[data-view="events"] #app::before{background:linear-gradient(120deg,#9a3412 0%,#c2410c 60%,#ea580c 100%)!important}
+    html.is-desktop[data-view="tide"] #app::before,html.is-phone[data-view="tide"] #app::before{background:linear-gradient(120deg,#134e4a 0%,#0f766e 60%,#14b8a6 100%)!important}
+    html.is-desktop[data-view="map"] #app::before,html.is-phone[data-view="map"] #app::before{background:linear-gradient(120deg,#14532d 0%,#15803d 60%,#22a352 100%)!important}
+    html.is-desktop[data-view="flight"] #app::before,html.is-phone[data-view="flight"] #app::before{background:linear-gradient(120deg,#1e1b4b 0%,#3730a3 60%,#4f46e5 100%)!important}
+    html.is-desktop[data-view="remind"] #app::before,html.is-phone[data-view="remind"] #app::before{background:linear-gradient(120deg,#7f1d1d 0%,#b91c1c 60%,#e04848 100%)!important}
+    html.is-desktop[data-view="finance"] #app::before,html.is-phone[data-view="finance"] #app::before{background:linear-gradient(120deg,#78350f 0%,#b45309 60%,#d97706 100%)!important}
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
@@ -3721,6 +3721,7 @@ const money = n => (Math.round(Number(n) || 0)).toLocaleString('zh-TW');
 const numOf = v => { const n = Number(String(v ?? '').replace(/[,\s$元]/g, '')); return Number.isFinite(n) ? n : 0; };
 const IS_DESK = /Electron/i.test(navigator.userAgent);   /* Windows 版 */
 if (IS_DESK) document.documentElement.classList.add('is-desktop');
+if (!IS_DESK && (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()))) document.documentElement.classList.add('is-phone');   /* 手機端 */
 const lsGet = (k, d = '') => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (_) { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {  } };
 const addMonthsKey = (k, n) => { const [y, m, d] = k.split('/').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, d)); return `${t.getUTCFullYear()}/${pad2(t.getUTCMonth() + 1)}/${pad2(t.getUTCDate())}`; };
