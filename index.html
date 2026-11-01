@@ -1115,13 +1115,17 @@
     .xb-day-list{display:grid;gap:8px;padding:10px}
     .xb-day-list .xb-item{box-shadow:none}
     @media(max-width:520px){.xb-day-head{flex-wrap:wrap;gap:4px 12px}.xb-day-head b{min-width:0;width:100%}}
+    html.is-desktop .xb-item.rem{background:color-mix(in srgb,var(--c) 7%,#fff);border-color:color-mix(in srgb,var(--c) 30%,#fff);border-left-color:var(--c)}   /* 電腦版：重要提醒依類別上色 */
+    html.is-desktop .xb-item.rem b{color:var(--c)}
+    html.is-desktop .xb-item.rem .ic{background:color-mix(in srgb,var(--c) 18%,#fff)}
+    html.is-desktop .xb-item.rem .xb-tag.cat{background:var(--c);color:#fff}
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
-    .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 首頁航班：狀態放在時間右側 */
-    .h-fl b{flex:0 0 auto}
-    .h-fl span{flex:0 1 auto;min-width:0}
-    .h-fl em{grid-column:auto!important;flex:0 0 auto;white-space:nowrap}
+    html.is-desktop .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 電腦版首頁航班：狀態放在時間右側 */
+    html.is-desktop .h-fl b{flex:0 0 auto}
+    html.is-desktop .h-fl span{flex:0 1 auto;min-width:0}
+    html.is-desktop .h-fl em{grid-column:auto!important;flex:0 0 auto;white-space:nowrap}
     .m-list{grid-column:1/-1;display:flex;align-items:center;gap:12px;padding:12px 14px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;text-decoration:none;color:inherit;min-width:0}
     .m-list .type-badge{flex:0 0 auto}
     .m-list-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
@@ -3705,6 +3709,8 @@ const Home = (() => {
 
 const money = n => (Math.round(Number(n) || 0)).toLocaleString('zh-TW');
 const numOf = v => { const n = Number(String(v ?? '').replace(/[,\s$元]/g, '')); return Number.isFinite(n) ? n : 0; };
+const IS_DESK = /Electron/i.test(navigator.userAgent);   /* Windows 版 */
+if (IS_DESK) document.documentElement.classList.add('is-desktop');
 const lsGet = (k, d = '') => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (_) { return d; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) {  } };
 const addMonthsKey = (k, n) => { const [y, m, d] = k.split('/').map(Number); const t = new Date(Date.UTC(y, m - 1 + n, d)); return `${t.getUTCFullYear()}/${pad2(t.getUTCMonth() + 1)}/${pad2(t.getUTCDate())}`; };
@@ -3839,6 +3845,7 @@ function periodDates(code) {
 const Remind = (() => {
   const CATS = ['一般', '繳費', '證件', '保險', '車輛保養', '稅務', '醫療', '預約', '生日紀念', '機票搶票', '節日', '其他'];
   const ICON = { '繳費': '💳', '證件': '🪪', '保險': '🛡️', '車輛保養': '🔧', '稅務': '🧾', '醫療': '🏥', '預約': '📌', '生日紀念': '🎂', '機票搶票': '🎫', '節日': '🎉', '其他': '📎', '一般': '🔔' };
+  const DESK_COLOR = { '繳費': '#854D0E', '機票搶票': '#C2410C', '醫療': '#B91C1C', '生日紀念': '#BE185D', '車輛保養': '#1D4ED8', '證件': '#6D28D9', '保險': '#0E7490', '預約': '#15803D', '稅務': '#4D7C0F', '節日': '#A21CAF' };   /* 電腦版：每個類別不同顏色 */
   const COLOR = { '繳費': '#ea580c', '證件': '#7c3aed', '保險': '#0891b2', '車輛保養': '#2563eb', '稅務': '#b45309', '醫療': '#dc2626', '預約': '#16a34a', '生日紀念': '#db2777', '機票搶票': '#ea580c', '節日': '#dc2626' };
   let filter = 'active';
   function next(r, k = todayKey()) {
@@ -3868,10 +3875,10 @@ const Remind = (() => {
     return `${x.days} 天後`;
   }
   function itemHtml(x) {
-    const r = x.r, c = COLOR[r['類別']] || '#0a6fb3';
+    const r = x.r, c = (IS_DESK ? DESK_COLOR[r['類別']] : COLOR[r['類別']]) || '#0a6fb3';
     const sub = [x.d ? `${x.d}（${WEEK[weekdayOf(x.d)]}）${r['時間'] && r['時間'] !== '09:00' ? ` ${r['時間']}` : ''}` : '', r['重複'] && r['重複'] !== '不重複' ? `🔁 ${r['重複']}` : '', numOf(r['提前提醒天數']) ? `提前 ${numOf(r['提前提醒天數'])} 天提醒` : ''].filter(Boolean).join('・');
     const tagCls = { overdue: 'win', today: 'win', soon: 'late', later: 'wait', done: 'ok', nodate: 'miss' }[x.state];
-    return `<div class="xb-item rem" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div></div>`;
+    return `<div class="xb-item rem" style="--c:${c}"><span class="ic">${ICON[r['類別']] || '🔔'}</span><div><b>${esc(r['標題'])}</b><small>${esc(sub)}</small>${r['內容'] ? `<small>${richText(r['內容'])}</small>` : ''}<span class="xb-tag cat">${esc(r['類別'] || '一般')}</span><span class="xb-tag ${tagCls}">${cdText(x)}</span></div></div>`;
   }
   function render() {
     const list = $('remList');
@@ -4411,7 +4418,7 @@ const Finance = (() => {
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
       <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
-      <div class="xb-list">${list.length ? ledgerDays(list) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
+      <div class="xb-list">${list.length ? (IS_DESK ? ledgerDays(list) : list.map(l => ledgerItem(l)).join('')) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
   }
   /* 收支：每日一列，點了顯示當天的收支資料 */
   function ledgerDays(list) {
@@ -4904,7 +4911,6 @@ const TempleInfo = (() => {
   row.append(lab, nx);
 })();
 
-if (/Electron/i.test(navigator.userAgent)) document.documentElement.classList.add('is-desktop');
 /* 電腦版：把提醒資料交給 Windows 程式跳通知，按通知切到月曆 */
 if (window.bearDesktop) {
   window.bearDesktop.onOpen(v => showView(v));
