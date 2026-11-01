@@ -1107,6 +1107,10 @@
     .h-fcount{display:none}   /* 電腦版：班次數量放在標題右側 */
     html.is-desktop .h-fcount{display:inline;margin-left:4px;font-size:.84rem;font-weight:700;color:var(--muted)}
     html.is-desktop .h-flight-cols h4{display:none}
+    html.is-desktop #view-flight .ap-app{width:auto;margin:0 14px}   /* 電腦版：航班表隨視窗寬度，不用左右捲 */
+    html.is-desktop #view-flight table{min-width:0}
+    html.is-desktop #view-flight th{font-size:14px;padding:12px 6px;white-space:normal}
+    html.is-desktop #view-flight td{font-size:14px;padding:10px 6px}
     .h-fl{display:flex!important;align-items:center;gap:8px;flex-wrap:nowrap}   /* 首頁航班：狀態放在時間右側 */
     .h-fl b{flex:0 0 auto}
     .h-fl span{flex:0 1 auto;min-width:0}
