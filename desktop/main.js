@@ -1,5 +1,5 @@
 // 熊寶系統 Windows 版：直接開啟線上的熊寶系統，網頁更新後打開就是最新版，不用重新安裝
-const { app, BrowserWindow, shell, session, Menu } = require('electron');
+const { app, BrowserWindow, shell, session, Menu, screen } = require('electron');
 const fs = require('fs');
 const path = require('path');
 
@@ -17,9 +17,13 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 /* 記住視窗大小與位置 */
-const stateFile = () => path.join(app.getPath('userData'), 'window.json');
+const stateFile = () => path.join(app.getPath('userData'), 'window2.json');
 function loadState() {
-  try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch (_) { return { width: 1280, height: 820 }; }
+  try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch (_) {
+    /* 預設寬一點：寬 1600、高 900，螢幕不夠大就用螢幕可用範圍 */
+    const wa = screen.getPrimaryDisplay().workAreaSize;
+    return { width: Math.min(1600, wa.width), height: Math.min(900, wa.height) };
+  }
 }
 function saveState() {
   if (!win || win.isDestroyed()) return;
@@ -37,7 +41,7 @@ function start() {
 
   const st = loadState();
   win = new BrowserWindow({
-    x: st.x, y: st.y, width: st.width || 1280, height: st.height || 820,
+    x: st.x, y: st.y, width: st.width || 1600, height: st.height || 900,
     minWidth: 380, minHeight: 600,
     title: '熊寶系統',
     backgroundColor: '#fef8e4',
