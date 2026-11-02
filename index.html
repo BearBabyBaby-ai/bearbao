@@ -2484,10 +2484,10 @@ function makeTideChart(k, canvasId, titleId, infoId) {
     const near = list => (list || []).map(t => ({ m: tdToMin(t.time), h: t.height })).filter(p => p.m != null).sort((a, b) => a.m - b.m);
     const prev = near(adj && adj.prev), next = near(adj && adj.next);
     const today = points.map(p => ({ m: p.x, h: p.y }));
-    /* 沒有前一天／後一天資料（例如最後一天 12/31）：以當天第一筆／最後一筆資料定位，曲線延伸到 0 時／24 時 */
-    const head = prev.length ? { m: prev[prev.length - 1].m - 1440, h: prev[prev.length - 1].h } : today.length ? { m: Math.min(-1, today[0].m - 1), h: today[0].h } : null;
-    const tail = next.length ? { m: next[0].m + 1440, h: next[0].h } : today.length ? { m: Math.max(1441, today[today.length - 1].m + 1), h: today[today.length - 1].h } : null;
-    const ext = today.length ? [head, ...today, tail] : [], curve = [];
+    /* 沒有前一天／後一天資料（例如最後一天 12/31）：曲線只畫到當天第一筆／最後一筆資料 */
+    const head = prev.length ? [{ m: prev[prev.length - 1].m - 1440, h: prev[prev.length - 1].h }] : [];
+    const tail = next.length ? [{ m: next[0].m + 1440, h: next[0].h }] : [];
+    const ext = today.length ? [...head, ...today, ...tail] : [], curve = [];
     if (ext.length >= 2) {
       const from = Math.max(0, ext[0].m), to = Math.min(1440, ext[ext.length - 1].m);
       for (let m = Math.ceil(from); m < to; m += 5) curve.push({ x: m, y: Math.round(cosTideAt(ext, m) * 10) / 10 });
