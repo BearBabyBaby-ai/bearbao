@@ -3122,7 +3122,8 @@ const Cal = (() => {
 
   const colorOf = cat => FIXED_COLORS[cat] || (/花火|煙火/.test(cat) ? '#eab308' : PALETTE[[...cat].reduce((a, c) => a + c.charCodeAt(0), 0) % PALETTE.length]);
   const spanOf = it => daysBetween(it.start, it.end) + 1;
-  const isHidden = it => CFG.calendarHidden.includes(it.cat) || it.cat === '縣府政策' || (!it.yearly && it.end < todayKey());   
+  const isHidden = it => CFG.calendarHidden.includes(it.cat) || it.cat === '縣府政策';
+  const isExpired = it => !it.yearly && it.end < todayKey() && it.src !== 'expense';   /* 過期活動：只在右側資訊隱藏，日期格照常顯示 */
   function occurs(it, key) {
     if (it.yearly) return key.slice(5) === it.start.slice(5) && key >= it.start.slice(0, 4);
     return it.start <= key && key <= it.end;
@@ -3229,7 +3230,7 @@ const Cal = (() => {
     const box = $('calDetail');
     if (!box) return;
     const key = selected;
-    const list = itemsOn(key);
+    const list = itemsOn(key).filter(it => !isExpired(it));
     const main = list.filter(it => shownInCell(it, key));
     const ongoing = list.filter(it => !shownInCell(it, key));
     let html = `<h3>${key}（${WEEK[weekdayOf(key)]}）</h3><p class="cd-sub">${key === todayKey() ? '今天・' : ''}共 ${list.length} 個項目</p>`;
@@ -3320,7 +3321,7 @@ const Cal = (() => {
     get loaded() { return loaded; },
     get error() { return error; },
     all: () => items.filter(it => !isHidden(it)),
-    itemsOn: key => itemsOn(key, items.filter(it => !isHidden(it))),
+    itemsOn: key => itemsOn(key, items.filter(it => !isHidden(it) && !(isExpired(it) && it.src !== 'expense'))),
     shownInCell, spanOf, colorOf,
     onShown() { load(); render(); },
     openDate(key) { selected = key; month = key.slice(0, 7); render(); showView('calendar'); },
