@@ -2202,7 +2202,7 @@ function applyMapSettings() {
 
 
 const tideDays = $('tideDays'), tideStatus = $('tideStatus'), tideMonth = $('tideMonth');
-let tideRows = [], tideLoaded = false, tideLoading = false, dynamicThreshold = 3.75;
+let tideRows = [], tideAllRows = [], tideLoaded = false, tideLoading = false, dynamicThreshold = 3.75;
 const tideToMinutes = t => { if (!t || !String(t).includes(':')) return 0; const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
 const minutesToTide = m => { m = Math.max(0, Math.min(1439, Math.round(m))); return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; };
 function calcTideTime(t1, h1, t2, h2, target) {
@@ -2256,6 +2256,7 @@ function parseTideCsv(url, onFail) {
       tideLoading = false;
       if (Number.isFinite(threshold) && threshold > 0) dynamicThreshold = threshold;
       const now = new Date(), today = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+      tideAllRows = parsed;   /* 含今天以前，趨勢圖帶入前一天潮汐用 */
       tideRows = parsed.filter(x => x.date >= today);
       if (!tideRows.length) tideRows = parsed;
       const months = [...new Set(tideRows.map(x => x.date.substring(0, 7)))].sort();
@@ -2383,6 +2384,7 @@ function cosTideAt(ext, m) {
 function tdCurveAt(c, minute) {
   const ext = c.$ext;
   if (!ext || ext.length < 2 || minute < ext[0].m || minute > ext[ext.length - 1].m) return null;
+  if (minute < 0 || minute > 1440) return null;
   const height = cosTideAt(ext, minute);
   return { px: c.scales.x.getPixelForValue(minute), py: c.scales.y.getPixelForValue(height), height };
 }
@@ -2422,7 +2424,7 @@ const tdPickPlugin = {
     const e = args.event, area = c.chartArea;
     if (!['mousemove', 'mousedown', 'click', 'touchstart', 'touchmove'].includes(e.type)) return;
     if (e.x < area.left || e.x > area.right || e.y < area.top || e.y > area.bottom) return;
-    const minute = Math.max(0, Math.min(1439, Math.round(c.scales.x.getValueForPixel(e.x))));
+    const minute = Math.max(0, Math.min(1440, Math.round(c.scales.x.getValueForPixel(e.x))));
     if (!tdCurveAt(c, minute)) return;
     c.$pick = minute; args.changed = true;
   },
@@ -2467,21 +2469,29 @@ function makeTideChart(k, canvasId, titleId, infoId) {
     if (minute === null) { if (input.value.trim()) msg.textContent = '請輸入 24 小時制時間，例如 09:40'; return; }
     if (!chart) return;
     const ext = chart.$ext || [];
-    if (!tdCurveAt(chart, minute)) { msg.textContent = ext.length ? `此時間不在曲線範圍（${tdHHMM(ext[0].m)}–${tdHHMM(ext[ext.length - 1].m)}）` : '這天沒有潮汐資料'; return; }
+    if (!tdCurveAt(chart, minute)) { msg.textContent = ext.length ? `此時間不在曲線範圍（${tdHHMM(Math.max(0, ext[0].m))}–${tdHHMM(Math.min(1439, ext[ext.length - 1].m))}）` : '這天沒有潮汐資料'; return; }
     chart.$pick = minute; chart.draw();
   }
   $(`${k}TimeGo`).addEventListener('click', jump);
   input.addEventListener('keydown', e => { if (e.key === 'Enter') jump(); });
-  function draw(data, titleText) {
+  function draw(data, titleText, adj) {
     $(titleId).innerText = `${titleText} 潮位趨勢圖`;
     msg.textContent = '';
     if (typeof Chart === 'undefined' || isMobile()) return;
     if (chart) chart.destroy();
     const points = data.tides.map(t => ({ x: tdToMin(t.time), y: t.height, tideType: t.type })).filter(p => p.x != null).sort((a, b) => a.x - b.x);
-    const ext = points.map(p => ({ m: p.x, h: p.y })), curve = [];
+    /* 帶入前一天最後一個、後一天第一個滿乾潮，曲線補滿 0～24 時（分合海時間不受影響） */
+    const near = list => (list || []).map(t => ({ m: tdToMin(t.time), h: t.height })).filter(p => p.m != null).sort((a, b) => a.m - b.m);
+    const prev = near(adj && adj.prev), next = near(adj && adj.next);
+    const today = points.map(p => ({ m: p.x, h: p.y }));
+    /* 沒有前一天／後一天資料（例如最後一天 12/31）：以當天第一筆／最後一筆資料定位，曲線延伸到 0 時／24 時 */
+    const head = prev.length ? { m: prev[prev.length - 1].m - 1440, h: prev[prev.length - 1].h } : today.length ? { m: Math.min(-1, today[0].m - 1), h: today[0].h } : null;
+    const tail = next.length ? { m: next[0].m + 1440, h: next[0].h } : today.length ? { m: Math.max(1441, today[today.length - 1].m + 1), h: today[today.length - 1].h } : null;
+    const ext = today.length ? [head, ...today, tail] : [], curve = [];
     if (ext.length >= 2) {
-      for (let m = ext[0].m; m < ext[ext.length - 1].m; m += 5) curve.push({ x: m, y: Math.round(cosTideAt(ext, m) * 10) / 10 });
-      curve.push({ x: ext[ext.length - 1].m, y: ext[ext.length - 1].h });
+      const from = Math.max(0, ext[0].m), to = Math.min(1440, ext[ext.length - 1].m);
+      for (let m = Math.ceil(from); m < to; m += 5) curve.push({ x: m, y: Math.round(cosTideAt(ext, m) * 10) / 10 });
+      curve.push({ x: to, y: Math.round(cosTideAt(ext, to) * 10) / 10 });
     }
     chart = new Chart($(canvasId).getContext('2d'), {
       type: 'line',
@@ -2522,7 +2532,8 @@ const fcChart = makeTideChart('fc', 'forecastChart', 'forecastChartTitle', null)
 function updateForecastChart(date) {
   const data = forecastStore[date];
   if (!data) return;
-  fcChart.draw(data, date);
+  const i = forecastDateList.indexOf(date), pv = forecastStore[forecastDateList[i - 1]], nx = forecastStore[forecastDateList[i + 1]];
+  fcChart.draw(data, date, { prev: pv && pv.tides, next: nx && nx.tides });
 }
 /* 電腦版奎壁山分海：日期清單＋潮位趨勢圖 */
 const KbDesk = (() => {
@@ -2530,6 +2541,8 @@ const KbDesk = (() => {
   const WEEK = ['日', '一', '二', '三', '四', '五', '六'];
   const weekOf = date => { const d = new Date(date.replace(/\//g, '-') + 'T00:00:00'); return Number.isNaN(d.getTime()) ? '' : `（${WEEK[d.getDay()]}）`; };
   let store = {};
+  const shiftDay = (date, n) => { const d = new Date(date.replace(/\//g, '-') + 'T00:00:00'); d.setDate(d.getDate() + n); return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`; };
+  const dayTides = date => tideAllRows.filter(x => x.date === date && x.time && Number.isFinite(x.height)).map(x => ({ time: x.time, height: x.height }));
   function render(month) {
     store = {};
     const dates = [...new Set(tideRows.filter(x => x.date.startsWith(month)).map(x => x.date))].sort();
@@ -2556,7 +2569,7 @@ const KbDesk = (() => {
     list.querySelectorAll('.f-card.active').forEach(c => c.classList.remove('active'));
     card.classList.add('active');
     const v = store[card.dataset.day];
-    if (v) chart.draw(v, v.title);
+    if (v) chart.draw(v, v.title, { prev: dayTides(shiftDay(card.dataset.day, -1)), next: dayTides(shiftDay(card.dataset.day, 1)) });
   }
   list.addEventListener('click', e => { const card = e.target.closest('.f-card'); if (card && !card.classList.contains('active')) select(card); });
   return { render, resize: chart.resize };
