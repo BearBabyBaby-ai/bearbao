@@ -149,7 +149,7 @@ final class WidgetData {
             for (int i = 0; i < list.length(); i++) {
                 JSONObject r = list.optJSONObject(i);
                 if (r == null || "已完成".equals(r.optString("狀態").trim())) continue;
-                List<String> ds = RemDates.expand(r.optString("提醒日期"));   // 多天／區間／民國年／每週幾
+                List<String> ds = RemDates.expand(r.optString("提醒日期"), RemDates.fire(r.optString("類別"), r.optString("標題")));   // 多天／區間／民國年／每週幾
                 if (ds.isEmpty()) continue;
                 for (String dk : ds) {
                 int y = Integer.parseInt(dk.substring(0, 4)), mo = Integer.parseInt(dk.substring(5, 7)), d = Integer.parseInt(dk.substring(8, 10));

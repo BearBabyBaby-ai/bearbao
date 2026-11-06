@@ -3208,7 +3208,8 @@ const Cal = (() => {
   function itemHtml(it, key) {
     const rows = [];
     if (it.time) rows.push(['時間', esc(it.time)]);
-    if (!it.yearly && it.start !== it.end) rows.push(['期間', `${esc(it.start)} – ${esc(it.end)}`]);
+    if (it.dateText) rows.push(['日期', esc(it.dateText)]);   /* 重要資訊提醒：多天／期間／每週幾 */
+    else if (!it.yearly && it.start !== it.end) rows.push(['期間', `${esc(it.start)} – ${esc(it.end)}`]);
     if (it.range) rows.push([it.cat === '機票搶票' ? '適用範圍' : '範圍', esc(it.range)]);
     if (it.place) rows.push(['地點', richText(it.place)]);
     if (it.unit) rows.push(['單位', esc(it.unit)]);
@@ -4030,28 +4031,58 @@ function formValues(form) {
 const dateInput = k => (k || todayKey()).replace(/\//g, '-');
 const dateKeyOf = v => (parseDates(v)[0] || '');
 // 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
-// 支援：2027/01/03、2027/01/05（多天）｜116/01/03（民國）｜2027/01/03-2027/01/09（區間）｜區間後加「週一、週四」只取那幾個星期
-function expandRemDates(text) {
+// 單日｜民國年（2～3 位數加 1911）｜多個單日（「、」「+」「，」空格分開）｜期間（「-」「至」「到」）｜期間後加「週一、週四」只取那幾個星期
+// 日期後面的 (一) 只是註記；單日後面寫星期不算條件；期間前後顛倒自動對調
+// 花火節（類別含花火／煙火，或標題含施放／花火／煙火）：加的單日落在「期間＋星期」裡 → 改期（拿掉期間裡最近的一場）
+function remFireRow(r) { return /花火|煙火/.test(String((r && r['類別']) || '')) || /施放|花火|煙火/.test(String((r && r['標題']) || '')); }
+function remDateSpec(text, fire) {
   var s = String(text == null ? '' : text);
   var re = /(\d{2,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g, toks = [], m;
+  var key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
   while ((m = re.exec(s))) {
     var y = Number(m[1]); if (y < 1000) y += 1911;
-    var mo = Number(m[2]), d = Number(m[3]);
-    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: m.index + m[0].length });
+    var mo = Number(m[2]), d = Number(m[3]), b = m.index + m[0].length;
+    var note = s.slice(b).match(/^\s*[（(][^）)]{0,8}[）)]/);
+    if (note) { b += note[0].length; re.lastIndex = b; }
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: b });
   }
-  var out = {}, key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
-  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 }, segs = [];
   for (var i = 0; i < toks.length; i++) {
     var nx = toks[i + 1];
-    if (nx && /^\s*[-~～－–—至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
-      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, any = false, w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
-      while ((w = wr.exec(tail))) { wd[WD[w[1]]] = 1; any = true; }
-      var a = Math.min(toks[i].t, nx.t), b = Math.max(toks[i].t, nx.t);
-      for (var t = a, n = 0; t <= b && n < 1000; t += 86400000, n++) if (!any || wd[new Date(t).getUTCDay()]) out[key(t)] = 1;
+    if (nx && /^\s*[-－–—~～至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
+      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, wl = [], w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
+      while ((w = wr.exec(tail))) { if (!wd[WD[w[1]]]) wl.push(WD[w[1]]); wd[WD[w[1]]] = 1; }
+      var a = Math.min(toks[i].t, nx.t), bb = Math.max(toks[i].t, nx.t), days = [];
+      for (var t = a, n = 0; t <= bb && n < 1500; t += 86400000, n++) if (!wl.length || wd[new Date(t).getUTCDay()]) days.push(key(t));
+      segs.push({ type: 'range', a: key(a), b: key(bb), wd: wl.length ? wl.sort(function (x, y) { return (x || 7) - (y || 7); }) : null, days: days });
       i++;
-    } else out[key(toks[i].t)] = 1;
+    } else segs.push({ type: 'single', d: key(toks[i].t) });
   }
-  return Object.keys(out).sort();
+  if (fire) segs.forEach(function (g) {
+    if (g.type !== 'single') return;
+    var r = null;
+    segs.forEach(function (x) { if (!r && x.type === 'range' && x.wd && x.a <= g.d && g.d <= x.b) r = x; });
+    if (!r || !r.days.length) return;
+    if (r.days.indexOf(g.d) >= 0) { g.dup = true; return; }
+    var gt = Date.parse(g.d.replace(/\//g, '-') + 'T00:00:00Z'), best = 0;
+    r.days.forEach(function (d, k) { if (Math.abs(Date.parse(d.replace(/\//g, '-') + 'T00:00:00Z') - gt) < Math.abs(Date.parse(r.days[best].replace(/\//g, '-') + 'T00:00:00Z') - gt)) best = k; });
+    r.days.splice(best, 1);
+  });
+  var out = {};
+  segs.forEach(function (g) { if (g.type === 'single') out[g.d] = 1; else g.days.forEach(function (d) { out[d] = 1; }); });
+  return { segs: segs, days: Object.keys(out).sort() };
+}
+function expandRemDates(text, fire) { return remDateSpec(text, fire).days; }
+/* 月曆明細：2027/01/03、2027/01/05｜2027/01/03 – 2027/01/09｜2027/01/03 – 2027/03/20 每週一、週四＋2027/02/24 */
+function remDateText(segs) {
+  const W = '日一二三四五六';
+  let out = '', prev = false;
+  segs.filter(g => !g.dup).forEach((g, i) => {
+    const single = g.type === 'single';
+    out += (i ? (single && prev ? '、' : '＋') : '') + (single ? g.d : `${g.a} – ${g.b}${g.wd ? ` 每${g.wd.map(w => '週' + W[w]).join('、')}` : ''}`);
+    prev = single;
+  });
+  return out;
 }
 
 
@@ -4132,7 +4163,7 @@ const Remind = (() => {
   const COLOR = { '繳費': '#ea580c', '證件': '#7c3aed', '保險': '#0891b2', '車輛保養': '#2563eb', '稅務': '#b45309', '醫療': '#dc2626', '預約': '#16a34a', '生日紀念': '#db2777', '機票搶票': '#ea580c', '節日': '#dc2626' };
   let filter = 'active';
   function next(r, k = todayKey()) {
-    const ds = expandRemDates(r['提醒日期']);
+    const ds = expandRemDates(r['提醒日期'], remFireRow(r));
     let d = ds[0] || '';
     if (ds.length > 1) return ds.find(x => x >= k) || ds[ds.length - 1];   /* 多天／區間：取今天以後最近的一天 */
     if (!d || !r['重複'] || r['重複'] === '不重複') return d;
@@ -4939,9 +4970,10 @@ function remindersForCal() {
   const pad = n => String(n).padStart(2, '0');
   (Fin.data?.reminders || []).forEach(r => {
     if (r['狀態'] === '已完成') return;
-    const ds = expandRemDates(r['提醒日期']), d = ds[0];
+    const spec = remDateSpec(r['提醒日期'], remFireRow(r)), ds = spec.days, d = ds[0];
     if (!d || !r['標題']) return;
     const base = { src: 'remind', cat: '重要提醒', name: String(r['標題']), time: String(r['時間'] || ''), content: [r['類別'], r['內容']].filter(Boolean).join('・'), note: String(r['備註'] || ''), yearly: false };
+    if (ds.length > 1) base.dateText = remDateText(spec.segs);   /* 月曆明細的日期文字 */
     if (r['重複'] === '每年') out.push({ ...base, start: d, end: d, yearly: true });
     else if (r['重複'] === '每月') {
       const ty = Number(t.slice(0, 4)), tm = Number(t.slice(5, 7)), dd = Number(d.slice(8, 10));

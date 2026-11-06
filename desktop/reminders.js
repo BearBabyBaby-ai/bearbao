@@ -11,36 +11,55 @@ function addMonths(d, n) { const x = new Date(Date.UTC(d[0], d[1] - 1 + n, d[2])
 const md = d => d[1] + '/' + d[2];
 
 // 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
-// 支援：2027/01/03、2027/01/05（多天）｜116/01/03（民國）｜2027/01/03-2027/01/09（區間）｜區間後加「週一、週四」只取那幾個星期
-function expandRemDates(text) {
+// 單日｜民國年（2～3 位數加 1911）｜多個單日（「、」「+」「，」空格分開）｜期間（「-」「至」「到」）｜期間後加「週一、週四」只取那幾個星期
+// 日期後面的 (一) 只是註記；單日後面寫星期不算條件；期間前後顛倒自動對調
+// 花火節（類別含花火／煙火，或標題含施放／花火／煙火）：加的單日落在「期間＋星期」裡 → 改期（拿掉期間裡最近的一場）
+function remFireRow(r) { return /花火|煙火/.test(String((r && r['類別']) || '')) || /施放|花火|煙火/.test(String((r && r['標題']) || '')); }
+function remDateSpec(text, fire) {
   var s = String(text == null ? '' : text);
   var re = /(\d{2,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g, toks = [], m;
+  var key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
   while ((m = re.exec(s))) {
     var y = Number(m[1]); if (y < 1000) y += 1911;
-    var mo = Number(m[2]), d = Number(m[3]);
-    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: m.index + m[0].length });
+    var mo = Number(m[2]), d = Number(m[3]), b = m.index + m[0].length;
+    var note = s.slice(b).match(/^\s*[（(][^）)]{0,8}[）)]/);
+    if (note) { b += note[0].length; re.lastIndex = b; }
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: b });
   }
-  var out = {}, key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
-  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 }, segs = [];
   for (var i = 0; i < toks.length; i++) {
     var nx = toks[i + 1];
-    if (nx && /^\s*[-~～－–—至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
-      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, any = false, w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
-      while ((w = wr.exec(tail))) { wd[WD[w[1]]] = 1; any = true; }
-      var a = Math.min(toks[i].t, nx.t), b = Math.max(toks[i].t, nx.t);
-      for (var t = a, n = 0; t <= b && n < 1000; t += 86400000, n++) if (!any || wd[new Date(t).getUTCDay()]) out[key(t)] = 1;
+    if (nx && /^\s*[-－–—~～至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
+      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, wl = [], w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
+      while ((w = wr.exec(tail))) { if (!wd[WD[w[1]]]) wl.push(WD[w[1]]); wd[WD[w[1]]] = 1; }
+      var a = Math.min(toks[i].t, nx.t), bb = Math.max(toks[i].t, nx.t), days = [];
+      for (var t = a, n = 0; t <= bb && n < 1500; t += 86400000, n++) if (!wl.length || wd[new Date(t).getUTCDay()]) days.push(key(t));
+      segs.push({ type: 'range', a: key(a), b: key(bb), wd: wl.length ? wl.sort(function (x, y) { return (x || 7) - (y || 7); }) : null, days: days });
       i++;
-    } else out[key(toks[i].t)] = 1;
+    } else segs.push({ type: 'single', d: key(toks[i].t) });
   }
-  return Object.keys(out).sort();
+  if (fire) segs.forEach(function (g) {
+    if (g.type !== 'single') return;
+    var r = null;
+    segs.forEach(function (x) { if (!r && x.type === 'range' && x.wd && x.a <= g.d && g.d <= x.b) r = x; });
+    if (!r || !r.days.length) return;
+    if (r.days.indexOf(g.d) >= 0) { g.dup = true; return; }
+    var gt = Date.parse(g.d.replace(/\//g, '-') + 'T00:00:00Z'), best = 0;
+    r.days.forEach(function (d, k) { if (Math.abs(Date.parse(d.replace(/\//g, '-') + 'T00:00:00Z') - gt) < Math.abs(Date.parse(r.days[best].replace(/\//g, '-') + 'T00:00:00Z') - gt)) best = k; });
+    r.days.splice(best, 1);
+  });
+  var out = {};
+  segs.forEach(function (g) { if (g.type === 'single') out[g.d] = 1; else g.days.forEach(function (d) { out[d] = 1; }); });
+  return { segs: segs, days: Object.keys(out).sort() };
 }
+function expandRemDates(text, fire) { return remDateSpec(text, fire).days; }
 
 // 算出最近 30 分鐘內到期、還沒跳出的通知
 function due(list, now) {
   const out = [];
   (list || []).forEach(r => {
     if (!r || str(r['狀態']) === '已完成') return;
-    const ds = expandRemDates(r['提醒日期']).map(ymd);
+    const ds = expandRemDates(r['提醒日期'], remFireRow(r)).map(ymd);
     if (!ds.length) return;
     const d0 = ds[0];
     const rep = str(r['重複']);

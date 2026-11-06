@@ -289,7 +289,7 @@ final class BgSync {
             for (int i = 0; i < a.length(); i++) {
                 JSONObject r = a.optJSONObject(i);
                 if (r == null || "已完成".equals(r.optString("狀態").trim())) continue;
-                List<String> ds = RemDates.expand(r.optString("提醒日期"));   // 多天／區間／民國年／每週幾
+                List<String> ds = RemDates.expand(r.optString("提醒日期"), RemDates.fire(r.optString("類別"), r.optString("標題")));   // 多天／區間／民國年／每週幾
                 String title = r.optString("標題").trim();
                 if (ds.isEmpty() || title.isEmpty()) continue;
                 String d = ds.get(0), rep = r.optString("重複").trim();
