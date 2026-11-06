@@ -4696,9 +4696,10 @@ const Finance = (() => {
     const maxC = Math.max(1, ...cats.map(c => c[1]));
     const PAL = ['#f59e0b', '#2563eb', '#16a34a', '#db2777', '#7c3aed', '#0891b2', '#ea580c', '#64748b'];
     const oil = (D().oil || []).slice(-1)[0];
-    return `<div class="xb-kpis">
+    return `<div class="xb-kpis five">
       <div class="xb-kpi out"><small>本月支出</small><b>$${money(out)}</b><em>${inM.filter(l => l['收支'] !== '收入').length} 筆</em></div>
-      <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(inc - out)}｜總餘額 $${money(totalTo(m))}</em></div>
+      <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(inc - out)}</em></div>
+      <div class="xb-kpi"><small>總餘額</small><b>$${money(totalTo(m))}</b><em>累計到本月</em></div>
       <div class="xb-kpi"><small>本期發票（${esc(per.label)}）</small><b>${perInv.length} 張</b><em>$${money(perInv.reduce((s, x) => s + numOf(x['金額']), 0))}</em></div>
       <div class="xb-kpi win"><small>待領獎</small><b>${winners.length} 張</b><em>$${money(winners.reduce((s, x) => s + numOf(x['中獎金額']), 0))}</em></div></div>
       <div class="xb-grid">
@@ -4738,7 +4739,7 @@ const Finance = (() => {
     return `<div class="xb-row" style="margin-bottom:12px"><input type="month" class="ct-select" id="ledMonth" value="${esc(ledMonth.replace('/', '-'))}">
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
-      <div class="xb-kpis five"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>總餘額</small><b>$${money(totalTo(ledMonth.replace('-', '/')))}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
+      <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
       <div class="xb-list">${list.length ? ledgerDays(list) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
   }
   /* 收支：每日一列，點了顯示當天的收支資料 */
