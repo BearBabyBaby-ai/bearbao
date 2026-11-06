@@ -7,8 +7,8 @@ const A = 'android/app';
 const RES = `${A}/src/main/res`;
 const ICON = '../icons/icon-512.png';
 const MASK = '../icons/icon-maskable-512.png';
-const VERSION_CODE = 27;
-const VERSION_NAME = '2.6.0';
+const VERSION_CODE = 28;
+const VERSION_NAME = '2.6.1';
 const BAR = '#0a6fb3';
 const BG = '#fef8e4';
 
@@ -113,7 +113,7 @@ public class MainActivity extends BridgeActivity {
 `);
 
 // 3-1. 桌面小工具「熊寶貼心提醒」
-for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java', 'BgSync.java', 'BearScanPlugin.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
+for (const f of ['WidgetData.java', 'ReminderWidget.java', 'ReminderListService.java', 'AreaPickerActivity.java', 'Lunar.java', 'LockCalendar.java', 'LockCalReceiver.java', 'BearLockPlugin.java', 'BgSync.java', 'BearScanPlugin.java', 'RemDates.java']) fs.copyFileSync(`widget/${f}`, `${javaDir}/${f}`);
 for (const [from, to] of [['reminder_widget.xml', 'layout'], ['widget_item.xml', 'layout'], ['reminder_widget_info.xml', 'xml'], ['widget_strings.xml', 'values']]) {
   fs.mkdirSync(`${RES}/${to}`, { recursive: true });
   fs.copyFileSync(`widget/${from}`, `${RES}/${to}/${from}`);

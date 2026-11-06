@@ -35,13 +35,39 @@ function hash(s) {
 }
 function md(d) { return d[1] + '/' + d[2]; }
 
+// 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
+// 支援：2027/01/03、2027/01/05（多天）｜116/01/03（民國）｜2027/01/03-2027/01/09（區間）｜區間後加「週一、週四」只取那幾個星期
+function expandRemDates(text) {
+  var s = String(text == null ? '' : text);
+  var re = /(\d{2,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g, toks = [], m;
+  while ((m = re.exec(s))) {
+    var y = Number(m[1]); if (y < 1000) y += 1911;
+    var mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: m.index + m[0].length });
+  }
+  var out = {}, key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
+  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+  for (var i = 0; i < toks.length; i++) {
+    var nx = toks[i + 1];
+    if (nx && /^\s*[-~～－–—至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
+      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, any = false, w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
+      while ((w = wr.exec(tail))) { wd[WD[w[1]]] = 1; any = true; }
+      var a = Math.min(toks[i].t, nx.t), b = Math.max(toks[i].t, nx.t);
+      for (var t = a, n = 0; t <= b && n < 1000; t += 86400000, n++) if (!any || wd[new Date(t).getUTCDay()]) out[key(t)] = 1;
+      i++;
+    } else out[key(toks[i].t)] = 1;
+  }
+  return Object.keys(out).sort();
+}
+
 // 依提醒資料算出未來要跳出的通知
 function build(list, now) {
   var out = [];
   (list || []).forEach(function (r) {
     if (!r || str(r['狀態']) === '已完成') return;
-    var d0 = ymd(r['提醒日期']);
-    if (!d0) return;
+    var ds = expandRemDates(r['提醒日期']).map(ymd);
+    if (!ds.length) return;
+    var d0 = ds[0];
     var rep = str(r['重複']);
     var step = rep === '每月' ? 1 : rep === '每年' ? 12 : 0;
     var t = hm(r['時間']);
@@ -49,8 +75,9 @@ function build(list, now) {
     var lead = Math.max(0, Number(r['提前提醒天數']) || 0);
     var offs = ticket ? [DAY, 3600000, 600000] : (lead ? [lead * DAY, 0] : [0]);
     var title = (ICON[str(r['類別'])] || '🔔') + ' ' + str(r['標題']) + (ticket ? ' 開搶' : '');
-    var d = d0, guard = 0;
-    while (guard++ < 400) {
+    if (ds.length > 1) step = 0;   // 多天／區間：每一天各自提醒
+    var di = 0, d = d0, guard = 0;
+    while (guard++ < 1200) {
       var ev = at(d, t);
       if (ev - now > HORIZON + lead * DAY) break;
       offs.forEach(function (off) {
@@ -64,8 +91,9 @@ function build(list, now) {
         if (extra) body += '・' + extra.replace(/\s+/g, ' ').slice(0, 80);
         out.push({ key: str(r.ID || r['標題']) + '|' + ev + '|' + off, when: when, title: title, body: body });
       });
-      if (!step) break;
-      d = addMonths(d, step);
+      if (step) d = addMonths(d, step);
+      else if (++di < ds.length) d = ds[di];
+      else break;
     }
   });
   out.sort(function (a, b) { return a.when - b.when; });

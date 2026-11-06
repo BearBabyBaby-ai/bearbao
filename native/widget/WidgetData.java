@@ -149,11 +149,12 @@ final class WidgetData {
             for (int i = 0; i < list.length(); i++) {
                 JSONObject r = list.optJSONObject(i);
                 if (r == null || "已完成".equals(r.optString("狀態").trim())) continue;
-                Matcher m = DATE.matcher(r.optString("提醒日期"));
-                if (!m.find()) continue;
-                int y = Integer.parseInt(m.group(1)), mo = Integer.parseInt(m.group(2)), d = Integer.parseInt(m.group(3));
+                List<String> ds = RemDates.expand(r.optString("提醒日期"));   // 多天／區間／民國年／每週幾
+                if (ds.isEmpty()) continue;
+                for (String dk : ds) {
+                int y = Integer.parseInt(dk.substring(0, 4)), mo = Integer.parseInt(dk.substring(5, 7)), d = Integer.parseInt(dk.substring(8, 10));
                 String rep = r.optString("重複").trim();
-                int step = "每月".equals(rep) ? 1 : "每年".equals(rep) ? 12 : 0;
+                int step = ds.size() > 1 ? 0 : "每月".equals(rep) ? 1 : "每年".equals(rep) ? 12 : 0;
                 long day = dayNumber(y, mo, d);
                 int guard = 0;
                 while (step > 0 && day < today && guard++ < 1200) {
@@ -178,6 +179,7 @@ final class WidgetData {
                 it.title = icon(cat) + " " + r.optString("標題").trim() + ("機票搶票".equals(cat) ? " 開搶" : "");
                 it.when = monthDay(day) + (hasTime ? String.format(Locale.ROOT, " %02d:%02d", it.minutes / 60, it.minutes % 60) : "");
                 out.add(it);
+                }
             }
         } catch (Exception ignored) {
         }

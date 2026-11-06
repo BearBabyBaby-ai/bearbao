@@ -4029,6 +4029,31 @@ function formValues(form) {
 }
 const dateInput = k => (k || todayKey()).replace(/\//g, '-');
 const dateKeyOf = v => (parseDates(v)[0] || '');
+// 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
+// 支援：2027/01/03、2027/01/05（多天）｜116/01/03（民國）｜2027/01/03-2027/01/09（區間）｜區間後加「週一、週四」只取那幾個星期
+function expandRemDates(text) {
+  var s = String(text == null ? '' : text);
+  var re = /(\d{2,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g, toks = [], m;
+  while ((m = re.exec(s))) {
+    var y = Number(m[1]); if (y < 1000) y += 1911;
+    var mo = Number(m[2]), d = Number(m[3]);
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) toks.push({ t: Date.UTC(y, mo - 1, d), a: m.index, b: m.index + m[0].length });
+  }
+  var out = {}, key = function (t) { var x = new Date(t); return x.getUTCFullYear() + '/' + ('0' + (x.getUTCMonth() + 1)).slice(-2) + '/' + ('0' + x.getUTCDate()).slice(-2); };
+  var WD = { '日': 0, '天': 0, '一': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6 };
+  for (var i = 0; i < toks.length; i++) {
+    var nx = toks[i + 1];
+    if (nx && /^\s*[-~～－–—至到]\s*$/.test(s.slice(toks[i].b, nx.a))) {
+      var tail = s.slice(nx.b, toks[i + 2] ? toks[i + 2].a : s.length), wd = {}, any = false, w, wr = /(?:週|周|星期|禮拜)\s*([日天一二三四五六])/g;
+      while ((w = wr.exec(tail))) { wd[WD[w[1]]] = 1; any = true; }
+      var a = Math.min(toks[i].t, nx.t), b = Math.max(toks[i].t, nx.t);
+      for (var t = a, n = 0; t <= b && n < 1000; t += 86400000, n++) if (!any || wd[new Date(t).getUTCDay()]) out[key(t)] = 1;
+      i++;
+    } else out[key(toks[i].t)] = 1;
+  }
+  return Object.keys(out).sort();
+}
+
 
 
 
@@ -4107,7 +4132,9 @@ const Remind = (() => {
   const COLOR = { '繳費': '#ea580c', '證件': '#7c3aed', '保險': '#0891b2', '車輛保養': '#2563eb', '稅務': '#b45309', '醫療': '#dc2626', '預約': '#16a34a', '生日紀念': '#db2777', '機票搶票': '#ea580c', '節日': '#dc2626' };
   let filter = 'active';
   function next(r, k = todayKey()) {
-    let d = dateKeyOf(r['提醒日期']);
+    const ds = expandRemDates(r['提醒日期']);
+    let d = ds[0] || '';
+    if (ds.length > 1) return ds.find(x => x >= k) || ds[ds.length - 1];   /* 多天／區間：取今天以後最近的一天 */
     if (!d || !r['重複'] || r['重複'] === '不重複') return d;
     for (let i = 0; d < k && i < 600; i++) d = addMonthsKey(d, r['重複'] === '每月' ? 1 : 12);
     return d;
@@ -4154,7 +4181,8 @@ const Remind = (() => {
     const sheet = Modal.open(id ? '編輯提醒' : '新增重要資訊提醒', `<form class="xb-form" id="remForm">
       ${field({ name: '標題', label: '標題', value: r['標題'], required: true, full: true, placeholder: '例如：汽車保險到期、繳房屋稅' })}
       ${field({ name: '類別', label: '類別', type: 'select', options: CATS, value: r['類別'] || '一般' })}
-      ${field({ name: '提醒日期', label: '日期', type: 'date', value: dateInput(dateKeyOf(r['提醒日期']) || todayKey()) })}
+      ${(() => { const raw = String(r['提醒日期'] ?? '').trim(), simple = !raw || (expandRemDates(raw).length === 1 && /^\d{4}\D\d{1,2}\D\d{1,2}$/.test(raw));
+        return simple ? field({ name: '提醒日期', label: '日期', type: 'date', value: dateInput(dateKeyOf(raw) || todayKey()) }) : field({ name: '提醒日期', label: '日期', value: raw, placeholder: '例如 2027/01/03-2027/02/20 週一、週四' }); })()}
       ${field({ name: '時間', label: '時間', type: 'time', value: r['時間'] || '09:00' })}
       ${field({ name: '提前提醒天數', label: '提前幾天提醒', type: 'number', value: r['提前提醒天數'] ?? 3, inputmode: 'numeric' })}
       ${field({ name: '重複', label: '重複', type: 'select', options: ['不重複', '每月', '每年'], value: r['重複'] || '不重複' })}
@@ -4165,7 +4193,7 @@ const Remind = (() => {
     sheet.querySelector('#remSave').addEventListener('click', async e => {
       const v = formValues(sheet.querySelector('#remForm'));
       if (!v['標題']) { alert('請輸入標題'); return; }
-      v['提醒日期'] = v['提醒日期'].replace(/-/g, '/');
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v['提醒日期'])) v['提醒日期'] = v['提醒日期'].replace(/-/g, '/');
       if (id) v.ID = id;
       e.target.disabled = true; e.target.textContent = '儲存中…';
       try { const r = await Fin.call('saveReminder', { item: v }); Modal.close(); toast('remStatus', calMsg(r._calendar, '✅ 已儲存提醒'), Boolean(r._calendar && r._calendar.error)); await Fin.sync(true); }
@@ -4911,7 +4939,7 @@ function remindersForCal() {
   const pad = n => String(n).padStart(2, '0');
   (Fin.data?.reminders || []).forEach(r => {
     if (r['狀態'] === '已完成') return;
-    const d = dateKeyOf(r['提醒日期']);
+    const ds = expandRemDates(r['提醒日期']), d = ds[0];
     if (!d || !r['標題']) return;
     const base = { src: 'remind', cat: '重要提醒', name: String(r['標題']), time: String(r['時間'] || ''), content: [r['類別'], r['內容']].filter(Boolean).join('・'), note: String(r['備註'] || ''), yearly: false };
     if (r['重複'] === '每年') out.push({ ...base, start: d, end: d, yearly: true });
@@ -4923,7 +4951,7 @@ function remindersForCal() {
         if (k >= d) out.push({ ...base, start: k, end: k });
       }
     }
-    else out.push({ ...base, start: d, end: d });
+    else ds.forEach(k => out.push({ ...base, start: k, end: k }));   /* 多天／區間／每週幾：每一天都放 */
   });
   const days = {};
   (Fin.data?.ledger || []).forEach(l => {
