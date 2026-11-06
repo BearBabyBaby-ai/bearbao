@@ -3178,7 +3178,7 @@ const Cal = (() => {
   }
 
   function renderFilters() {
-    const cats = [...new Set(items.filter(it => !isHidden(it)).map(it => it.cat))];
+    const cats = [...new Set(items.filter(it => !isHidden(it) && !isExpired(it)).map(it => it.cat))];   /* 類別標籤：全部已過期的類別不顯示 */
     if (filter && !cats.includes(filter)) filter = '';
     $('calFilters').innerHTML = cats.length < 2 ? '' : [`<button type="button" class="cal-chip${filter ? '' : ' active'}" data-cat="">全部</button>`]
       .concat(cats.map(c => `<button type="button" class="cal-chip${c === filter ? ' active' : ''}" data-cat="${esc(c)}"><i style="background:${colorOf(c)}"></i>${esc(c)}</button>`)).join('');
@@ -4180,7 +4180,6 @@ const Remind = (() => {
   
   const all = () => (Fin.data?.reminders || []).map(decorate).filter(x => x.state !== 'overdue').sort((a, b) => (a.d || '9999').localeCompare(b.d || '9999'));
   const within30 = x => x.d && x.days !== null && x.days >= 0 && x.days <= 30;
-  const withinMonth = x => x.d && x.days !== null && x.days >= 0 && x.d <= addMonthsKey(todayKey(), 1);
   const alerting = () => all().filter(x => ['overdue', 'today', 'soon'].includes(x.state));
   function cdText(x) {
     if (x.state === 'done') return '已完成';
@@ -4202,7 +4201,7 @@ const Remind = (() => {
     if (!list) return;
     if (!Fin.ready()) { list.innerHTML = '<div class="xb-empty">請先到「財務管理」完成連線設定。<br><button type="button" class="xb-btn pri" data-go="finance" style="margin-top:10px">前往設定</button></div>'; $('remChips').innerHTML = ''; return; }
     if (!Fin.data) { list.innerHTML = `<div class="xb-empty">${Fin.error ? esc(Fin.error) : '正在讀取提醒…'}</div>`; return; }
-    const items = all().filter(withinMonth);   /* 只顯示一個月內 */
+    const items = all().filter(within30);   /* 只顯示 30 天內 */
     const groups = { active: items.filter(x => x.state !== 'done'), alert: items.filter(x => ['overdue', 'today', 'soon'].includes(x.state)), done: items.filter(x => x.state === 'done'), all: items };
     $('remChips').innerHTML = [['active', '進行中'], ['alert', '需注意'], ['done', '已完成'], ['all', '全部']].map(([k, t]) => `<button type="button" class="xb-chip${filter === k ? ' active' : ''}" data-rem-f="${k}">${t} ${groups[k].length}</button>`).join('');
     const shown = groups[filter];
