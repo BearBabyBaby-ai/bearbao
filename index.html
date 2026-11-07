@@ -4433,7 +4433,7 @@ const Invoice = (() => {
     busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
     upQueue = upQueue.then(async () => {
       const img = await fileToImage(file);
-      const b64 = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 2000), 0.88);
+      const b64 = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 3000), 0.92);   /* 保留較高解析度，載入時比較讀得到 QR Code */
       const r = await Fin.call('pendingAdd', { image: b64, mime: 'image/jpeg' }, 90000);
       if (Fin.data) { Fin.data.pending = pendingList().concat(r); }
     }).catch(err => toast('finStatus', `上傳失敗：${String(err && err.message || err)}`, true)).finally(() => {
@@ -4507,6 +4507,8 @@ const Invoice = (() => {
         results.push(r);
       }
     } finally { loading = false; }
+    const okN = results.filter(r => r.status === 'saved').length;
+    toast('finStatus', `✅ 載入完成：存入 ${okN} 張，共 ${results.length} 張`);
     await Fin.sync(true);
     showResults(results);
   }
@@ -4538,12 +4540,25 @@ const Invoice = (() => {
       const img = await fileToImage(file);
       const W = img.naturalWidth, H = img.naturalHeight;
       const found = [], seen = new Set();
-      const tries = [[0, 0, W, H, 2000], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400]];
+      /* [x, y, 寬, 高, 最大邊, 加強對比]：整張 → 中間 → 上下左右各半 → 九宮格重疊 → 加強對比 */
+      const tries = [[0, 0, W, H, 2000], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400],
+        [0, 0, W, H * 0.6, 1600], [0, H * 0.4, W, H * 0.6, 1600]];
+      for (const fx of [0, 0.25, 0.5]) for (const fy of [0, 0.25, 0.5]) tries.push([W * fx, H * fy, W * 0.5, H * 0.5, 1400]);
+      tries.push([0, 0, W, H, 1600, 1], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600, 1], [0, 0, W, H * 0.6, 1600, 1], [0, H * 0.4, W, H * 0.6, 1600, 1]);
+      const boost = c => {   /* 灰階＋拉高對比，皺摺或反光的紙本比較讀得到 */
+        const ctx = c.getContext('2d', { willReadFrequently: true }), d = ctx.getImageData(0, 0, c.width, c.height), a = d.data;
+        let lo = 255, hi = 0;
+        for (let k = 0; k < a.length; k += 16) { const g = a[k] * 0.3 + a[k + 1] * 0.59 + a[k + 2] * 0.11; if (g < lo) lo = g; if (g > hi) hi = g; }
+        const span = Math.max(1, hi - lo);
+        for (let k = 0; k < a.length; k += 4) { let g = (a[k] * 0.3 + a[k + 1] * 0.59 + a[k + 2] * 0.11 - lo) / span; g = g < 0.45 ? 0 : g > 0.62 ? 255 : (g - 0.45) / 0.17 * 255; a[k] = a[k + 1] = a[k + 2] = g; }
+        ctx.putImageData(d, 0, 0);
+      };
       for (let i = 0; i < tries.length; i++) {
-        const [x, y, w, h, max] = tries[i];
-        const sc = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
+        const [x, y, w, h, max, hard] = tries[i];
+        const sc = Math.min(1.6, max / Math.max(w, h)), c = document.createElement('canvas');
         c.width = Math.round(w * sc); c.height = Math.round(h * sc);
         c.getContext('2d').drawImage(img, x, y, w, h, 0, 0, c.width, c.height);
+        if (hard) boost(c);
         (await detectAll(c)).forEach(v => { if (seen.has(v.text)) return; seen.add(v.text); found.push({ text: v.text, x: x + v.x / sc, y: y + v.y / sc, size: v.size / sc }); });
         if (i >= 1 && found.some(v => QR_LEFT.test(v.text))) break;
       }
@@ -4556,7 +4571,20 @@ const Invoice = (() => {
       }
       const info = parseQR(left, right);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
-      if (!info) return await ocrFromImage(shot, opt);
+      if (!info) {
+        const r = await ocrFromImage(shot, { ...opt, batch: true });
+        if (r && r.status !== 'need' && r.status !== 'fail') return r;
+        /* 第二次：整張加強對比、較高解析度再辨識 */
+        const c2 = drawScaled(img, img.naturalWidth, img.naturalHeight, 2400);
+        const ctx2 = c2.getContext('2d', { willReadFrequently: true }), d2 = ctx2.getImageData(0, 0, c2.width, c2.height), a2 = d2.data;
+        for (let k = 0; k < a2.length; k += 4) { const g = a2[k] * 0.3 + a2[k + 1] * 0.59 + a2[k + 2] * 0.11; const v = g < 110 ? 0 : g > 170 ? 255 : (g - 110) / 60 * 255; a2[k] = a2[k + 1] = a2[k + 2] = v; }
+        ctx2.putImageData(d2, 0, 0);
+        const r2 = await ocrFromImage(canvasToB64(c2, 0.9), { ...opt, batch: true, keepImage: shot });
+        if (opt.batch) return r2;
+        if (r2 && r2.status === 'need') { openForm(r2.info); return; }
+        if (r2 && r2.status === 'fail') { toast('finStatus', `${r2.msg}，可以改用「手動輸入」`, true); return; }
+        return r2;
+      }
       return await autoSave({ ...info, method: '拍照', image: shot, header }, opt);
     } catch (err) { if (opt.batch) return { status: 'fail', msg: String(err && err.message || err) }; toast('finStatus', String(err && err.message || err), true); }
   }
@@ -4581,8 +4609,8 @@ const Invoice = (() => {
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
       const nm = nameFromText(String(r.text || ''));
-      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: b64, ocrText: r.text }, opt);
-    } catch (err) { if (opt.batch) return { status: 'fail', msg: `辨識失敗：${err.message}`, info: { image: b64 } }; toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
+      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: opt.keepImage || b64, ocrText: r.text }, opt);
+    } catch (err) { if (opt.batch) return { status: 'fail', msg: `辨識失敗：${err.message}`, info: { image: opt.keepImage || b64 } }; toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
   const banOf = v => { const d = String(v || '').replace(/\D/g, ''); return d ? d.padStart(8, '0') : ''; };
