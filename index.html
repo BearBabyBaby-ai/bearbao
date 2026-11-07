@@ -891,6 +891,7 @@
     .xb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
     .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
+    .xb-res .xb-item{flex-wrap:wrap}.xb-res .xb-item>div:first-child{flex:1 1 100%;min-width:0}.xb-res .xb-item .acts{margin-left:auto}
     .xb-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:56vh;overflow:auto;margin-bottom:12px}
     .xb-pick{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#f1f5f9}
     .xb-pick img{width:100%;height:100%;object-fit:cover}
@@ -4430,7 +4431,7 @@ const Invoice = (() => {
       if (Fin.data) { Fin.data.pending = pendingList().concat(r); }
     }).catch(err => toast('finStatus', `上傳失敗：${String(err && err.message || err)}`, true)).finally(() => {
       uploading--;
-      if (!uploading) { toast('finStatus', `✅ 已上傳，待載入 ${pendingList().length} 張`); Finance.render && Finance.render(); }
+      if (!uploading) { Finance.render && Finance.render(); loadPending(); }   /* 上傳完直接載入 */
       else busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
     });
   }
@@ -4475,9 +4476,9 @@ const Invoice = (() => {
     choose();
   }
   /* 載入發票：逐張判別；重複的發票不存、收支已有同日同金額不重複記；判斷不出來的留著 */
-  let loading = false;
+  let loading = false, again = false;
   async function loadPending() {
-    if (loading) return;
+    if (loading) { again = true; return; }
     const list = pendingList().slice();
     if (!list.length) { toast('finStatus', '目前沒有待載入的發票'); return; }
     loading = true;
@@ -4499,12 +4500,18 @@ const Invoice = (() => {
         results.push(r);
       }
     } finally { loading = false; }
-    const okN = results.filter(r => r.status === 'saved').length;
-    toast('finStatus', `✅ 載入完成：存入 ${okN} 張，共 ${results.length} 張`);
+    const okN = results.filter(r => r.status === 'saved').length, dupN = results.filter(r => r.status === 'dup').length, badN = results.length - okN - dupN;
+    toast('finStatus', `✅ 載入完成：存入 ${okN} 張${dupN ? `・重複 ${dupN} 張不重複存入` : ''}${badN ? `・判斷不出來 ${badN} 張` : ''}`, badN > 0);
     await Fin.sync(true);
     showResults(results);
+    if (again) { again = false; loadPending(); }
   }
-  function showResults(results) {
+  function showResults(all) {
+    const won = all.filter(r => r.status === 'saved' && r.saved['兌獎狀態'] === '中獎');
+    if (won.length) Helper.say(`🎉 恭喜中獎！${won.map(r => `<b>${esc(r.saved['發票號碼'])} ${esc(r.saved['中獎獎別'])} ${money(r.saved['中獎金額'])} 元</b>`).join('、')}，記得在領獎期限內兌領喔！`, true);
+    /* 只有判斷不出來的才跳出畫面 */
+    const results = all.filter(r => r.status === 'need' || r.status === 'fail');
+    if (!results.length) { Finance.render && Finance.render(); return; }
     const n = st => results.filter(r => r.status === st).length;
     const row = (r, i) => {
       const s = r.saved || {};
@@ -4512,9 +4519,7 @@ const Invoice = (() => {
       if (r.status === 'dup') return `<div class="xb-item"><div><b>⚠️ ${esc(r.no)} 重複</b><small>已經記錄過，這次不重複存入（${esc(r.hit?.['購買日期'] || '')}・${esc(r.hit?.['資料來源'] || '')}・$${money(r.hit?.['金額'])}）</small></div></div>`;
       return `<div class="xb-item"><div><b>❓ 判斷不出來</b><small>${esc(r.msg || '找不到發票號碼')}，照片保留在待載入</small></div><div class="acts"><button type="button" class="xb-btn sm" data-res-form="${i}">✍️ 手動輸入</button><button type="button" class="xb-btn sm" data-res-del="${i}">刪除照片</button></div></div>`;
     };
-    const sheet = Modal.open('📥 載入結果', `<div class="xb-empty" style="margin-bottom:10px">存入 ${n('saved')} 張・重複 ${n('dup')} 張・判斷不出來 ${n('need') + n('fail')} 張</div><div class="xb-list">${results.map(row).join('')}</div><div class="xb-form-acts"><button type="button" class="xb-btn pri" data-xb-close>完成</button></div>`);
-    const won = results.filter(r => r.status === 'saved' && r.saved['兌獎狀態'] === '中獎');
-    if (won.length) Helper.say(`🎉 恭喜中獎！${won.map(r => `<b>${esc(r.saved['發票號碼'])} ${esc(r.saved['中獎獎別'])} ${money(r.saved['中獎金額'])} 元</b>`).join('、')}，記得在領獎期限內兌領喔！`, true);
+    const sheet = Modal.open('❓ 判斷不出來的發票', `<div class="xb-empty" style="margin-bottom:10px">判斷不出來 ${n('need') + n('fail')} 張，可以手動輸入或刪除照片</div><div class="xb-list xb-res">${results.map(row).join('')}</div><div class="xb-form-acts"><button type="button" class="xb-btn pri" data-xb-close>完成</button></div>`);
     sheet.addEventListener('click', async e => {
       const f = e.target.closest('[data-res-fuel]'), m = e.target.closest('[data-res-form]'), d = e.target.closest('[data-res-del]');
       if (f) { const r = results[f.dataset.resFuel]; askFuel(r.saved, r.info || {}); }
