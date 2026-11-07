@@ -4303,14 +4303,14 @@ const Invoice = (() => {
   let jsqrPromise = null;
   function loadJsQR() {
     if (window.jsQR) return Promise.resolve();
-    if (!jsqrPromise) jsqrPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; s.onload = ok; s.onerror = () => fail(new Error('掃描元件載入失敗')); document.head.appendChild(s); });
+    if (!jsqrPromise) jsqrPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js'; s.onload = ok; s.onerror = () => fail(new Error('辨識元件載入失敗')); document.head.appendChild(s); });
     return jsqrPromise;
   }
   
   let zxPromise = null;
   function loadZX() {
     if (window.ZXingWASM) return Promise.resolve(window.ZXingWASM);
-    if (!zxPromise) zxPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/iife/reader/index.js'; s.onload = () => { const ZX = window.ZXingWASM; try { ZX.prepareZXingModule({ overrides: { locateFile: (f, pre) => f.endsWith('.wasm') ? 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/reader/' + f : pre + f } }); } catch (_) {} ok(ZX); }; s.onerror = () => { zxPromise = null; fail(new Error('掃描元件載入失敗')); }; document.head.appendChild(s); });
+    if (!zxPromise) zxPromise = new Promise((ok, fail) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/iife/reader/index.js'; s.onload = () => { const ZX = window.ZXingWASM; try { ZX.prepareZXingModule({ overrides: { locateFile: (f, pre) => f.endsWith('.wasm') ? 'https://cdn.jsdelivr.net/npm/zxing-wasm@2.1.2/dist/reader/' + f : pre + f } }); } catch (_) {} ok(ZX); }; s.onerror = () => { zxPromise = null; fail(new Error('辨識元件載入失敗')); }; document.head.appendChild(s); });
     return zxPromise;
   }
   function b64utf8(s) { try { return new TextDecoder().decode(Uint8Array.from(atob(s), c => c.charCodeAt(0))); } catch (_) { return ''; } }
@@ -4404,15 +4404,7 @@ const Invoice = (() => {
     return new Blob([arr], { type: 'image/' + (r.format || 'jpeg') });
   }
   const cancelled = err => /cancel|取消/i.test(String(err && err.message || err));
-  async function nativeScan(tries = 0) {
-    let text = '';
-    try { text = (await CapX.nativePromise('BearScan', 'scan', {})).text || ''; }
-    catch (err) { if (!cancelled(err)) alert(`${String(err && err.message || err)}\n可以改用「拍照」或「手動輸入」。`); return; }
-    const info = parseQR(text);
-    if (info) { if (navigator.vibrate) navigator.vibrate(80); openForm({ ...info, method: '電子發票QR' }); return; }
-    if (/^\*\*/.test(text) && tries < 2) { await new Promise(ok => { Modal.open('📷 再掃一次', '<div class="xb-empty">掃到的是右邊的 QR Code，請改對準<b>左邊</b>的 QR Code</div>'); setTimeout(() => { Modal.close(); ok(); }, 1400); }); return nativeScan(tries + 1); }
-    alert('這不是電子發票的 QR Code，請對準發票左邊的 QR Code。');
-  }
+
 
   
   let stream = null, timer = null;
@@ -4535,10 +4527,9 @@ const Invoice = (() => {
     });
     Finance.render && Finance.render();
   }
-  async function fromQRPhoto(file, opt = {}) {
-    try {
-      const img = await fileToImage(file);
-      const W = img.naturalWidth, H = img.naturalHeight;
+  /* 備援：印刷字讀不到發票號碼時才用 */
+  async function codeInfo(img) {
+    const W = img.naturalWidth, H = img.naturalHeight;
       const found = [], seen = new Set();
       /* [x, y, 寬, 高, 最大邊, 加強對比]：整張 → 中間 → 上下左右各半 → 九宮格重疊 → 加強對比 */
       const tries = [[0, 0, W, H, 2000], [W * 0.15, H * 0.15, W * 0.7, H * 0.7, 1600], [0, 0, W, H, 1400], [0, 0, W, H, 1000], [0, 0, W * 0.6, H, 1400], [W * 0.4, 0, W * 0.6, H, 1400],
@@ -4569,26 +4560,40 @@ const Invoice = (() => {
         const hw = Math.min(W, pos.x + 3.6 * z) - hx, hh = Math.min(H, pos.y - 1.2 * z) - hy;
         if (hw > 20 && hh > 20) { const c = document.createElement('canvas'), k = Math.min(1, 1200 / hw); c.width = Math.round(hw * k); c.height = Math.round(hh * k); c.getContext('2d').drawImage(img, hx, hy, hw, hh, 0, 0, c.width, c.height); header = canvasToB64(c, 0.9); }
       }
-      const info = parseQR(left, right);
+      return { info: parseQR(left, right), header };
+  }
+  /* 讀發票照片：先讀印在發票上的字（店名、日期、發票號碼、金額）→ 存入 → 比對中獎 */
+  async function fromQRPhoto(file, opt = {}) {
+    try {
+      const img = await fileToImage(file);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
-      if (!info) {
-        const r = await ocrFromImage(shot, { ...opt, batch: true });
-        if (r && r.status !== 'need' && r.status !== 'fail') return r;
-        /* 第二次：整張加強對比、較高解析度再辨識 */
+      /* 1. 讀印刷字 */
+      let r = await ocrFromImage(shot, { ...opt, batch: true });
+      /* 2. 讀不到：整張加強對比、較高解析度再讀一次 */
+      if (!r || r.status === 'need' || r.status === 'fail') {
         const c2 = drawScaled(img, img.naturalWidth, img.naturalHeight, 2400);
         const ctx2 = c2.getContext('2d', { willReadFrequently: true }), d2 = ctx2.getImageData(0, 0, c2.width, c2.height), a2 = d2.data;
         for (let k = 0; k < a2.length; k += 4) { const g = a2[k] * 0.3 + a2[k + 1] * 0.59 + a2[k + 2] * 0.11; const v = g < 110 ? 0 : g > 170 ? 255 : (g - 110) / 60 * 255; a2[k] = a2[k + 1] = a2[k + 2] = v; }
         ctx2.putImageData(d2, 0, 0);
         const r2 = await ocrFromImage(canvasToB64(c2, 0.9), { ...opt, batch: true, keepImage: shot });
-        if (opt.batch) return r2;
-        if (r2 && r2.status === 'need') { openForm(r2.info); return; }
-        if (r2 && r2.status === 'fail') { toast('finStatus', `${r2.msg}，可以改用「手動輸入」`, true); return; }
-        return r2;
+        if (r2 && (r2.status === 'saved' || r2.status === 'dup' || !r || r.status === 'fail')) r = r2;
       }
-      return await autoSave({ ...info, method: '拍照', image: shot, header }, opt);
+      /* 3. 還是沒有發票號碼才用備援 */
+      if (!r || r.status === 'need' || r.status === 'fail') {
+        try {
+          const q = await codeInfo(img);
+          if (q.info) {
+            const base = (r && r.info) || {};
+            r = await autoSave({ ...q.info, merchant: base.merchant || '', category: base.category || '', ocrText: base.ocrText, method: '拍照', image: shot, header: q.header }, { ...opt, batch: true });
+          }
+        } catch (_) {}
+      }
+      if (opt.batch) return r;
+      if (r && r.status === 'need') { openForm(r.info); return; }
+      if (r && r.status === 'fail') { toast('finStatus', `${r.msg}，可以改用「手動輸入」`, true); return; }
+      return r;
     } catch (err) { if (opt.batch) return { status: 'fail', msg: String(err && err.message || err) }; toast('finStatus', String(err && err.message || err), true); }
   }
-  
   async function pickPaper() { return scanCamera(); }
   async function pickPaperOld() {
     if (!Fin.ready()) { showView('finance'); return; }
