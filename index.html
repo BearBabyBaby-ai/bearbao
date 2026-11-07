@@ -890,7 +890,8 @@
     .xb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
     .xb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
-    @media(max-width:820px){.xb-kpis.five{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    @media(max-width:820px){.xb-kpis.five{grid-template-columns:repeat(2,minmax(0,1fr))}.xb-kpis.five .xb-kpi.total{grid-column:1/-1}}   /* 手機：總餘額佔一整排，其餘兩兩一排 */
+    .xb-kpi small,.xb-kpi em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .xb-kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:0 5px 14px rgba(7,43,75,.06)}
     .xb-kpi small{display:block;color:var(--muted);font-weight:800;font-size:.76rem}
     .xb-kpi b{display:block;font-size:1.35rem;color:#0b3954;margin-top:3px;font-variant-numeric:tabular-nums}
@@ -4699,8 +4700,8 @@ const Finance = (() => {
     return `<div class="xb-kpis five">
       <div class="xb-kpi out"><small>本月支出</small><b>$${money(out)}</b><em>${inM.filter(l => l['收支'] !== '收入').length} 筆</em></div>
       <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(inc - out)}</em></div>
-      <div class="xb-kpi"><small>總餘額</small><b>$${money(totalTo(m))}</b><em>累計到本月</em></div>
-      <div class="xb-kpi"><small>本期發票（${esc(per.label)}）</small><b>${perInv.length} 張</b><em>$${money(perInv.reduce((s, x) => s + numOf(x['金額']), 0))}</em></div>
+      <div class="xb-kpi total"><small>總餘額</small><b>$${money(totalTo(m))}</b><em>累計到本月</em></div>
+      <div class="xb-kpi"><small>本期發票</small><b>${perInv.length} 張</b><em>${esc(per.label)}・$${money(perInv.reduce((s, x) => s + numOf(x['金額']), 0))}</em></div>
       <div class="xb-kpi win"><small>待領獎</small><b>${winners.length} 張</b><em>$${money(winners.reduce((s, x) => s + numOf(x['中獎金額']), 0))}</em></div></div>
       <div class="xb-grid">
         <div class="xb-card"><h3>🎫 兌獎資訊<button type="button" class="xb-btn sm" data-fin-act="win">🔄 更新中獎號碼</button></h3>
