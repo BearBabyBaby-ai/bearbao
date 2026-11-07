@@ -892,6 +892,10 @@
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
     .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
     .inv-bar{display:grid;gap:8px;margin-bottom:12px}
+    .inv-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px}   /* 發票：圖片、刪除和標籤同一行 */
+    .inv-row .acts{margin:0 0 0 auto!important;flex-wrap:nowrap!important}
+    .xb-item.inv-item{grid-template-columns:auto minmax(0,1fr)!important}
+    .xb-item.inv-item>div:last-child{grid-column:auto!important;display:block!important;border-top:0!important;padding-top:0!important}
     .inv-main{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:14px 16px;font-size:1.08rem}
     .inv-main small{font-weight:700;font-size:.74rem;opacity:.9}
     .inv-sub{display:flex;flex-wrap:wrap;gap:8px}
@@ -4874,10 +4878,9 @@ const Finance = (() => {
   }
   function invItem(s) {
     const c = s['兌獎狀態'] === '中獎' ? '#be123c' : s['類別'] === '加油' ? '#2563eb' : '#f59e0b';
-    return `<div class="xb-item" style="--c:${c}"><span class="ic">${s['類別'] === '加油' ? '⛽' : '🧾'}</span>
+    return `<div class="xb-item inv-item" style="--c:${c}"><span class="ic">${s['類別'] === '加油' ? '⛽' : '🧾'}</span>
       <div><b>${esc(s['資料來源'] || '未知店家')}・${esc(s['發票號碼'])}</b><small>${esc(s['購買日期'])}・${esc(periodLabel(s['期別']))}・<span class="amt out" style="font-size:inherit">$${money(s['金額'])}</span></small>
-      <span class="xb-tag">${esc(s['類別'] || '其他')}</span>${invStatusTag(s)}${s['掃描方式'] ? `<span class="xb-tag">${esc(s['掃描方式'])}</span>` : ''}</div>
-      <div><div class="acts">${s['兌獎狀態'] === '中獎' ? `<button type="button" class="xb-btn sm warm" data-inv-claim="${esc(s.ID)}">領獎入帳</button>` : ''}${s['圖片連結'] ? `<a class="xb-btn sm" href="${esc(s['圖片連結'])}" target="_blank" rel="noopener noreferrer">圖片</a>` : ''}<button type="button" class="xb-btn sm danger" data-inv-del="${esc(s.ID)}">刪除</button></div></div></div>`;
+      <div class="inv-row"><span class="xb-tag">${esc(s['類別'] || '其他')}</span>${invStatusTag(s)}${s['掃描方式'] ? `<span class="xb-tag">${esc(s['掃描方式'])}</span>` : ''}<div class="acts">${s['兌獎狀態'] === '中獎' ? `<button type="button" class="xb-btn sm warm" data-inv-claim="${esc(s.ID)}">領獎入帳</button>` : ''}${s['圖片連結'] ? `<a class="xb-btn sm" href="${esc(s['圖片連結'])}" target="_blank" rel="noopener noreferrer">圖片</a>` : ''}<button type="button" class="xb-btn sm danger" data-inv-del="${esc(s.ID)}">刪除</button></div></div></div></div>`;
   }
   function claimInfo() {
     const k = todayKey();
