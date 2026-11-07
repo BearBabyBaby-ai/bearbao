@@ -4438,30 +4438,53 @@ const Invoice = (() => {
     queue = queue.then(() => fromQRPhoto(file)).catch(err => toast('finStatus', String(err && err.message || err), true)).finally(() => { pending--; });
   }
   /* 拍發票：先全部拍、上傳到雲端「待載入」，之後按「載入發票」再一次判別 → 存入 → 比對 */
-  let upQueue = Promise.resolve(), uploading = 0;
+  let upQueue = Promise.resolve(), uploading = 0, shooting = false;
+  const sess = { total: 0, up: 0, fail: 0 };
   const pendingList = () => (Fin.data && Fin.data.pending) || [];
   function upload(file) {
-    uploading++;
-    busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
+    uploading++; sess.total++;
+    busy(`📤 上傳 ${sess.up}／${sess.total}…`);
     upQueue = upQueue.then(async () => {
       const img = await fileToImage(file);
-      const b64 = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 3000), 0.92);   /* 保留較高解析度，載入時比較讀得到 QR Code */
-      const r = await Fin.call('pendingAdd', { image: b64, mime: 'image/jpeg' }, 90000);
-      if (Fin.data) { Fin.data.pending = pendingList().concat(r); }
-    }).catch(err => toast('finStatus', `上傳失敗：${String(err && err.message || err)}`, true)).finally(() => {
+      const b64 = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 3000), 0.92);
+      /* 上傳失敗自動重試 3 次，不會漏掉 */
+      for (let k = 0; ; k++) {
+        try {
+          const r = await Fin.call('pendingAdd', { image: b64, mime: 'image/jpeg' }, 90000);
+          if (Fin.data) Fin.data.pending = pendingList().concat(r);
+          sess.up++;
+          return;
+        } catch (err) {
+          if (k >= 2) throw err;
+          await new Promise(ok => setTimeout(ok, 1500 * (k + 1)));
+        }
+      }
+    }).catch(err => { sess.fail++; toast('finStatus', `第 ${sess.up + sess.fail} 張上傳失敗：${String(err && err.message || err)}`, true); }).finally(() => {
       uploading--;
-      if (!uploading) { Finance.render && Finance.render(); loadPending(); }   /* 上傳完直接載入 */
-      else busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
+      busy(`📤 上傳 ${sess.up}／${sess.total}${sess.fail ? `（失敗 ${sess.fail}）` : ''}…`);
+      if (!uploading && !shooting) finishSession();
     });
+  }
+  /* 這一批全部拍完、上傳完，才開始一次載入 */
+  function finishSession() {
+    Finance.render && Finance.render();
+    Object.assign(sess, { total: 0, up: 0, fail: 0 });
+    loadPending();
   }
   async function scanCamera() {
     if (!Fin.ready()) { showView('finance'); return; }
     if (hasNative('Camera')) {
-      /* 連拍：拍完一張馬上開下一張，按返回／取消就結束 */
-      for (;;) {
-        let f;
-        try { f = await nativePhoto(); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); break; }
-        upload(f);
+      /* 連拍：拍完一張馬上開下一張，按返回／取消就結束；結束後才一次載入 */
+      shooting = true;
+      try {
+        for (;;) {
+          let f;
+          try { f = await nativePhoto(); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); break; }
+          upload(f);
+        }
+      } finally {
+        shooting = false;
+        if (!uploading) finishSession();
       }
       return;
     }
@@ -4509,32 +4532,39 @@ const Invoice = (() => {
   let loading = false, again = false;
   async function loadPending() {
     if (loading) { again = true; return; }
-    const list = pendingList().slice();
-    if (!list.length) { toast('finStatus', '目前沒有待載入的發票'); return; }
+    if (!pendingList().length) return;
     loading = true;
-    const results = [];
+    const results = [], tried = new Set();
     try {
-      for (let i = 0; i < list.length; i++) {
-        busy(`📥 載入發票 ${i + 1}／${list.length}…`);
-        let r;
-        try {
-          const g = await Fin.call('pendingGet', { id: list[i].id }, 90000);
-          const bin = atob(g.image || ''), arr = new Uint8Array(bin.length);
-          for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
-          r = await fromQRPhoto(new Blob([arr], { type: g.mime || 'image/jpeg' }), { batch: true });
-        } catch (err) { r = { status: 'fail', msg: String(err && err.message || err) }; }
-        r.pendingId = list[i].id;
-        if (r.status === 'saved' || r.status === 'dup') {
-          try { await Fin.call('pendingDone', { id: list[i].id }); if (Fin.data) Fin.data.pending = pendingList().filter(x => x.id !== list[i].id); } catch (_) {}
+      /* 一直載到雲端待載入區沒有新的照片為止（同一批全部載完） */
+      for (let round = 0; round < 5; round++) {
+        const list = pendingList().filter(x => !tried.has(x.id));
+        if (!list.length) break;
+        for (const item of list) {
+          tried.add(item.id);
+          const total = tried.size + pendingList().filter(x => !tried.has(x.id)).length;
+          busy(`🔍 辨識 ${results.length + 1}／${total}…`);
+          let r;
+          try {
+            const g = await Fin.call('pendingGet', { id: item.id }, 90000);
+            const bin = atob(g.image || ''), arr = new Uint8Array(bin.length);
+            for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+            r = await fromQRPhoto(new Blob([arr], { type: g.mime || 'image/jpeg' }), { batch: true });
+          } catch (err) { r = { status: 'fail', msg: String(err && err.message || err) }; }
+          r = r || { status: 'fail', msg: '判斷不出來' };
+          r.pendingId = item.id;
+          if (r.status === 'saved' || r.status === 'dup') {
+            try { await Fin.call('pendingDone', { id: item.id }); if (Fin.data) Fin.data.pending = pendingList().filter(x => x.id !== item.id); } catch (_) {}
+          }
+          results.push(r);
         }
-        results.push(r);
+        await Fin.sync(true);   /* 取回雲端最新的待載入清單，有漏的再載一輪 */
       }
     } finally { loading = false; }
     const okN = results.filter(r => r.status === 'saved').length, dupN = results.filter(r => r.status === 'dup').length, badN = results.length - okN - dupN;
-    toast('finStatus', `✅ 載入完成：存入 ${okN} 張${dupN ? `・重複 ${dupN} 張不重複存入` : ''}${badN ? `・判斷不出來 ${badN} 張` : ''}`, badN > 0);
-    await Fin.sync(true);
+    toast('finStatus', `✅ 共 ${results.length} 張：存入 ${okN} 張${dupN ? `・重複 ${dupN} 張不重複存入` : ''}${badN ? `・判斷不出來 ${badN} 張` : ''}`, badN > 0);
     showResults(results);
-    if (again) { again = false; loadPending(); }
+    if (again) { again = false; if (pendingList().some(x => !tried.has(x.id))) loadPending(); }
   }
   function showResults(all) {
     const won = all.filter(r => r.status === 'saved' && r.saved['兌獎狀態'] === '中獎');
