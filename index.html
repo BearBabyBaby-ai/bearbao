@@ -892,6 +892,9 @@
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
     .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
     .inv-bar{display:grid;gap:8px;margin-bottom:12px}
+    .xb-item.led-sus{background:#fee2e2}   /* 疑似已有手動輸入：整筆淺紅、金額不納入 */
+    .xb-item.led-sus .amt{text-decoration:line-through;opacity:.6}
+    .sus-note{display:inline-block!important;background:#dc2626;color:#fff!important;border-radius:6px;padding:1px 6px;margin-top:3px}
     .inv-row{display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-top:4px}   /* 發票：圖片、刪除和標籤同一行 */
     .inv-row .acts{margin:0 0 0 auto!important;flex-wrap:nowrap!important}
     .xb-item.inv-item{grid-template-columns:auto minmax(0,1fr)!important}
@@ -4059,6 +4062,9 @@ function formValues(form) {
 }
 const dateInput = k => (k || todayKey()).replace(/\//g, '-');
 const dateKeyOf = v => (parseDates(v)[0] || '');
+/* 收支：備註「此筆疑似已有手動輸入」的不納入金額 */
+const SUSPECT_NOTE = '此筆疑似已有手動輸入';
+const ledAmt = l => String(l['備註'] || '').includes(SUSPECT_NOTE) ? 0 : numOf(l['金額']);
 // 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
 // 單日｜民國年（2～3 位數加 1911）｜多個單日（「、」「+」「，」空格分開）｜期間（「-」「至」「到」）｜期間後加「週一、週四」只取那幾個星期
 // 日期後面的 (一) 只是註記；單日後面寫星期不算條件；期間前後顛倒自動對調
@@ -4575,7 +4581,7 @@ const Invoice = (() => {
     const n = st => results.filter(r => r.status === st).length;
     const row = (r, i) => {
       const s = r.saved || {};
-      if (r.status === 'saved') return `<div class="xb-item"><div><b>✅ ${esc(s['發票號碼'] || '')}</b><small>${esc(s['購買日期'] || '')}・${esc(s['資料來源'] || '')}・$${money(s['金額'])}・${esc(s['兌獎狀態'] || '')}${s.ledgerDup ? '・收支已有同日同金額紀錄，未重複記錄' : ''}</small></div>${s['類別'] === '加油' ? `<div class="acts"><button type="button" class="xb-btn sm" data-res-fuel="${i}">⛽ 補里程</button></div>` : ''}</div>`;
+      if (r.status === 'saved') return `<div class="xb-item"><div><b>✅ ${esc(s['發票號碼'] || '')}</b><small>${esc(s['購買日期'] || '')}・${esc(s['資料來源'] || '')}・$${money(s['金額'])}・${esc(s['兌獎狀態'] || '')}${s.ledgerDup ? '・收支疑似已有手動輸入，金額不納入' : ''}</small></div>${s['類別'] === '加油' ? `<div class="acts"><button type="button" class="xb-btn sm" data-res-fuel="${i}">⛽ 補里程</button></div>` : ''}</div>`;
       if (r.status === 'dup') return `<div class="xb-item"><div><b>⚠️ ${esc(r.no)} 重複</b><small>已經記錄過，這次不重複存入（${esc(r.hit?.['購買日期'] || '')}・${esc(r.hit?.['資料來源'] || '')}・$${money(r.hit?.['金額'])}）</small></div></div>`;
       return `<div class="xb-item"><div><b>❓ 判斷不出來</b><small>${esc(r.msg || '找不到發票號碼')}，照片保留在待載入</small></div><div class="acts"><button type="button" class="xb-btn sm" data-res-form="${i}">✍️ 手動輸入</button><button type="button" class="xb-btn sm" data-res-del="${i}">刪除照片</button></div></div>`;
     };
@@ -4907,7 +4913,7 @@ const Finance = (() => {
     ledger().forEach(l => {
       const d = dateKeyOf(l['日期']);
       if (!d || d < st.date || d > k) return;
-      const pay = String(l['付款方式'] || '').trim(), amt = numOf(l['金額']);
+      const pay = String(l['付款方式'] || '').trim(), amt = ledAmt(l);
       if (l['收支'] === '收入') { if (/現金/.test(pay)) cash += amt; else deposit += amt; }
       else if (!pay || /現金/.test(pay)) cash -= amt; else deposit -= amt;
     });
@@ -4956,18 +4962,18 @@ const Finance = (() => {
     const k = todayKey(), m = k.slice(0, 7);
     const led = ledger();
     const inM = led.filter(l => monthKey(l['日期']) === m);
-    const out = inM.filter(l => l['收支'] !== '收入').reduce((s, l) => s + numOf(l['金額']), 0);
-    const inc = inM.filter(l => l['收支'] === '收入').reduce((s, l) => s + numOf(l['金額']), 0);
+    const out = inM.filter(l => l['收支'] !== '收入').reduce((s, l) => s + ledAmt(l), 0);
+    const inc = inM.filter(l => l['收支'] === '收入').reduce((s, l) => s + ledAmt(l), 0);
     const per = periodOf(k);
     const perInv = invoices().filter(s => s['期別'] === per.code);
     const winners = invoices().filter(s => s['兌獎狀態'] === '中獎');
     const ci = claimInfo();
     
     const months = Array.from({ length: 6 }, (_, i) => addMonthsKey(`${m}/01`, i - 5).slice(0, 7));
-    const mOut = months.map(mm => led.filter(l => l['收支'] !== '收入' && monthKey(l['日期']) === mm).reduce((s, l) => s + numOf(l['金額']), 0));
+    const mOut = months.map(mm => led.filter(l => l['收支'] !== '收入' && monthKey(l['日期']) === mm).reduce((s, l) => s + ledAmt(l), 0));
     const maxM = Math.max(1, ...mOut);
     const byCat = new Map();
-    inM.filter(l => l['收支'] !== '收入').forEach(l => byCat.set(l['類別'] || '其他', (byCat.get(l['類別'] || '其他') || 0) + numOf(l['金額'])));
+    inM.filter(l => l['收支'] !== '收入').forEach(l => byCat.set(l['類別'] || '其他', (byCat.get(l['類別'] || '其他') || 0) + ledAmt(l)));
     const cats = [...byCat.entries()].sort((a, b) => b[1] - a[1]);
     const maxC = Math.max(1, ...cats.map(c => c[1]));
     const PAL = ['#f59e0b', '#2563eb', '#16a34a', '#db2777', '#7c3aed', '#0891b2', '#ea580c', '#64748b'];
@@ -5003,16 +5009,16 @@ const Finance = (() => {
       <div class="xb-list">${shown.length ? shown.slice(0, 300).map(invItem).join('') : '<div class="xb-empty">還沒有發票，按「📸 新增發票」開始</div>'}</div>`;
   }
   function ledgerItem(l, view) {
-    const isIn = l['收支'] === '收入';
-    return `<div class="xb-item" style="--c:${isIn ? '#16a34a' : '#ea580c'}"><span class="ic">${isIn ? '💰' : l['來源'] === '發票' ? '🧾' : l['類別'] === '加油' ? '⛽' : '💸'}</span>
-      <div><b>${esc(l['項目'] || l['類別'])}</b><small>${esc(l['日期'])}・${esc(l['類別'])}${l['付款方式'] ? `・${esc(l['付款方式'])}` : ''}${l['來源'] && l['來源'] !== '手動' ? `・來自${esc(l['來源'])}` : ''}</small>${l['備註'] ? `<small>${esc(l['備註'])}</small>` : ''}</div>
+    const isIn = l['收支'] === '收入', sus = String(l['備註'] || '').includes(SUSPECT_NOTE);
+    return `<div class="xb-item${sus ? ' led-sus' : ''}" style="--c:${isIn ? '#16a34a' : '#ea580c'}"><span class="ic">${isIn ? '💰' : l['來源'] === '發票' ? '🧾' : l['類別'] === '加油' ? '⛽' : '💸'}</span>
+      <div><b>${esc(l['項目'] || l['類別'])}</b><small>${esc(l['日期'])}・${esc(l['類別'])}${l['付款方式'] ? `・${esc(l['付款方式'])}` : ''}${l['來源'] && l['來源'] !== '手動' ? `・來自${esc(l['來源'])}` : ''}</small>${l['備註'] ? `<small${sus ? ' class="sus-note"' : ''}>${esc(l['備註'])}</small>` : ''}</div>
       <div><div class="amt ${isIn ? 'in' : 'out'}">${isIn ? '+' : '-'}$${money(l['金額'])}</div><div class="acts">${view || l['來源'] === '發票' ? '' : `<button type="button" class="xb-btn sm" data-led-edit="${esc(l.ID)}">編輯</button><button type="button" class="xb-btn sm danger" data-led-del="${esc(l.ID)}">刪除</button>`}</div></div></div>`;
   }
   function ledgerPane() {
     const list = ledger().filter(l => monthKey(l['日期']) === ledMonth.replace('-', '/') && (!ledType || l['收支'] === ledType));
     const all = ledger().filter(l => monthKey(l['日期']) === ledMonth.replace('-', '/'));
-    const out = all.filter(l => l['收支'] !== '收入').reduce((s, l) => s + numOf(l['金額']), 0);
-    const inc = all.filter(l => l['收支'] === '收入').reduce((s, l) => s + numOf(l['金額']), 0);
+    const out = all.filter(l => l['收支'] !== '收入').reduce((s, l) => s + ledAmt(l), 0);
+    const inc = all.filter(l => l['收支'] === '收入').reduce((s, l) => s + ledAmt(l), 0);
     return `<div class="xb-row" style="margin-bottom:12px"><input type="month" class="ct-select" id="ledMonth" value="${esc(ledMonth.replace('/', '-'))}">
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
@@ -5025,8 +5031,8 @@ const Finance = (() => {
     list.forEach(l => { const k = String(l['日期'] || '').slice(0, 10); if (!days.has(k)) days.set(k, []); days.get(k).push(l); });
     return [...days.keys()].sort().reverse().map(k => {
       const rows = days.get(k);
-      const out = rows.filter(l => l['收支'] !== '收入').reduce((s, l) => s + numOf(l['金額']), 0);
-      const inc = rows.filter(l => l['收支'] === '收入').reduce((s, l) => s + numOf(l['金額']), 0);
+      const out = rows.filter(l => l['收支'] !== '收入').reduce((s, l) => s + ledAmt(l), 0);
+      const inc = rows.filter(l => l['收支'] === '收入').reduce((s, l) => s + ledAmt(l), 0);
       const m = k.match(/(\d{4})\D(\d{1,2})\D(\d{1,2})/);
       const wd = m ? '日一二三四五六'[new Date(+m[1], +m[2] - 1, +m[3]).getDay()] : '';
       const open = ledOpen.has(k);
@@ -5198,7 +5204,7 @@ const Finance = (() => {
     if (!Fin.ready()) { box.innerHTML = '<span class="h-muted">尚未連線財務管理</span><br><button type="button" class="h-more" data-go="finance">前往設定 ›</button>'; return; }
     if (!Fin.data) { box.innerHTML = `<span class="h-muted">${Fin.error ? esc(Fin.error) : '正在讀取…'}</span>`; return; }
     const m = todayKey().slice(0, 7);
-    const out = ledger().filter(l => l['收支'] !== '收入' && monthKey(l['日期']) === m).reduce((s, l) => s + numOf(l['金額']), 0);
+    const out = ledger().filter(l => l['收支'] !== '收入' && monthKey(l['日期']) === m).reduce((s, l) => s + ledAmt(l), 0);
     const winners = invoices().filter(s => s['兌獎狀態'] === '中獎');
     const ci = claimInfo();
     const oil = (D().oil || []).slice(-1)[0];
@@ -5273,12 +5279,12 @@ function remindersForCal() {
   const days = {};
   (Fin.data?.ledger || []).forEach(l => {
     if (l['收支'] !== '支出') return;
-    const d = dateKeyOf(l['日期']), amt = numOf(l['金額']);
-    if (!d || !amt) return;
+    const d = dateKeyOf(l['日期']), amt = ledAmt(l);
+    if (!d || !amt) return;   /* 疑似重複的不算 */
     (days[d] = days[d] || []).push(l);
   });
   Object.entries(days).forEach(([d, list]) => {
-    const total = list.reduce((s, l) => s + numOf(l['金額']), 0);
+    const total = list.reduce((s, l) => s + ledAmt(l), 0);
     out.push({ src: 'expense', cat: '支出', name: `支出 $${money(total)}`, time: '', start: d, end: d, yearly: false,
       content: list.map(l => `${l['項目'] || l['類別'] || '支出'} $${money(l['金額'])}`).join('、') });
   });
