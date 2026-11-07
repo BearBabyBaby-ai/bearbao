@@ -890,6 +890,7 @@
     .xb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
     .xb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
+    .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
     @media(max-width:820px){.xb-kpis.five{grid-template-columns:repeat(2,minmax(0,1fr))}.xb-kpis.five .xb-kpi.total{grid-column:1/-1}}   /* 手機：總餘額佔一整排，其餘兩兩一排 */
     .xb-kpi small,.xb-kpi em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .xb-kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:0 5px 14px rgba(7,43,75,.06)}
@@ -4420,18 +4421,98 @@ const Invoice = (() => {
     busy(`📥 已收到發票，背景處理中（${pending} 張）`);
     queue = queue.then(() => fromQRPhoto(file)).catch(err => toast('finStatus', String(err && err.message || err), true)).finally(() => { pending--; });
   }
+  /* 拍發票：先全部拍、上傳到雲端「待載入」，之後按「載入發票」再一次判別 → 存入 → 比對 */
+  let upQueue = Promise.resolve(), uploading = 0;
+  const pendingList = () => (Fin.data && Fin.data.pending) || [];
+  function upload(file) {
+    uploading++;
+    busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
+    upQueue = upQueue.then(async () => {
+      const img = await fileToImage(file);
+      const b64 = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 2000), 0.88);
+      const r = await Fin.call('pendingAdd', { image: b64, mime: 'image/jpeg' }, 90000);
+      if (Fin.data) { Fin.data.pending = pendingList().concat(r); }
+    }).catch(err => toast('finStatus', `上傳失敗：${String(err && err.message || err)}`, true)).finally(() => {
+      uploading--;
+      if (!uploading) { toast('finStatus', `✅ 已上傳，待載入 ${pendingList().length} 張`); Finance.render && Finance.render(); }
+      else busy(`📤 上傳中（${uploading} 張）…待載入 ${pendingList().length} 張`);
+    });
+  }
   async function scanCamera() {
     if (!Fin.ready()) { showView('finance'); return; }
     if (hasNative('Camera')) {
-      try { enqueue(await nativePhoto()); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); }
+      /* 連拍：拍完一張馬上開下一張，按返回／取消就結束 */
+      for (;;) {
+        let f;
+        try { f = await nativePhoto(); } catch (err) { if (!cancelled(err)) alert(String(err && err.message || err)); break; }
+        upload(f);
+      }
       return;
     }
     const input = document.createElement('input');
     input.type = 'file'; input.accept = 'image/*'; input.setAttribute('capture', 'environment');
-    input.onchange = () => { const f = input.files[0]; if (f) enqueue(f); };
+    input.onchange = () => { const f = input.files[0]; if (f) upload(f); };
     input.click();
   }
-  async function fromQRPhoto(file) {
+  function pickAlbum() {
+    if (!Fin.ready()) { showView('finance'); return; }
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+    input.onchange = () => [...input.files].forEach(upload);
+    input.click();
+  }
+  /* 載入發票：逐張判別；重複的發票不存、收支已有同日同金額不重複記；判斷不出來的留著 */
+  let loading = false;
+  async function loadPending() {
+    if (loading) return;
+    const list = pendingList().slice();
+    if (!list.length) { toast('finStatus', '目前沒有待載入的發票'); return; }
+    loading = true;
+    const results = [];
+    try {
+      for (let i = 0; i < list.length; i++) {
+        busy(`📥 載入發票 ${i + 1}／${list.length}…`);
+        let r;
+        try {
+          const g = await Fin.call('pendingGet', { id: list[i].id }, 90000);
+          const bin = atob(g.image || ''), arr = new Uint8Array(bin.length);
+          for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+          r = await fromQRPhoto(new Blob([arr], { type: g.mime || 'image/jpeg' }), { batch: true });
+        } catch (err) { r = { status: 'fail', msg: String(err && err.message || err) }; }
+        r.pendingId = list[i].id;
+        if (r.status === 'saved' || r.status === 'dup') {
+          try { await Fin.call('pendingDone', { id: list[i].id }); if (Fin.data) Fin.data.pending = pendingList().filter(x => x.id !== list[i].id); } catch (_) {}
+        }
+        results.push(r);
+      }
+    } finally { loading = false; }
+    await Fin.sync(true);
+    showResults(results);
+  }
+  function showResults(results) {
+    const n = st => results.filter(r => r.status === st).length;
+    const row = (r, i) => {
+      const s = r.saved || {};
+      if (r.status === 'saved') return `<div class="xb-item"><div><b>✅ ${esc(s['發票號碼'] || '')}</b><small>${esc(s['購買日期'] || '')}・${esc(s['資料來源'] || '')}・$${money(s['金額'])}・${esc(s['兌獎狀態'] || '')}${s.ledgerDup ? '・收支已有同日同金額紀錄，未重複記錄' : ''}</small></div>${s['類別'] === '加油' ? `<div class="acts"><button type="button" class="xb-btn sm" data-res-fuel="${i}">⛽ 補里程</button></div>` : ''}</div>`;
+      if (r.status === 'dup') return `<div class="xb-item"><div><b>⚠️ ${esc(r.no)} 重複</b><small>已經記錄過，這次不重複存入（${esc(r.hit?.['購買日期'] || '')}・${esc(r.hit?.['資料來源'] || '')}・$${money(r.hit?.['金額'])}）</small></div></div>`;
+      return `<div class="xb-item"><div><b>❓ 判斷不出來</b><small>${esc(r.msg || '找不到發票號碼')}，照片保留在待載入</small></div><div class="acts"><button type="button" class="xb-btn sm" data-res-form="${i}">✍️ 手動輸入</button><button type="button" class="xb-btn sm" data-res-del="${i}">刪除照片</button></div></div>`;
+    };
+    const sheet = Modal.open('📥 載入結果', `<div class="xb-empty" style="margin-bottom:10px">存入 ${n('saved')} 張・重複 ${n('dup')} 張・判斷不出來 ${n('need') + n('fail')} 張</div><div class="xb-list">${results.map(row).join('')}</div><div class="xb-form-acts"><button type="button" class="xb-btn pri" data-xb-close>完成</button></div>`);
+    const won = results.filter(r => r.status === 'saved' && r.saved['兌獎狀態'] === '中獎');
+    if (won.length) Helper.say(`🎉 恭喜中獎！${won.map(r => `<b>${esc(r.saved['發票號碼'])} ${esc(r.saved['中獎獎別'])} ${money(r.saved['中獎金額'])} 元</b>`).join('、')}，記得在領獎期限內兌領喔！`, true);
+    sheet.addEventListener('click', async e => {
+      const f = e.target.closest('[data-res-fuel]'), m = e.target.closest('[data-res-form]'), d = e.target.closest('[data-res-del]');
+      if (f) { const r = results[f.dataset.resFuel]; askFuel(r.saved, r.info || {}); }
+      if (m) { const r = results[m.dataset.resForm]; Modal.close(); openForm({ ...(r.info || {}), method: '拍照', pendingId: r.pendingId }); }
+      if (d) {
+        const r = results[d.dataset.resDel];
+        d.disabled = true;
+        try { await Fin.call('pendingDone', { id: r.pendingId }); if (Fin.data) Fin.data.pending = pendingList().filter(x => x.id !== r.pendingId); d.closest('.xb-item').remove(); Finance.render && Finance.render(); } catch (err) { d.disabled = false; alert(err.message); }
+      }
+    });
+    Finance.render && Finance.render();
+  }
+  async function fromQRPhoto(file, opt = {}) {
     try {
       const img = await fileToImage(file);
       const W = img.naturalWidth, H = img.naturalHeight;
@@ -4454,9 +4535,9 @@ const Invoice = (() => {
       }
       const info = parseQR(left, right);
       const shot = canvasToB64(drawScaled(img, img.naturalWidth, img.naturalHeight, 1600));
-      if (!info) { await ocrFromImage(shot); return; }
-      await autoSave({ ...info, method: '拍照', image: shot, header });
-    } catch (err) { toast('finStatus', String(err && err.message || err), true); }
+      if (!info) return await ocrFromImage(shot, opt);
+      return await autoSave({ ...info, method: '拍照', image: shot, header }, opt);
+    } catch (err) { if (opt.batch) return { status: 'fail', msg: String(err && err.message || err) }; toast('finStatus', String(err && err.message || err), true); }
   }
   
   async function pickPaper() { return scanCamera(); }
@@ -4475,12 +4556,12 @@ const Invoice = (() => {
     };
     input.click();
   }
-  async function ocrFromImage(b64) {
+  async function ocrFromImage(b64, opt = {}) {
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
       const nm = nameFromText(String(r.text || ''));
-      await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: b64, ocrText: r.text });
-    } catch (err) { toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
+      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: b64, ocrText: r.text }, opt);
+    } catch (err) { if (opt.batch) return { status: 'fail', msg: `辨識失敗：${err.message}`, info: { image: b64 } }; toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
   const banOf = v => { const d = String(v || '').replace(/\D/g, ''); return d ? d.padStart(8, '0') : ''; };
@@ -4506,10 +4587,13 @@ const Invoice = (() => {
     toast('finStatus', `⚠️ 發票重複：${no} 已經記錄過，這次不納入（${hit['購買日期'] || ''}・${hit['資料來源'] || ''}・${money(hit['金額'])} 元）`, true);
     return true;
   }
-  async function autoSave(info) {
+  async function autoSave(info, opt = {}) {
     const no = String(info.invoiceNo || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    if (!/^[A-Z]{2}\d{8}$/.test(no)) { openForm(info); return; }
-    if (alreadySaved(no)) return;
+    if (!/^[A-Z]{2}\d{8}$/.test(no)) { if (opt.batch) return { status: 'need', info }; openForm(info); return; }
+    if (opt.batch) {
+      const hit = (Fin.data?.invoices || []).find(s => String(s['發票號碼']).toUpperCase().replace(/[^A-Z0-9]/g, '') === no);
+      if (hit) return { status: 'dup', no, hit };
+    } else if (alreadySaved(no)) return;
     const st = Fin.data?.settings || {};
     const cats = st.expense?.length ? st.expense : ['餐飲日用', '加油', '交通', '居家', '其他'];
     const ban = banOf(info.ban);
@@ -4530,6 +4614,16 @@ const Invoice = (() => {
     if (fuelItem(info.items)) category = '加油';
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
     const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': ban, '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
+    if (opt.batch) {
+      try {
+        const saved = await Fin.call('saveInvoice', { invoice: inv, image: info.image || '', mime: 'image/jpeg', addLedger: true, fuel: null }, 90000);
+        if (Fin.data) Fin.data.invoices = (Fin.data.invoices || []).concat(saved);   /* 同一批裡重複拍的也擋得住 */
+        return { status: 'saved', saved, info };
+      } catch (err) {
+        if (/已經登錄過/.test(err.message)) return { status: 'dup', no, hit: { '購買日期': (err.message.match(/（(.+)）/) || [])[1] || '' } };
+        return { status: 'fail', msg: err.message, info };
+      }
+    }
     try {
       const saved = await Fin.call('saveInvoice', { invoice: inv, image: info.image || '', mime: 'image/jpeg', addLedger: true, fuel: null }, 90000);
       const st2 = saved['兌獎狀態'];
@@ -4616,6 +4710,7 @@ const Invoice = (() => {
       e.target.disabled = true; e.target.textContent = '上傳中…';
       try {
         const saved = await Fin.call('saveInvoice', { invoice: inv, image: info.image || '', mime: 'image/jpeg', addLedger: v.addLedger, fuel }, 90000);
+        if (info.pendingId) { try { await Fin.call('pendingDone', { id: info.pendingId }); } catch (_) {} }
         Modal.close();
         const st2 = saved['兌獎狀態'];
         toast('finStatus', st2 === '中獎' ? `🎉 恭喜！${saved['發票號碼']} 中了${saved['中獎獎別']} ${money(saved['中獎金額'])} 元！` : `✅ 已儲存 ${saved['發票號碼']}（${saved['資料來源']} ${money(saved['金額'])} 元・${st2}）`);
@@ -4624,7 +4719,7 @@ const Invoice = (() => {
       } catch (err) { e.target.disabled = false; e.target.textContent = '💾 儲存發票'; alert(err.message); }
     });
   }
-  return { scanCamera, pickPaper, openForm, parseQR, fromQRPhoto };
+  return { scanCamera, pickPaper, pickAlbum, loadPending, openForm, parseQR, fromQRPhoto };
 })();
 
 
@@ -4636,6 +4731,7 @@ const Finance = (() => {
   const ledger = () => (D().ledger || []).slice().sort((a, b) => String(b['日期']).localeCompare(String(a['日期'])));
   const winning = () => (D().winning || []).slice().sort((a, b) => String(b['期別代碼']).localeCompare(String(a['期別代碼'])));
   const monthKey = d => String(dateKeyOf(d) || '').slice(0, 7);
+  const loadBtn = () => { const n = (D().pending || []).length; return n ? `<button type="button" class="xb-btn load" data-fin-act="load">📥 載入發票（${n}）</button>` : ''; };
   /* 總餘額：從第一筆紀錄累計到該月底（收入 − 支出） */
   /* 現金／存款：從起始金額開始，只加減起始日期（含）之後的紀錄
      支出：付款方式是現金或空白 → 現金，其他 → 存款；收入：付款方式是現金 → 現金，其他或空白 → 存款 */
@@ -4723,7 +4819,7 @@ const Finance = (() => {
           <div class="xb-win">${ci.claimable.length ? ci.claimable.map(winHtml).join('') : ''}</div></div>
         <div class="xb-card"><h3>📈 近 6 個月支出</h3><div class="xb-bars">${months.map((mm, i) => `<div class="xb-bar" style="--c:#f59e0b"><span>${Number(mm.slice(5))} 月</span><i style="width:${Math.round(mOut[i] / maxM * 100)}%"></i><span>$${money(mOut[i])}</span></div>`).join('')}</div>
           <h3 style="margin-top:14px">🧩 本月支出類別</h3>${cats.length ? `<div class="xb-bars">${cats.map(([c, v], i) => `<div class="xb-bar" style="--c:${PAL[i % PAL.length]}"><span>${esc(c)}</span><i style="width:${Math.round(v / maxC * 100)}%"></i><span>$${money(v)}</span></div>`).join('')}</div>` : '<p class="xb-note">本月還沒有支出紀錄</p>'}</div>
-        <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button><button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
+        <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
           ${oil ? `<p class="xb-note">中油馬公站油價（${esc(oil['生效日期'])} 起）：92 <b>${esc(oil['92無鉛'])}</b>・95 <b>${esc(oil['95無鉛'])}</b>・98 <b>${esc(oil['98無鉛'])}</b>・柴油 <b>${esc(oil['超級柴油'])}</b></p>` : ''}
           <p class="xb-note">資料更新：${esc(D().time || '—')}</p></div>
       </div>`;
@@ -4734,7 +4830,7 @@ const Finance = (() => {
     if (invPeriod && !periods.includes(invPeriod)) invPeriod = '';
     const shown = all.filter(s => (!invPeriod || s['期別'] === invPeriod) && (!invFilter || (invFilter === 'win' ? ['中獎', '已入帳'].includes(s['兌獎狀態']) : invFilter === 'wait' ? ['未開獎', '待更新號碼'].includes(s['兌獎狀態'] || '未開獎') : true)));
     const total = shown.reduce((s, x) => s + numOf(x['金額']), 0);
-    return `<div class="xb-row" style="margin-bottom:12px"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button><button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動輸入</button><button type="button" class="xb-btn" data-fin-act="win">🔄 更新中獎號碼並對獎</button></div>
+    return `<div class="xb-row" style="margin-bottom:12px"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button><button type="button" class="xb-btn" data-fin-act="album">🖼️ 相簿選取</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動輸入</button><button type="button" class="xb-btn" data-fin-act="win">🔄 更新中獎號碼並對獎</button></div>
       <div class="xb-row" style="margin-bottom:10px"><select class="ct-select" id="invPeriod"><option value="">全部期別</option>${periods.map(p => `<option value="${esc(p)}"${p === invPeriod ? ' selected' : ''}>${esc(periodLabel(p))}</option>`).join('')}</select>
         ${[['', '全部'], ['win', '中獎'], ['wait', '未開獎']].map(([k, t]) => `<button type="button" class="xb-chip${invFilter === k ? ' active' : ''}" data-inv-f="${k}">${t}</button>`).join('')}
         <span class="xb-note" style="margin:0 0 0 auto">${shown.length} 張・$${money(total)}</span></div>
@@ -4871,6 +4967,8 @@ const Finance = (() => {
   async function act(name, btn) {
     if (name === 'scan') return Invoice.scanCamera();
     if (name === 'paper') return Invoice.pickPaper();
+    if (name === 'album') return Invoice.pickAlbum();
+    if (name === 'load') return Invoice.loadPending();
     if (name === 'manual') return Invoice.openForm({ method: '手動' });
     if (name === 'ledger') return ledgerForm('');
     if (name === 'fuel') return fuelForm();
