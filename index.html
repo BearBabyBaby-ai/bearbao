@@ -4645,7 +4645,7 @@ const Invoice = (() => {
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
       const nm = nameFromText(String(r.text || ''));
-      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', branch: branchOf(String(r.text || '')), method: '拍照', image: opt.keepImage || b64, ocrText: r.text }, opt);
+      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban || banOfText(r.text), random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', branch: branchOf(String(r.text || '')), top: topLine(String(r.text || '')), method: '拍照', image: opt.keepImage || b64, ocrText: r.text }, opt);
     } catch (err) { if (opt.batch) return { status: 'fail', msg: `辨識失敗：${err.message}`, info: { image: opt.keepImage || b64 } }; toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
@@ -4657,6 +4657,20 @@ const Invoice = (() => {
   async function merchantOf(ban) { return shopOf(banOf(ban)); }
   /* 從發票最上面印的字找出店名 */
   /* 分店名稱：發票上（最上面店名以外）以「店／站／門市／分店」結尾的名稱，例如 023893澎湖海洋店01序… → 澎湖海洋店 */
+  const shortBranch = b => String(b || '').replace(/(汽車)?加油站$/, '站');   /* 馬公汽車加油站 → 馬公站 */
+  /* 最上面那一行（原字） */
+  function topLine(text) {
+    const lines = String(text || '').split(/\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const at = lines.findIndex(l => /電子發票|證明聯/.test(l.replace(/\s/g, '')));
+    for (let k = at - 1; k >= 0; k--) { const t = lines[k].replace(/[^\u4e00-\u9fffA-Za-z0-9&.'\- ]/g, '').trim(); if (t.replace(/\s/g, '').length >= 2 && !/^\d+$/.test(t)) return t.replace(/\s/g, ''); }
+    return '';
+  }
+  /* 統編：讀字結果沒有時，從文字再找一次（數字中間有空格也可以） */
+  function banOfText(text) {
+    const t = String(text || '');
+    const m = t.match(/(賣\s*方|統\s*編)[^\d\n]{0,6}((?:\d\s?){8})(?!\d)/) || t.slice(Math.max(0, t.search(/隨\s*機\s*碼/))).match(/(?:^|\n)([^\n\d]{0,4})[:：]\s*((?:\d\s?){8})(?!\d)/);
+    return m ? m[2].replace(/\s/g, '') : '';
+  }
   function branchOf(text) {
     const lines = String(text || '').split(/\n/).map(l => l.replace(/\s+/g, '')).filter(Boolean);
     const at = lines.findIndex(l => /電子發票|證明聯/.test(l));
@@ -4666,7 +4680,7 @@ const Invoice = (() => {
       if (/有限公司|股份|發票|證明聯|隨機碼|總計/.test(l)) continue;
       for (const tok of l.split(/\s+/)) {
         const m = tok.match(/([\u4e00-\u9fff]{2,10}?(?:門市|分店|店|站))(?![\u4e00-\u9fff])/);
-        if (m && m[1] !== top && !top.includes(m[1])) return m[1];
+        if (m && m[1] !== top && !top.includes(m[1])) return shortBranch(m[1]);
       }
     }
     return '';
@@ -4726,7 +4740,10 @@ const Invoice = (() => {
     }
     if (fuelItem(info.items)) category = '加油';
     /* 有分店名稱：全家-澎湖海洋店、中油加油-馬公站 */
-    if (info.branch && merchant && !merchant.includes(info.branch)) merchant = `${merchant}-${info.branch}`;
+    /* 沒有另外印分店時：最上面那行（例如 馬公汽車加油站）和品牌不同，就當分店 */
+    let branch = info.branch || '';
+    if (!branch && info.top && merchant && !info.top.includes(merchant) && !merchant.includes(info.top) && /(店|站|門市)$/.test(info.top)) branch = shortBranch(info.top);
+    if (branch && merchant && !merchant.includes(branch)) merchant = `${merchant}-${branch}`;
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
     const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': ban, '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
     if (opt.batch) {
