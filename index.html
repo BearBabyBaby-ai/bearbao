@@ -1610,6 +1610,7 @@ const CFG = {
   calendarHidden: [],
   homeDays: 14,
   activityLeadDays: 14,   
+  balanceStart: { date: '2026/11/07', cash: 2700, deposit: 39310 },   /* 起始金額：此日期以前的紀錄已包含在內 */
   defaultView: 'home'
 };
 const OLD_LOGO_URL = 'https://lh3.googleusercontent.com/d/1rYf3EqwjJBh7pfyYFniBu5AjcKk8drS5';
@@ -4636,7 +4637,20 @@ const Finance = (() => {
   const winning = () => (D().winning || []).slice().sort((a, b) => String(b['期別代碼']).localeCompare(String(a['期別代碼'])));
   const monthKey = d => String(dateKeyOf(d) || '').slice(0, 7);
   /* 總餘額：從第一筆紀錄累計到該月底（收入 − 支出） */
-  const totalTo = m => ledger().filter(l => { const mk = monthKey(l['日期']); return mk && mk <= m; }).reduce((s, l) => s + (l['收支'] === '收入' ? 1 : -1) * numOf(l['金額']), 0);
+  /* 現金／存款：從起始金額開始，只加減起始日期（含）之後的紀錄
+     支出：付款方式是現金或空白 → 現金，其他 → 存款；收入：付款方式是現金 → 現金，其他或空白 → 存款 */
+  function balances() {
+    const st = CFG.balanceStart, k = todayKey();
+    let cash = st.cash, deposit = st.deposit;
+    ledger().forEach(l => {
+      const d = dateKeyOf(l['日期']);
+      if (!d || d < st.date || d > k) return;
+      const pay = String(l['付款方式'] || '').trim(), amt = numOf(l['金額']);
+      if (l['收支'] === '收入') { if (/現金/.test(pay)) cash += amt; else deposit += amt; }
+      else if (!pay || /現金/.test(pay)) cash -= amt; else deposit -= amt;
+    });
+    return { cash, deposit };
+  }
 
   function setupHtml() {
     return `<h3>🔐 財務管理連線設定</h3>
@@ -4700,7 +4714,7 @@ const Finance = (() => {
     return `<div class="xb-kpis five">
       <div class="xb-kpi out"><small>本月支出</small><b>$${money(out)}</b><em>${inM.filter(l => l['收支'] !== '收入').length} 筆</em></div>
       <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(inc - out)}</em></div>
-      <div class="xb-kpi total"><small>總餘額</small><b>$${money(totalTo(m))}</b><em>累計到本月</em></div>
+      ${(() => { const b = balances(); return `<div class="xb-kpi total"><small>總餘額</small><b>$${money(b.cash + b.deposit)}</b><em>現金 $${money(b.cash)}｜存款 $${money(b.deposit)}</em></div>`; })()}
       <div class="xb-kpi"><small>本期發票</small><b>${perInv.length} 張</b><em>${esc(per.label)}・$${money(perInv.reduce((s, x) => s + numOf(x['金額']), 0))}</em></div>
       <div class="xb-kpi win"><small>待領獎</small><b>${winners.length} 張</b><em>$${money(winners.reduce((s, x) => s + numOf(x['中獎金額']), 0))}</em></div></div>
       <div class="xb-grid">
