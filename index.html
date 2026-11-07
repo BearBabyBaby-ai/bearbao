@@ -4652,8 +4652,8 @@ const Invoice = (() => {
     const cats = st.expense?.length ? st.expense : ['餐飲日用', '加油', '交通', '居家', '其他'];
     const ban = banOf(info.ban);
     let merchant = info.merchant || '', category = info.category || '';
-    /* 店名：店家對照 → 以前記過的同統編 → 發票最上面印的店名 */
-    if (!merchant && ban) { const m = shopOf(ban); if (m) { merchant = m.name || ''; category = category || m.category || ''; } }
+    /* 店名：店家對照有同一個統編就一律用它 → 以前記過的同統編 → 發票最上面印的店名 */
+    if (ban) { const m = shopOf(ban); if (m && m.name) { merchant = m.name; category = m.category || category; } }
     if (!merchant && ban) {
       const past = (Fin.data?.invoices || []).find(s => banOf(s['賣方統編']) === ban && s['資料來源'] && s['資料來源'] !== '未知店家');
       if (past) { merchant = past['資料來源']; category = category || past['類別'] || ''; }
