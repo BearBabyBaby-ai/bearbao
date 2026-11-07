@@ -4614,7 +4614,7 @@ const Invoice = (() => {
     try {
       const r = await Fin.call('ocr', { image: b64, mime: 'image/jpeg' }, 90000);
       const nm = nameFromText(String(r.text || ''));
-      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', method: '拍照', image: opt.keepImage || b64, ocrText: r.text }, opt);
+      return await autoSave({ invoiceNo: r.invoiceNo, date: r.date, amount: r.amount, ban: r.ban, random: r.random, merchant: nm ? nm.name : '', category: nm ? nm.category : '', branch: branchOf(String(r.text || '')), method: '拍照', image: opt.keepImage || b64, ocrText: r.text }, opt);
     } catch (err) { if (opt.batch) return { status: 'fail', msg: `辨識失敗：${err.message}`, info: { image: opt.keepImage || b64 } }; toast('finStatus', `辨識失敗：${err.message}，可以改用「手動輸入」`, true); }
   }
   
@@ -4625,6 +4625,21 @@ const Invoice = (() => {
   }
   async function merchantOf(ban) { return shopOf(banOf(ban)); }
   /* 從發票最上面印的字找出店名 */
+  /* 分店名稱：發票上（最上面店名以外）以「店／站／門市／分店」結尾的名稱，例如 023893澎湖海洋店01序… → 澎湖海洋店 */
+  function branchOf(text) {
+    const lines = String(text || '').split(/\n/).map(l => l.replace(/\s+/g, '')).filter(Boolean);
+    const at = lines.findIndex(l => /電子發票|證明聯/.test(l));
+    const top = at > 0 ? lines[at - 1] : '';
+    const raw = String(text || '').split(/\n/).map(l => l.trim()).filter(Boolean);
+    for (const l of raw.slice(Math.max(0, raw.findIndex(x => /電子發票|證明聯/.test(x.replace(/\s/g, '')))) + 1)) {
+      if (/有限公司|股份|發票|證明聯|隨機碼|總計/.test(l)) continue;
+      for (const tok of l.split(/\s+/)) {
+        const m = tok.match(/([\u4e00-\u9fff]{2,10}?(?:門市|分店|店|站))(?![\u4e00-\u9fff])/);
+        if (m && m[1] !== top && !top.includes(m[1])) return m[1];
+      }
+    }
+    return '';
+  }
   function nameFromText(text) {
     const shops = (Fin.data?.shops || []).filter(s => String(s['關鍵字或統編']) && !/^'?\d+$/.test(String(s['關鍵字或統編'])));
     const mapKw = t => { const kw = shops.filter(s => t.includes(String(s['關鍵字或統編']))).sort((a, b) => String(b['關鍵字或統編']).length - String(a['關鍵字或統編']).length)[0]; return kw ? { name: kw['顯示名稱'], category: kw['預設類別'] || '' } : null; };
@@ -4679,6 +4694,8 @@ const Invoice = (() => {
       } catch (_) {  }
     }
     if (fuelItem(info.items)) category = '加油';
+    /* 有分店名稱：全家-澎湖海洋店、中油加油-馬公站 */
+    if (info.branch && merchant && !merchant.includes(info.branch)) merchant = `${merchant}-${info.branch}`;
     const itemsText = (info.items || []).map(i => `${i.name}×${i.qty}${i.price ? ` @${i.price}` : ''}`).join('、');
     const inv = { '發票號碼': no, '購買日期': info.date || todayKey(), '金額': info.amount ?? '', '資料來源': merchant, '類別': category || cats[0], '付款方式': (st.payments || [])[0] || '現金', '賣方統編': ban, '隨機碼': info.random || '', '備註': '', '品項': itemsText, '掃描方式': info.method || '拍照' };
     if (opt.batch) {
