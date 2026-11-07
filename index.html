@@ -891,6 +891,10 @@
     .xb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
     .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
+    .xb-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:56vh;overflow:auto;margin-bottom:12px}
+    .xb-pick{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#f1f5f9}
+    .xb-pick img{width:100%;height:100%;object-fit:cover}
+    .xb-pick button{position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;border:0;background:rgba(0,0,0,.6);color:#fff;font-size:.8rem;cursor:pointer}
     @media(max-width:820px){.xb-kpis.five{grid-template-columns:repeat(2,minmax(0,1fr))}.xb-kpis.five .xb-kpi.total{grid-column:1/-1}}   /* 手機：總餘額佔一整排，其餘兩兩一排 */
     .xb-kpi small,.xb-kpi em{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
     .xb-kpi{background:#fff;border:1px solid var(--line);border-radius:16px;padding:12px 14px;box-shadow:0 5px 14px rgba(7,43,75,.06)}
@@ -4454,12 +4458,29 @@ const Invoice = (() => {
     input.onchange = () => { const f = input.files[0]; if (f) upload(f); };
     input.click();
   }
+  /* 相簿選取：選好的照片先列出來，按「一鍵上傳」全部上傳 */
   function pickAlbum() {
     if (!Fin.ready()) { showView('finance'); return; }
-    const input = document.createElement('input');
-    input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
-    input.onchange = () => [...input.files].forEach(upload);
-    input.click();
+    let files = [];
+    const choose = () => {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
+      input.onchange = () => { files = files.concat([...input.files]); show(); };
+      input.click();
+    };
+    function show() {
+      if (!files.length) { Modal.close(); return; }
+      const urls = files.map(f => URL.createObjectURL(f));
+      const sheet = Modal.open(`🖼️ 已選取 ${files.length} 張`, `<div class="xb-picks">${urls.map((u, i) => `<div class="xb-pick"><img src="${u}" alt="發票照片 ${i + 1}"><button type="button" data-pick-del="${i}" aria-label="移除">✕</button></div>`).join('')}</div>
+        <div class="xb-form-acts"><button type="button" class="xb-btn" data-pick-more>＋ 再選</button><button type="button" class="xb-btn pri" data-pick-up>📤 一鍵上傳（${files.length} 張）</button></div>`);
+      sheet.addEventListener('click', e => {
+        const del = e.target.closest('[data-pick-del]');
+        if (del) { files.splice(Number(del.dataset.pickDel), 1); show(); return; }
+        if (e.target.closest('[data-pick-more]')) { choose(); return; }
+        if (e.target.closest('[data-pick-up]')) { const list = files; files = []; Modal.close(); list.forEach(upload); }
+      });
+    }
+    choose();
   }
   /* 載入發票：逐張判別；重複的發票不存、收支已有同日同金額不重複記；判斷不出來的留著 */
   let loading = false;
