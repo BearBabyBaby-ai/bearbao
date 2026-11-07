@@ -4626,8 +4626,21 @@ const Invoice = (() => {
   async function merchantOf(ban) { return shopOf(banOf(ban)); }
   /* 從發票最上面印的字找出店名 */
   function nameFromText(text) {
-    const kw = (Fin.data?.shops || []).find(s => !/^\d+$/.test(String(s['關鍵字或統編'])) && String(s['關鍵字或統編']) && text.includes(String(s['關鍵字或統編'])));
-    if (kw) return { name: kw['顯示名稱'], category: kw['預設類別'] || '' };
+    const shops = (Fin.data?.shops || []).filter(s => String(s['關鍵字或統編']) && !/^'?\d+$/.test(String(s['關鍵字或統編'])));
+    const mapKw = t => { const kw = shops.filter(s => t.includes(String(s['關鍵字或統編']))).sort((a, b) => String(b['關鍵字或統編']).length - String(a['關鍵字或統編']).length)[0]; return kw ? { name: kw['顯示名稱'], category: kw['預設類別'] || '' } : null; };
+    /* 1. 店名就是「電子發票證明聯」上面那一行（最上面的店家，中英文都算）；店家對照有這個名稱就換成對照的名稱 */
+    const lines = text.split(/\n/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+    const at = lines.findIndex(l => /電子發票|證明聯/.test(l.replace(/\s/g, '')));
+    for (let k = at - 1; k >= 0; k--) {
+      const t = lines[k].replace(/[^\u4e00-\u9fffA-Za-z0-9&.'\- ]/g, '').trim();
+      if (t.replace(/\s/g, '').length >= 2 && !/^\d+$/.test(t)) {
+        const kw = shops.find(s => t.replace(/\s/g, '').toLowerCase() === String(s['關鍵字或統編']).replace(/\s/g, '').toLowerCase()) || null;
+        return kw ? { name: kw['顯示名稱'], category: kw['預設類別'] || '' } : { name: t.slice(0, 20), category: '' };
+      }
+    }
+    /* 2. 找不到上面那一行：用店家對照的關鍵字 */
+    const kw = mapKw(text);
+    if (kw) return kw;
     for (const raw of text.split(/\n/)) {
       const t = raw.replace(/\s*[A-Za-z][A-Za-z0-9\s.'&-]*$/, '').replace(/\s+/g, '').trim();
       if (/[\u4e00-\u9fff]{2,}/.test(t) && !/發票|證明聯|\d{3}年|[A-Z]{2}-?\d{8}|隨機碼|總計|賣方/.test(t)) return { name: t.slice(0, 20), category: '' };
