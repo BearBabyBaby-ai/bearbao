@@ -4025,9 +4025,13 @@ const Modal = (() => {
   box.className = 'xb-modal'; box.hidden = true;
   box.innerHTML = '<div class="xb-sheet" role="dialog" aria-modal="true"></div>';
   document.body.appendChild(box);
-  const sheet = box.firstChild;
+  let sheet = box.firstChild;
   let onClose = null;
   function open(title, html, closeCb) {
+    /* 每次開新視窗都換一個新的框，上一個視窗綁的按鈕動作不會留下來重複觸發 */
+    const fresh = sheet.cloneNode(false);
+    box.replaceChild(fresh, sheet);
+    sheet = fresh;
     sheet.innerHTML = `<h3><span>${title}</span><button type="button" class="xb-x" data-xb-close aria-label="關閉">✕</button></h3>${html}`;
     box.hidden = false; onClose = closeCb || null;
     return sheet;
