@@ -891,6 +891,17 @@
     .xb-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
     .xb-kpis.five{grid-template-columns:repeat(5,minmax(0,1fr))}
     .xb-btn.load{background:#047857;color:#fff;border-color:#047857}
+    .inv-bar{display:grid;gap:8px;margin-bottom:12px}
+    .inv-main{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:14px 16px;font-size:1.08rem}
+    .inv-main small{font-weight:700;font-size:.74rem;opacity:.9}
+    .inv-sub{display:flex;flex-wrap:wrap;gap:8px}
+    .inv-sub .xb-btn{flex:1 1 auto}
+    @media(min-width:821px){.inv-bar{grid-template-columns:minmax(260px,1fr) auto;align-items:center}.inv-sub{justify-content:flex-end}.inv-sub .xb-btn{flex:0 0 auto}}
+    .inv-pick{display:grid;gap:10px}
+    .inv-pick button{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:16px;background:#fff;padding:16px;font:inherit;text-align:left;cursor:pointer}
+    .inv-pick b{font-size:1.8rem}
+    .inv-pick span{display:flex;flex-direction:column;font-weight:900;font-size:1.05rem;color:#0b3954}
+    .inv-pick small{font-weight:700;font-size:.8rem;color:var(--muted)}
     .xb-res .xb-item{flex-wrap:wrap}.xb-res .xb-item>div:first-child{flex:1 1 100%;min-width:0}.xb-res .xb-item .acts{margin-left:auto}
     .xb-picks{display:grid;grid-template-columns:repeat(auto-fill,minmax(92px,1fr));gap:8px;max-height:56vh;overflow:auto;margin-bottom:12px}
     .xb-pick{position:relative;aspect-ratio:3/4;border-radius:10px;overflow:hidden;background:#f1f5f9}
@@ -4451,6 +4462,17 @@ const Invoice = (() => {
     input.onchange = () => { const f = input.files[0]; if (f) upload(f); };
     input.click();
   }
+  /* 新增發票：拍照（連拍）或從相簿選（多選），上傳後自動判別 */
+  function addInvoices() {
+    if (!Fin.ready()) { showView('finance'); return; }
+    const sheet = Modal.open('📸 新增發票', `<div class="inv-pick"><button type="button" data-add="cam"><b>📷</b><span>拍照<small>拍完一張自動開下一張，按返回結束</small></span></button><button type="button" data-add="album"><b>🖼️</b><span>從相簿選<small>可以一次選很多張</small></span></button></div>`);
+    sheet.addEventListener('click', e => {
+      const b = e.target.closest('[data-add]');
+      if (!b) return;
+      Modal.close();
+      if (b.dataset.add === 'cam') scanCamera(); else pickAlbum();
+    });
+  }
   /* 相簿選取：選好的照片先列出來，按「一鍵上傳」全部上傳 */
   function pickAlbum() {
     if (!Fin.ready()) { showView('finance'); return; }
@@ -4808,7 +4830,7 @@ const Invoice = (() => {
       } catch (err) { e.target.disabled = false; e.target.textContent = '💾 儲存發票'; alert(err.message); }
     });
   }
-  return { scanCamera, pickPaper, pickAlbum, loadPending, openForm, parseQR, fromQRPhoto };
+  return { scanCamera, pickPaper, pickAlbum, addInvoices, loadPending, openForm, parseQR, fromQRPhoto };
 })();
 
 
@@ -4908,7 +4930,7 @@ const Finance = (() => {
           <div class="xb-win">${ci.claimable.length ? ci.claimable.map(winHtml).join('') : ''}</div></div>
         <div class="xb-card"><h3>📈 近 6 個月支出</h3><div class="xb-bars">${months.map((mm, i) => `<div class="xb-bar" style="--c:#f59e0b"><span>${Number(mm.slice(5))} 月</span><i style="width:${Math.round(mOut[i] / maxM * 100)}%"></i><span>$${money(mOut[i])}</span></div>`).join('')}</div>
           <h3 style="margin-top:14px">🧩 本月支出類別</h3>${cats.length ? `<div class="xb-bars">${cats.map(([c, v], i) => `<div class="xb-bar" style="--c:${PAL[i % PAL.length]}"><span>${esc(c)}</span><i style="width:${Math.round(v / maxC * 100)}%"></i><span>$${money(v)}</span></div>`).join('')}</div>` : '<p class="xb-note">本月還沒有支出紀錄</p>'}</div>
-        <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
+        <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="add">📸 新增發票</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
           ${oil ? `<p class="xb-note">中油馬公站油價（${esc(oil['生效日期'])} 起）：92 <b>${esc(oil['92無鉛'])}</b>・95 <b>${esc(oil['95無鉛'])}</b>・98 <b>${esc(oil['98無鉛'])}</b>・柴油 <b>${esc(oil['超級柴油'])}</b></p>` : ''}
           <p class="xb-note">資料更新：${esc(D().time || '—')}</p></div>
       </div>`;
@@ -4919,11 +4941,12 @@ const Finance = (() => {
     if (invPeriod && !periods.includes(invPeriod)) invPeriod = '';
     const shown = all.filter(s => (!invPeriod || s['期別'] === invPeriod) && (!invFilter || (invFilter === 'win' ? ['中獎', '已入帳'].includes(s['兌獎狀態']) : invFilter === 'wait' ? ['未開獎', '待更新號碼'].includes(s['兌獎狀態'] || '未開獎') : true)));
     const total = shown.reduce((s, x) => s + numOf(x['金額']), 0);
-    return `<div class="xb-row" style="margin-bottom:12px"><button type="button" class="xb-btn pri" data-fin-act="scan">📸 拍發票</button><button type="button" class="xb-btn" data-fin-act="album">🖼️ 相簿選取</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動輸入</button><button type="button" class="xb-btn" data-fin-act="win">🔄 更新中獎號碼並對獎</button></div>
+    return `<div class="inv-bar"><button type="button" class="xb-btn pri inv-main" data-fin-act="add">📸 新增發票<small>拍照或從相簿選，可一次多張，上傳後自動判別</small></button>
+        <div class="inv-sub">${loadBtn()}<button type="button" class="xb-btn sm" data-fin-act="manual">✍️ 手動輸入</button><button type="button" class="xb-btn sm" data-fin-act="win">🔄 更新中獎號碼並對獎</button></div></div>
       <div class="xb-row" style="margin-bottom:10px"><select class="ct-select" id="invPeriod"><option value="">全部期別</option>${periods.map(p => `<option value="${esc(p)}"${p === invPeriod ? ' selected' : ''}>${esc(periodLabel(p))}</option>`).join('')}</select>
         ${[['', '全部'], ['win', '中獎'], ['wait', '未開獎']].map(([k, t]) => `<button type="button" class="xb-chip${invFilter === k ? ' active' : ''}" data-inv-f="${k}">${t}</button>`).join('')}
         <span class="xb-note" style="margin:0 0 0 auto">${shown.length} 張・$${money(total)}</span></div>
-      <div class="xb-list">${shown.length ? shown.slice(0, 300).map(invItem).join('') : '<div class="xb-empty">還沒有發票，按「📸 拍發票」開始</div>'}</div>`;
+      <div class="xb-list">${shown.length ? shown.slice(0, 300).map(invItem).join('') : '<div class="xb-empty">還沒有發票，按「📸 新增發票」開始</div>'}</div>`;
   }
   function ledgerItem(l, view) {
     const isIn = l['收支'] === '收入';
@@ -5057,6 +5080,7 @@ const Finance = (() => {
     if (name === 'scan') return Invoice.scanCamera();
     if (name === 'paper') return Invoice.pickPaper();
     if (name === 'album') return Invoice.pickAlbum();
+    if (name === 'add') return Invoice.addInvoices();
     if (name === 'load') return Invoice.loadPending();
     if (name === 'manual') return Invoice.openForm({ method: '手動' });
     if (name === 'ledger') return ledgerForm('');
@@ -5127,7 +5151,7 @@ const Finance = (() => {
     box.className = '';
     box.innerHTML = `<div class="h-fin"><div><small>本月支出</small><b>$${money(out)}</b></div><div><small>待領獎發票</small><b style="color:${winners.length ? '#be123c' : '#0b3954'}">${winners.length} 張</b></div>
       <div><small>最久可兌換</small><b style="font-size:.9rem">${ci.oldest ? `${esc(ci.oldest['期別'])}<br><small>至 ${esc(ci.oldest['領獎截止'])}</small>` : '—'}</b></div><div><small>95 無鉛</small><b>${oil ? `${esc(oil['95無鉛'])} 元` : '—'}</b></div></div>
-      <div class="xb-row" style="margin-top:10px"><button type="button" class="xb-btn sm pri" data-fin-act="scan">📸 拍發票</button><button type="button" class="xb-btn sm" data-fin-act="ledger">💵 記帳</button><button type="button" class="xb-btn sm" data-fin-act="fuel">⛽ 加油</button></div>`;
+      <div class="xb-row" style="margin-top:10px"><button type="button" class="xb-btn sm pri" data-fin-act="add">📸 新增發票</button><button type="button" class="xb-btn sm" data-fin-act="ledger">💵 記帳</button><button type="button" class="xb-btn sm" data-fin-act="fuel">⛽ 加油</button></div>`;
   }
   return { render, renderHome, claimInfo, invoices, ledgerForm, set tab(v) { tab = v; } };
 })();
