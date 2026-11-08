@@ -1725,7 +1725,7 @@ function showView(view) {
   if (view === 'flight') Flights.onShown();
   if (view === 'calendar') Cal.onShown();
   if (view === 'remind' && typeof Remind !== 'undefined') { Remind.render(); if (Fin.ready()) Fin.sync().catch(() => {}); }
-  if (view === 'finance' && typeof Finance !== 'undefined') { Finance.render(); if (Fin.ready() && !Fin.data) Fin.sync().catch(() => {}); }
+  if (view === 'finance' && typeof Finance !== 'undefined') { Finance.render(); if (Fin.ready()) Fin.sync().catch(() => {}); }   /* 每次進財務管理都取回雲端最新資料（其他裝置新增的收支才會算進餘額） */
   try { history.replaceState(null, '', `#${view}`); } catch (_) {  }
 }
 document.addEventListener('click', e => {
@@ -5785,6 +5785,8 @@ Cal.setExtra(remindersForCal());
 Remind.renderHome();
 Finance.renderHome();
 if (Fin.ready()) Fin.sync().catch(() => {});
+/* 視窗切回來時（例如 Windows 版常駐在系統匣），停在財務管理就取回雲端最新資料 */
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && currentView === 'finance' && Fin.ready()) Fin.sync().catch(() => {}); });
 </script>
 <script>
 
