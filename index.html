@@ -1646,7 +1646,7 @@ const CFG = {
   calendarHidden: [],
   homeDays: 14,
   activityLeadDays: 14,   
-  balanceStart: { date: '2026/11/13', cash: 2000, deposit: 27300 },   /* 截至 2026/11/12 的現金、存款；11/13 起的紀錄才加減 */
+  balanceStart: { date: '2026/11/12', after: '261112181100', cash: 2000, deposit: 27300 },   /* 2026/11/12 18:11 的現金、存款；之後新增的紀錄才加減 */
   defaultView: 'home'
 };
 const OLD_LOGO_URL = 'https://lh3.googleusercontent.com/d/1rYf3EqwjJBh7pfyYFniBu5AjcKk8drS5';
@@ -5036,6 +5036,7 @@ const Finance = (() => {
     ledger().forEach(l => {
       const d = dateKeyOf(l['日期']);
       if (!d || d < st.date || d > k) return;
+      if (d === st.date && st.after && String(l.ID || '').slice(1, 13) <= st.after) return;   /* 起始當天：起算時間之前記的已包含在起始金額 */
       const pay = String(l['付款方式'] || '').trim(), amt = ledAmt(l);
       if (isCashTransfer(l)) { const t = numOf(l['金額']); deposit -= t; cash += t; return; }   /* 存款 → 現金 */
       if (l['收支'] === '收入') { if (/現金/.test(pay)) cash += amt; else deposit += amt; }
