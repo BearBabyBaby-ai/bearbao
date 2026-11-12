@@ -4186,7 +4186,13 @@ const dateKeyOf = v => (parseDates(v)[0] || '');
 const SUSPECT_NOTE = '此筆疑似已有手動輸入';
 /* 轉現金／轉出到現金（項目寫「轉現金」「轉出到現金」「轉為現金」等）：由存款轉到現金，不算收入或支出 */
 const isCashTransfer = l => /轉(?:出)?(?:到|為|成)?現金/.test(String(l['項目'] || ''));
-const ledAmt = l => String(l['備註'] || '').includes(SUSPECT_NOTE) || isCashTransfer(l) ? 0 : numOf(l['金額']);
+/* 初始剩餘金額：收入、項目寫「…餘額」（例如 2026/10/31 存款餘額）＝下個月 1 日的初始剩餘金額，不算收入，算進下個月的結餘 */
+const isOpening = l => l['收支'] === '收入' && /餘額/.test(String(l['項目'] || ''));
+const openingMonth = l => { const d = dateKeyOf(l['日期']); return d ? addDays(d, 1).slice(0, 7) : ''; };
+const openingOf = m => (Fin.data && Fin.data.ledger || []).filter(l => isOpening(l) && openingMonth(l) === m).reduce((s, l) => s + numOf(l['金額']), 0);
+/* 備註寫「還沒付」「還沒扣款」：不納入（付了把備註拿掉就會算） */
+const isUnpaid = l => /還沒付|還沒扣款/.test(String(l['備註'] || ''));
+const ledAmt = l => String(l['備註'] || '').includes(SUSPECT_NOTE) || isCashTransfer(l) || isUnpaid(l) || isOpening(l) ? 0 : numOf(l['金額']);
 // 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
 // 單日｜民國年（2～3 位數加 1911）｜多個單日（「、」「+」「，」空格分開）｜期間（「-」「至」「到」）｜期間後加「週一、週四」只取那幾個星期
 // 日期後面的 (一) 只是註記；單日後面寫星期不算條件；期間前後顛倒自動對調
@@ -5035,7 +5041,7 @@ const Finance = (() => {
     let cash = st.cash, deposit = st.deposit;
     ledger().forEach(l => {
       const d = dateKeyOf(l['日期']);
-      if (!d || d < st.date || d > k) return;
+      if (!d || d < st.date || d > k || isUnpaid(l) || isOpening(l)) return;
       if (d === st.date && st.after && String(l.ID || '').slice(1, 13) <= st.after) return;   /* 起始當天：起算時間之前記的已包含在起始金額 */
       const pay = String(l['付款方式'] || '').trim(), amt = ledAmt(l);
       if (isCashTransfer(l)) { const t = numOf(l['金額']); deposit -= t; cash += t; return; }   /* 存款 → 現金 */
@@ -5105,7 +5111,7 @@ const Finance = (() => {
     const oil = (D().oil || []).slice(-1)[0];
     return `<div class="xb-kpis five">
       <div class="xb-kpi out"><small>本月支出</small><b>$${money(out)}</b><em>${inM.filter(l => l['收支'] !== '收入').length} 筆</em></div>
-      <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(inc - out)}</em></div>
+      <div class="xb-kpi in"><small>本月收入</small><b>$${money(inc)}</b><em>結餘 $${money(openingOf(m) + inc - out)}</em></div>
       ${(() => { const b = balances(); return `<div class="xb-kpi total"><small>總餘額</small><b>$${money(b.cash + b.deposit)}</b><em>現金 $${money(b.cash)}｜存款 $${money(b.deposit)}</em></div>`; })()}
       <div class="xb-kpi"><small>本期發票</small><b>${perInv.length} 張</b><em>${esc(per.label)}・$${money(perInv.reduce((s, x) => s + numOf(x['金額']), 0))}</em></div>
       <div class="xb-kpi win"><small>待領獎</small><b>${winners.length} 張</b><em>$${money(winners.reduce((s, x) => s + numOf(x['中獎金額']), 0))}</em></div></div>
@@ -5147,7 +5153,7 @@ const Finance = (() => {
     return `<div class="xb-row" style="margin-bottom:12px"><input type="month" class="ct-select" id="ledMonth" value="${esc(ledMonth.replace('/', '-'))}">
         ${[['', '全部'], ['支出', '支出'], ['收入', '收入']].map(([k, t]) => `<button type="button" class="xb-chip${ledType === k ? ' active' : ''}" data-led-f="${k}">${t}</button>`).join('')}
         <button type="button" class="xb-btn pri" data-fin-act="ledger" style="margin-left:auto">＋ 記一筆</button></div>
-      <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
+      <div class="xb-kpis"><div class="xb-kpi out"><small>支出</small><b>$${money(out)}</b></div><div class="xb-kpi in"><small>收入</small><b>$${money(inc)}</b></div><div class="xb-kpi"><small>結餘</small><b>$${money(openingOf(ledMonth.replace('-', '/')) + inc - out)}</b></div><div class="xb-kpi"><small>筆數</small><b>${all.length}</b></div></div>
       <div class="xb-list">${list.length ? ledgerDays(list) : '<div class="xb-empty">這個月還沒有紀錄</div>'}</div>`;
   }
   /* 收支：每日一列，點了顯示當天的收支資料 */
