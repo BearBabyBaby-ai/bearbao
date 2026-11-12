@@ -4184,7 +4184,9 @@ const dateInput = k => (k || todayKey()).replace(/\//g, '-');
 const dateKeyOf = v => (parseDates(v)[0] || '');
 /* 收支：備註「此筆疑似已有手動輸入」的不納入金額 */
 const SUSPECT_NOTE = '此筆疑似已有手動輸入';
-const ledAmt = l => String(l['備註'] || '').includes(SUSPECT_NOTE) ? 0 : numOf(l['金額']);
+/* 轉現金／轉出到現金（項目寫「轉現金」「轉出到現金」「轉為現金」等）：由存款轉到現金，不算收入或支出 */
+const isCashTransfer = l => /轉(?:出)?(?:到|為|成)?現金/.test(String(l['項目'] || ''));
+const ledAmt = l => String(l['備註'] || '').includes(SUSPECT_NOTE) || isCashTransfer(l) ? 0 : numOf(l['金額']);
 // 重要資訊提醒：日期欄位展開成每一天（YYYY/MM/DD）
 // 單日｜民國年（2～3 位數加 1911）｜多個單日（「、」「+」「，」空格分開）｜期間（「-」「至」「到」）｜期間後加「週一、週四」只取那幾個星期
 // 日期後面的 (一) 只是註記；單日後面寫星期不算條件；期間前後顛倒自動對調
@@ -5026,7 +5028,8 @@ const Finance = (() => {
   const loadBtn = () => { const n = (D().pending || []).length; return n ? `<button type="button" class="xb-btn load" data-fin-act="load">📥 載入發票（${n}）</button>` : ''; };
   /* 總餘額：從第一筆紀錄累計到該月底（收入 − 支出） */
   /* 現金／存款：從起始金額開始，只加減起始日期（含）之後的紀錄
-     支出：付款方式是現金或空白 → 現金，其他 → 存款；收入：付款方式是現金 → 現金，其他或空白 → 存款 */
+     支出：付款方式是現金或空白 → 現金，其他 → 存款；收入：付款方式是現金 → 現金，其他或空白 → 存款
+     轉現金／轉出到現金：存款減少、現金增加 */
   function balances() {
     const st = CFG.balanceStart, k = todayKey();
     let cash = st.cash, deposit = st.deposit;
@@ -5034,6 +5037,7 @@ const Finance = (() => {
       const d = dateKeyOf(l['日期']);
       if (!d || d < st.date || d > k) return;
       const pay = String(l['付款方式'] || '').trim(), amt = ledAmt(l);
+      if (isCashTransfer(l)) { const t = numOf(l['金額']); deposit -= t; cash += t; return; }   /* 存款 → 現金 */
       if (l['收支'] === '收入') { if (/現金/.test(pay)) cash += amt; else deposit += amt; }
       else if (!pay || /現金/.test(pay)) cash -= amt; else deposit -= amt;
     });
