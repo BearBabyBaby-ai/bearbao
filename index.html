@@ -5667,9 +5667,9 @@ if (window.bearDesktop) {
   setTimeout(pushDesk, 1500);
 
   /* 熊寶桌寵工作模式：對話框輸入的文字交給熊寶系統處理，回覆一段文字
-     「2026/11/15 分海」查奎壁山分海；「2026/11/14 消夜 111」記一筆支出 */
+     「2026/11/15 分海」查奎壁山分海；「2026/11/14 宵夜 111」記一筆支出（消夜一律記成宵夜） */
   window.BearCmd = (() => {
-    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 消夜 111';
+    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 宵夜 111';
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     function takeDate(s) {
       const t = todayKey(), y = t.slice(0, 4);
@@ -5711,7 +5711,9 @@ if (window.bearDesktop) {
       if (!Fin.data) { try { await Fin.sync(); } catch (_) { /* 用預設類別 */ } }
       const st = (Fin.data && Fin.data.settings) || {};
       const exp = st.expense || [], inc = st.income || [], pays = st.payments || [];
-      const same = [...((Fin.data && Fin.data.ledger) || [])].reverse().find(l => String(l['項目'] || '').trim() === item);
+      item = item.replace(/消夜/g, '宵夜');
+      /* 類別沿用最近一筆同項目（旅遊期間的旅遊支出類別不沿用） */
+      const same = [...((Fin.data && Fin.data.ledger) || [])].reverse().find(l => String(l['項目'] || '').trim() === item && !String(l['類別'] || '').startsWith('旅遊支出'));
       let type = '支出', cat = '', pay = '';
       if (same) { type = same['收支'] || '支出'; cat = same['類別'] || ''; pay = same['付款方式'] || ''; }
       else if (inc.includes(item)) { type = '收入'; cat = item; }

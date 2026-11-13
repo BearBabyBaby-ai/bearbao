@@ -15,7 +15,7 @@
     return d;
   }
 
-  add('要查分海或記帳，直接打給我：\n2026/11/15 分海\n2026/11/14 消夜 111', 'bear');
+  add('要查分海或記帳，直接打給我：\n2026/11/15 分海\n2026/11/14 宵夜 111', 'bear');
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
