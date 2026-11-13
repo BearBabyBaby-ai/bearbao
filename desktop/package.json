@@ -1,7 +1,7 @@
 {
   "name": "bearbao-desktop",
   "productName": "熊寶系統",
-  "version": "1.2.2",
+  "version": "1.3.0",
   "description": "熊寶系統",
   "main": "main.js",
   "author": "BearBabyBaby-ai",
@@ -10,16 +10,34 @@
     "dist": "electron-builder --win nsis --x64 --publish never"
   },
   "devDependencies": {
-    "electron": "33.2.1",
-    "electron-builder": "25.1.8"
+    "electron": "38.8.6",
+    "electron-builder": "26.18.0"
   },
   "build": {
     "appId": "io.github.bearbabybaby_ai.bearbao",
     "productName": "熊寶系統",
     "artifactName": "bearbao-setup.${ext}",
-    "directories": { "output": "dist" },
-    "files": ["main.js", "preload.js", "reminders.js", "icon.png", "package.json"],
-    "win": { "icon": "icon.png", "target": ["nsis"] },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "reminders.js",
+      "icon.png",
+      "package.json",
+      "pet/**",
+      "!node_modules/koffi/build/koffi/!(win32_x64)/**",
+      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/doc/**",
+      "!node_modules/koffi/vendor/**"
+    ],
+    "win": {
+      "icon": "icon.png",
+      "target": [
+        "nsis"
+      ]
+    },
     "nsis": {
       "oneClick": false,
       "perMachine": false,
@@ -28,6 +46,13 @@
       "createStartMenuShortcut": true,
       "shortcutName": "熊寶系統",
       "language": "1028"
-    }
+    },
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ]
+  },
+  "dependencies": {
+    "koffi": "2.16.3",
+    "extract-zip": "2.0.1"
   }
 }

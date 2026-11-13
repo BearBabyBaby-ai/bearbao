@@ -3,6 +3,9 @@ const { app, BrowserWindow, shell, session, Menu, screen, Tray, Notification, na
 const fs = require('fs');
 const path = require('path');
 const { due } = require('./reminders');
+const pet = require('./pet/src/index');   // 熊寶桌寵：只有電腦版有，手機與網頁不會載入
+
+pet.register();
 
 const URL_HOME = 'https://bearbabybaby-ai.github.io/bearbao/';
 const SITE = 'https://bearbabybaby-ai.github.io';
@@ -102,16 +105,34 @@ function autoStartOn() {
 function setAutoStart(on) {
   app.setLoginItemSettings({ openAtLogin: on, args: ['--hidden'] });
 }
+/* 桌寵狀態：動作圖第一次下載時顯示進度 */
+function petLabel() {
+  const st = pet.status();
+  if (!pet.ready()) {
+    if (st.phase === 'download') return `熊寶下載中 ${st.pct}%`;
+    if (st.phase === 'unpack') return '熊寶準備中…';
+    if (st.phase === 'retry') return '熊寶下載失敗，稍後自動重試';
+    return '熊寶準備中…';
+  }
+  return pet.isHidden() ? '顯示熊寶' : '隱藏熊寶';
+}
+let trayMenu = null;
+function refreshTray() {
+  if (!tray || !trayMenu) return;
+  tray.setContextMenu(trayMenu());
+  tray.setToolTip(pet.ready() ? '熊寶系統' : '熊寶系統・' + petLabel());
+}
 function buildTray() {
   tray = new Tray(iconImage().resize({ width: 16, height: 16 }));
   tray.setToolTip('熊寶系統');
-  const menu = () => Menu.buildFromTemplate([
+  trayMenu = () => Menu.buildFromTemplate([
     { label: '開啟熊寶系統', click: () => showWin() },
-    { label: '開機自動啟動', type: 'checkbox', checked: autoStartOn(), click: item => { setAutoStart(item.checked); tray.setContextMenu(menu()); } },
+    { label: petLabel(), enabled: pet.ready(), click: () => pet.setHidden(!pet.isHidden()) },
+    { label: '開機自動啟動', type: 'checkbox', checked: autoStartOn(), click: item => { setAutoStart(item.checked); refreshTray(); } },
     { type: 'separator' },
     { label: '結束熊寶系統', click: () => { quitting = true; app.quit(); } }
   ]);
-  tray.setContextMenu(menu());
+  tray.setContextMenu(trayMenu());
   tray.on('click', () => showWin());
 }
 
@@ -167,6 +188,14 @@ function start() {
 
   win.loadURL(URL_HOME);
   buildTray();
+
+  /* 熊寶桌寵：動作圖準備好就出現在桌面 */
+  let lastPct = -1;
+  pet.start({ onChange: st => {
+    if (st && st.phase === 'download' && st.pct === lastPct) return;
+    if (st) lastPct = st.pct;
+    refreshTray();
+  } });
 
   tick();
   setInterval(tick, 60000);
