@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; script-src 'self'; style-src 'unsafe-inline'">
 <title>熊寶工作模式</title>
 <style>
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
@@ -15,6 +15,16 @@
   .bear { align-self: flex-start; background: #fff; border: 1.5px solid #e2cba6; border-bottom-left-radius: 4px; }
   .me { align-self: flex-end; background: #0a6fb3; color: #fff; border-bottom-right-radius: 4px; }
   .wait { color: #a08868; }
+  .rich { display: flex; flex-direction: column; gap: 4px; white-space: normal; }
+  .b-title { font-weight: bold; font-size: 15px; }
+  .b-head { font-weight: bold; margin-top: 4px; }
+  .b-text { white-space: pre-wrap; margin-top: 4px; }
+  .b-link { color: #0a6fb3; text-decoration: none; cursor: pointer; white-space: pre-wrap; }
+  .b-link:hover { text-decoration: underline; }
+  .card { width: 140px; border: 1px solid #e2cba6; border-radius: 6px; margin-top: 6px; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .files button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1.5px solid #0a6fb3; border-radius: 8px; background: #fff; color: #0a6fb3; cursor: pointer; }
+  .files button:hover { background: #e8f2fa; }
   form { display: flex; gap: 6px; padding: 8px; border-top: 1.5px solid #e2cba6; }
   #input { flex: 1; min-width: 0; font: inherit; color: inherit; padding: 6px 10px; border: 1.5px solid #d6bd96; border-radius: 10px; outline: none; background: #fff; }
   #input:focus { border-color: #0a6fb3; }

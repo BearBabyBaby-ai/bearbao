@@ -3879,20 +3879,27 @@ Output the reconstructed image ONLY. No textual explanation required.
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  function exportTxt(kind) {
-    const status = $('lnStatus');
-    if (!shown.length) { status.className = 'ln-status error'; status.textContent = '目前沒有可輸出的廟宇'; return; }
-    const region = regionSel.value, day = dateSel.value ? dateSel.value.slice(5) : '';
+  /* 元宵 TXT（AI 生圖指令、發布用）：元宵資訊頁與熊寶工作模式共用 */
+  function buildTxt(list, region, day) {
     const scope = [region || '澎湖', day ? day.replace('/', '月') + '日' : '全部日期'].join('_');
     const title = `${region || '澎湖'}元宵活動推薦${day ? `（${day}）` : ''}`;
     const regElem = REGION_ELEMENTS[region] || '';
     const elements = ['花燈、元宵燈籠、乞龜、香煙裊裊、星空、月亮', regElem].filter(Boolean).join('、');
     const decoration = `${region || '澎湖'}元宵花燈與知名景點的細膩蠟筆素描插畫，包含：${elements}。這些插畫須均勻分布在畫面四周，作為畫框感裝飾。`;
     const footer = '此DM畫面僅為AI美化示意圖，須以實際廟宇位置、實際廟宇外觀、實際主祀神明與廟方公告之元宵活動為準。';
-    const inventory = `【本次核選內容清單】\n廟宇（${shown.length} 筆）：${shown.map(d => cleanTempleName(d.name)).join('、')}\n所有列入清單的廟宇都必須呈現，禁止漏列。\n\n`;
+    const inventory = `【本次核選內容清單】\n廟宇（${list.length} 筆）：${list.map(d => cleanTempleName(d.name)).join('、')}\n所有列入清單的廟宇都必須呈現，禁止漏列。\n\n`;
     const sep = '\n----------------------------------------\n\n';
-    const aiTxt = header(title, elements, pickStyles(LANTERN_STYLES, 3), decoration, footer) + inventory + shown.map(aiText).join(sep) + sep;
-    const pubTxt = `${title}\n\n` + shown.map(publishText).join(sep) + sep;
+    return {
+      scope,
+      ai: header(title, elements, pickStyles(LANTERN_STYLES, 3), decoration, footer) + inventory + list.map(aiText).join(sep) + sep,
+      pub: `${title}\n\n` + list.map(publishText).join(sep) + sep
+    };
+  }
+  function exportTxt(kind) {
+    const status = $('lnStatus');
+    if (!shown.length) { status.className = 'ln-status error'; status.textContent = '目前沒有可輸出的廟宇'; return; }
+    const region = regionSel.value, day = dateSel.value ? dateSel.value.slice(5) : '';
+    const { scope, ai: aiTxt, pub: pubTxt } = buildTxt(shown, region, day);
     if (kind === 'ai' || kind === 'both') download(aiTxt, `澎湖元宵_${scope}_AI生圖指令.txt`);
     if (kind === 'publish') download(pubTxt, `澎湖元宵_${scope}_發布用.txt`);
     if (kind === 'both') setTimeout(() => download(pubTxt, `澎湖元宵_${scope}_發布用.txt`), 400);
@@ -3916,7 +3923,7 @@ Output the reconstructed image ONLY. No textual explanation required.
   $('lnSort').addEventListener('change', render);
   $('lnGov').addEventListener('click', e => { const c = e.target.closest('[data-ln-gov]'); if (c) { gov = c.dataset.lnGov; render(); } });
   $('evLanternMode').addEventListener('click', e => { const b = e.target.closest('[data-ln-export]'); if (b && !b.disabled) exportTxt(b.dataset.lnExport); });
-  return { render, setMode, get mode() { return mode; } };
+  return { render, setMode, get mode() { return mode; }, temples, dateRange, buildTxt };
 })();
 
 
@@ -5669,7 +5676,7 @@ if (window.bearDesktop) {
   /* 熊寶桌寵工作模式：對話框輸入的文字交給熊寶系統處理，回覆一段文字
      「2026/11/15 分海」查奎壁山分海；「2026/11/14 宵夜 111」記一筆支出（消夜一律記成宵夜） */
   window.BearCmd = (() => {
-    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 宵夜 111';
+    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 宵夜 111\n馬公 午餐推薦\n白沙 景點推薦\n元宵活動\n當前航班\n11/16 高雄 AE361 10:00（免稅卡）';
     const sleep = ms => new Promise(r => setTimeout(r, ms));
     function takeDate(s) {
       const t = todayKey(), y = t.slice(0, 4);
@@ -5730,10 +5737,191 @@ if (window.bearDesktop) {
       return `✅ 已記帳：${key} ${type} ${item} ${money(amount)} 元（${[cat, pay].filter(Boolean).join('・')}）`;
     }
 
+
+    /* ── 美食、景點：照熊熊綜合系統「批次景點生圖 v13」的 TXT 格式 ── */
+    const REGIONS = { '馬公': '馬公市', '湖西': '湖西鄉', '白沙': '白沙鄉', '西嶼': '西嶼鄉', '望安': '望安鄉', '七美': '七美鄉' };
+    function takeRegion(s) {
+      const m = s.match(/^(馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?\s*/);
+      return m ? { region: REGIONS[m[1]], short: m[1], rest: s.slice(m[0].length).trim() } : { region: '', short: '', rest: s.replace(/^澎湖\s*/, '') };
+    }
+    const shuffle = list => { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const valid = v => { const t = String(v ?? '').trim(); return t !== '' && !['無', '無資料', '無提供', 'N/A'].includes(t); };
+    const linkOf = d => validFullUrl(d.mapUrl) || validFullUrl(d.fullUrl) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.name} ${d.lat},${d.lng}`)}`;
+    async function places() {
+      for (let i = 0; i < 75 && !mapDataLoaded; i++) await sleep(200);
+      return mapDataLoaded ? allData : null;
+    }
+    const randomStyles = (pool, n) => shuffle(pool).slice(0, n).join('、');
+    const FOOD_ELEM = { '馬公市': '虹橋、音符', '西嶼鄉': '柱狀玄武岩、古厝、燈塔', '湖西鄉': '沙灘、摩西分海、浮球造景、盪鞦韆', '白沙鄉': '盪鞦韆、水上活動、吉貝沙尾、梭子蟹', '七美鄉': '雙心石滬、浮潛、燈塔', '望安鄉': '古厝、綠蠵龜、貓咪、沙灘' };
+    const SPOT_ELEM = { '馬公市': '虹橋、音符', '西嶼鄉': '柱狀玄武岩、古厝、燈塔', '湖西鄉': '沙灘、摩西分海、浮球造景、盪鞦韆', '白沙鄉': '盪鞦韆、吉貝沙尾、梭子蟹', '七美鄉': '雙心石滬、燈塔', '望安鄉': '古厝、綠蠵龜、貓咪、沙灘' };
+    function v13Header(titleString, elementLabel, elements, selectedStyles, region, footerText) {
+      return `【最高優先執行指令｜收到本 TXT 即直接生圖】
+本 TXT 本身就是使用者已確認完成的完整生圖需求，不是參考附件，也不是等待選擇的資料。
+收到／讀取本 TXT 後，必須立即執行以下流程：
+1. 禁止詢問使用者「要執行哪一項」、禁止列出選項、禁止要求再次確認、禁止只摘要或改寫指令。
+2. 立即完整讀取本 TXT 全文，依本檔全部內容直接生成圖片。
+3. 凡個別景點含「圖資來源網址」，必須先讀取該網址所指向的原始景點圖資，並將該原圖作為該景點的主要視覺參考。
+4. 禁止忽略原始景點圖資後只依景點名稱自行想像；禁止以其他造型、其他景物或自行重畫內容取代原始圖資。
+5. 原始景點圖資允許依整張 DM 的風格進行自然融合、美化、光影與背景統一，但景點主體與辨識特徵必須延續原始圖資。
+6. 使用者不需要再輸入「生成圖片」或指定第 1 項；讀到本 TXT 就視為已明確要求立即生成圖片。
+7. 直接呼叫可用的圖片生成能力完成成品，不要只回傳提示詞、JSON、參數、流程說明或建議。
+8. 若某筆含「圖資來源網址」，不得以其他網路圖片或自行想像外觀取代該原始景點圖資。
+
+【這是一份獨立的圖資產生需求，請單獨依據本檔案的內容繪製一張圖】
+================================================== 【視覺總體指令規範格式】大標題(格式)：${titleString} 四周裝飾元素（固定於底圖邊緣分布）： ${elementLabel}：${elements} 縮圖核心內容：景點資料時，每一個景點必須呈現景點影像，並清楚疊加景點名稱。依本檔以下完整內容直接生成圖片 語言：繁體中文(圖片內文字內容須確認繁體中文) 版面大小： Height=841mm Width=1189mm 解析度設定：8K (118900 x84100) a0橫向尺寸 dpi=(1200, 1200) 整體風格:${selectedStyles} 排版強制指令: 圖資採減少個別區塊分隔感。🛑【絕對嚴禁使用九宮格、方格矩陣、表格列表或任何制式化的對稱排列】。各區塊必須自然融合於整體畫面中，請自行發揮最適合上述風格的排版設計，不侷限特定排版，但務必消除個別圖塊生硬的幾何邊界感。禁止出現任何 香蕉字眼 或 香蕉圖示禁止顯示「主標題、次標題、縮圖文字、中心影像」等系統標籤字樣；此規則不得套用於景點名稱，景點名稱屬必要成品文字請提升整張圖片的清晰度，特別是文字部分，讓筆畫更銳利、邊緣更乾淨，避免模糊不清須以高解析度、高清晰度繁體中文呈現 【視覺總體指令規範】大標題： ${titleString} 四周裝飾元素（固定於底圖邊緣分布）： ${region}知名景點的細膩蠟筆素描插畫，包含：${elements}。這些插畫須均勻分布在畫面四周，作為畫框感裝飾。縮圖核心內容：景點資料時，景點名稱必須直接呈現在對應景點旁；不得刪減。底部小字： ${footerText} 【圖卡個別內容指令】 `;
+    }
+    const SEP = '\n----------------------------------------\n\n';
+    function foodItem(d, publish) {
+      const lines = [['店名', d.name], ['推薦菜色', d.recommendation], ['營業時間', d.hours], ['電話', d.phone], ['地址', d.address]]
+        .filter(([, v]) => valid(v)).map(([k, v]) => `${k}：${String(v).trim()}`);
+      if (publish && valid(d.mapUrl)) lines.push(`短網址：${d.mapUrl}`);
+      return lines.join('\n');
+    }
+    function spotItem(d, publish) {
+      let t = '';
+      if (valid(d.region)) t += `區域(鄉市)：${d.region}\n`;
+      if (valid(d.category)) t += `類別：${d.category}\n`;
+      t += `景點名稱：${d.name}\n`;
+      if (publish) { t += `緯度：${d.lat}\n經度：${d.lng}\n`; }
+      if (valid(d.mapUrl)) t += `短網址：${d.mapUrl}\n`;
+      if (!publish && valid(d.image)) t += `圖資來源網址：${String(d.image).trim()} ｜ 圖像規則：以此原始景點圖片作為主要視覺參考，保留景點主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
+      return t.trimEnd();
+    }
+    function txtFiles(kind, list, region, subTitle, night) {
+      const area = region || '澎湖';
+      const title = `${area}-${subTitle}推薦`;
+      let label, elements, styles, footer;
+      if (kind === 'spot') {
+        label = '白天元素'; elements = SPOT_ELEM[region] || '';
+        styles = randomStyles(['童趣', '攝影', '新海城', '卡通', '微立體'], 3);
+        footer = '此DM畫面僅為AI美化示意圖，須以實際景點位置、實況為準。';
+      } else {
+        const reg = FOOD_ELEM[region] || '';
+        label = night ? '夜晚元素' : '白天元素';
+        elements = [night ? '星空、月亮' : '仙人掌冰、生魚片', reg].filter(Boolean).join('、');
+        styles = randomStyles(['童趣', '攝影', '新海城', '卡通'], 3);
+        footer = '此DM畫面僅為AI美化示意圖，須以實際料理為準。';
+      }
+      const item = kind === 'spot' ? spotItem : foodItem;
+      const ai = v13Header(title, label, elements, styles, area, footer) + list.map(d => item(d, false) + SEP).join('');
+      const pub = `${title}\n\n` + list.map(d => item(d, true) + SEP).join('');
+      const base = `澎湖_${region || '全區'}_${subTitle}`;
+      return [
+        { label: '⬇ AI 生圖指令 TXT', name: `${base}_AI生圖指令.txt`, content: ai },
+        { label: '⬇ 發布用 TXT', name: `${base}_發布用.txt`, content: pub }
+      ];
+    }
+
+    async function food(r, cat) {
+      const all = await places();
+      if (!all) return '美食資料讀取失敗，請確認網路後再試一次';
+      cat = cat.replace(/消夜/g, '宵夜');
+      const hit = d => d.type === '美食' && (!r.region || d.region === r.region) && (!cat
+        || d.category.split(/[／/、]/).map(x => x.trim()).includes(cat) || d.category.includes(cat) || d.mainCategory.includes(cat));
+      const list = shuffle(all.filter(hit)).slice(0, 7);
+      const area = r.short || '澎湖';
+      if (!list.length) return `找不到${area}${cat ? `「${cat}」` : ''}的美食資料`;
+      const blocks = [{ type: 'title', text: `${area} ${cat || '美食'}推薦` }];
+      list.forEach(d => {
+        blocks.push({ type: 'text', text: [d.name, valid(d.category) && `類別：${d.category}`, valid(d.hours) && `營業時間：${d.hours}`, valid(d.phone) && `電話：${d.phone}`].filter(Boolean).join('\n') });
+        blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
+      });
+      const night = /宵夜|酒吧|晚餐|居酒屋|BBQ|燒烤|餐酒館|串燒|夜景/.test(cat);
+      return { blocks, files: txtFiles('food', list, r.region, cat || '全區清單', night) };
+    }
+
+    async function spots(r) {
+      const all = await places();
+      if (!all) return '景點資料讀取失敗，請確認網路後再試一次';
+      const list = shuffle(all.filter(d => d.type === '景點' && (!r.region || d.region === r.region))).slice(0, 7);
+      const area = r.short || '澎湖';
+      if (!list.length) return `找不到${area}的景點資料`;
+      const blocks = [{ type: 'title', text: `${area} 景點推薦` }];
+      list.forEach(d => {
+        blocks.push({ type: 'text', text: [d.name, valid(d.category) && `類別：${d.category}`].filter(Boolean).join('\n') });
+        blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
+      });
+      return { blocks, files: txtFiles('spot', list, r.region, '景點', false) };
+    }
+
+    /* ── 元宵活動：元宵資訊頁同一份資料與 TXT 格式 ── */
+    async function lantern(r) {
+      const all = await places();
+      if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
+      const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; };
+      const list = Lantern.temples().filter(d => !r.region || d.region === r.region)
+        .sort((a, b) => order(a.region) - order(b.region) || a.village.localeCompare(b.village, 'zh-Hant') || a.name.localeCompare(b.name, 'zh-Hant'));
+      let acts = [];
+      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey()); } } catch (_) { /* 沒有活動資料 */ }
+      const area = r.short || '澎湖';
+      if (!list.length && !acts.length) return `${area}目前沒有元宵活動資料`;
+      const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
+      const groups = new Map();
+      list.forEach(d => {
+        const L = d.lantern, key = [L.theme || L.content || '元宵活動', L.dates].join('｜');
+        if (!groups.has(key)) groups.set(key, { name: L.theme || L.content || '元宵活動', dates: L.dates, time: L.time, list: [] });
+        groups.get(key).list.push(d);
+      });
+      groups.forEach(g => {
+        const byReg = new Map();
+        g.list.forEach(d => byReg.set(d.region || '其他', (byReg.get(d.region || '其他') || 0) + 1));
+        blocks.push({ type: 'text', text: [
+          `・${g.name}`,
+          [g.dates && `日期：${g.dates}`, g.time && `時間：${g.time}`].filter(Boolean).join('　'),
+          `參加廟宇 ${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`,
+          `例如：${g.list.slice(0, 6).map(d => d.name).join('、')}${g.list.length > 6 ? '…' : ''}`
+        ].filter(Boolean).join('\n') });
+      });
+      acts.forEach(it => blocks.push({ type: 'text', text: [`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`].filter(Boolean).join('\n') }));
+      const files = [];
+      if (list.length) {
+        const t = Lantern.buildTxt(list, r.region, '');
+        files.push({ label: '⬇ AI 生圖指令 TXT', name: `澎湖元宵_${t.scope}_AI生圖指令.txt`, content: t.ai });
+        files.push({ label: '⬇ 發布用 TXT', name: `澎湖元宵_${t.scope}_發布用.txt`, content: t.pub });
+      }
+      return { blocks, files };
+    }
+
+    /* ── 航班：機場航班頁同一份資料；點一下用 Flightradar24 查詢 ── */
+    const IATA = { MDA: 'AE', UIA: 'B7', DAC: 'DA' };
+    const flightCode = f => { const m = String(f).match(/^(MDA|UIA|DAC)(\d+)$/); return m ? IATA[m[1]] + m[2] : String(f); };
+    const placeName = p => String(p || '').replace(/[A-Za-z]+/g, '').replace(/臺/g, '台').trim();
+    const airlineName = a => String(a || '').replace(/[A-Za-z]+/g, '').trim();
+    const hhmm = t => { const m = String(t || '').match(/(\d{1,2}):(\d{2})/); return m ? `${pad2(m[1])}:${m[2]}` : ''; };
+    function flightLine(r, dep) {
+      const time = hhmm(dep ? (r.actualStart || r.scheduledStart) : (r.actualEnd || r.scheduledEnd));
+      const route = dep ? `澎湖 → ${placeName(r.place)}` : `${placeName(r.place)} → 澎湖`;
+      return { type: 'link', text: `${airlineName(r.airline)} ${flightCode(r.flight)} ${route} ${time} ${(String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]}`, url: `https://www.flightradar24.com/${encodeURIComponent(r.flight)}`, t: time };
+    }
+    async function flights(code) {
+      for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
+      const st = Flights.state;
+      if (!st.loaded) return '航班資料讀取失敗，請確認網路後再試一次';
+      const dep = st.departure.map(r => [r, true]), arr = st.arrival.map(r => [r, false]);
+      if (code) {
+        const want = code.replace(/^(AE|B7|DA)/, m => ({ AE: 'MDA', B7: 'UIA', DA: 'DAC' })[m]);
+        const hit = [...dep, ...arr].filter(([r]) => r.flight === want);
+        if (!hit.length) return `今天沒有 ${code} 的班次`;
+        return { blocks: [{ type: 'title', text: `${code} 班次` }, ...hit.map(([r, d]) => flightLine(r, d))] };
+      }
+      const pick = list => list.filter(([r]) => !r.status.history).map(([r, d]) => flightLine(r, d)).sort((a, b) => a.t.localeCompare(b.t)).slice(0, 8);
+      const d = pick(dep), a = pick(arr);
+      if (!d.length && !a.length) return '目前沒有接下來的航班';
+      return { blocks: [{ type: 'title', text: '澎湖機場 接下來的航班' }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有接下來的出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有接下來的抵達班次' }])] };
+    }
+
     async function run(text) {
       const s = String(text || '').replace(/\s+/g, ' ').trim();
       if (!s) return HELP;
       try {
+        if (/^(?:當前|現在|目前|今日|今天)?\s*(?:航班|班機|班次)$/.test(s)) return await flights('');
+        const fc = s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
+        if (fc) return await flights(fc[1] + fc[2]);
+        const rg = takeRegion(s);
+        if (/^景點(?:推薦)?$/.test(rg.rest)) return await spots(rg);
+        if (/^元宵(?:活動)?(?:推薦)?$/.test(rg.rest)) return await lantern(rg);
+        const fm = rg.rest.match(/^(.*?)\s*(?:推薦|美食)$/);
+        if (fm && !/\d/.test(fm[1])) return await food(rg, fm[1].trim().replace(/^美食$/, ''));
         const d = takeDate(s);
         if (d.bad) return '日期不正確，請再確認一次';
         if (/^(奎壁山)?\s*(分海|潮汐)$/.test(d.rest)) return await tide(d.key);

@@ -4,5 +4,6 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('desk', {
   ask: text => ipcRenderer.invoke('desk-ask', text),
+  save: (name, data) => ipcRenderer.invoke('desk-save', name, data),
   onFocus: fn => ipcRenderer.on('desk-focus', () => fn())
 });

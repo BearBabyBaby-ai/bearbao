@@ -1,7 +1,7 @@
 'use strict';
 // 熊寶桌寵（併入熊寶系統電腦版）：由熊寶系統主程式啟動，共用右下角小圖示
 // 動作圖第一次使用時下載到使用者資料夾，之後不用再下載
-const { app, BrowserWindow, ipcMain, screen, powerMonitor, protocol } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor, protocol, shell, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const log = require('./log');
@@ -21,7 +21,7 @@ function register() {
 }
 const ROOT = path.join(__dirname, '..');
 const gifs = require('./gifs');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.gif': 'image/gif', '.png': 'image/png', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.gif': 'image/gif', '.png': 'image/png', '.jpg': 'image/jpeg', '.json': 'application/json' };
 function serve(req) {
   const u = new URL(req.url);
   const rel = decodeURIComponent(u.pathname).replace(/^\/+/, '');
@@ -354,7 +354,7 @@ function checkAway() {
 // 對話框輸入的文字交給熊寶系統處理（查分海、記帳），把回覆顯示在對話框
 let desk = false, chatWin = null, askFn = null;
 const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
-const CHAT = { w: 330, h: 320 };
+const CHAT = { w: 380, h: 480 };
 
 function chatBounds() {
   const a = screen.getPrimaryDisplay().workArea;
@@ -370,6 +370,12 @@ function makeChat() {
     webPreferences: { preload: path.join(__dirname, 'desk-preload.js'), spellcheck: false }
   });
   chatWin.setAlwaysOnTop(true, 'screen-saver');
+  // 對話框裡的連結（地圖、Flightradar24）用瀏覽器開啟
+  chatWin.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  chatWin.webContents.on('will-navigate', e => e.preventDefault());
   chatWin.loadURL('bearbao://app/src/desk.html');
   chatWin.on('closed', () => { chatWin = null; });
   return chatWin;
@@ -402,9 +408,20 @@ function setDesk(on, save = true) {
   if (onChange) onChange();
 }
 
+// 對話框的下載（TXT、免稅卡 JPG）：另存新檔，預設放在「下載」資料夾
+ipcMain.handle('desk-save', async (_e, name, data) => {
+  const jpg = path.extname(name).toLowerCase() === '.jpg';
+  const filters = jpg ? [{ name: 'JPG 圖片', extensions: ['jpg'] }] : [{ name: '文字檔', extensions: ['txt'] }];
+  const opts = { defaultPath: path.join(app.getPath('downloads'), name), filters };
+  const r = chatWin && !chatWin.isDestroyed() ? await dialog.showSaveDialog(chatWin, opts) : await dialog.showSaveDialog(opts);
+  if (r.canceled || !r.filePath) return '';
+  await fs.promises.writeFile(r.filePath, typeof data === 'string' ? data : Buffer.from(data));
+  return r.filePath;
+});
+
 ipcMain.handle('desk-ask', async (_e, text) => {
   if (!askFn) return '熊寶系統還沒準備好，請稍後再試';
-  try { return String(await askFn(String(text || '')) || '熊寶系統沒有回覆，請再試一次'); }
+  try { return (await askFn(String(text || ''))) || '熊寶系統沒有回覆，請再試一次'; }
   catch (e) { log('工作模式處理失敗', e); return '連不上熊寶系統，請確認網路後再試一次'; }
 });
 
