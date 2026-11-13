@@ -85,6 +85,7 @@ function currentOutfit() {
 let outfitNow = currentOutfit();
 const world = {
   displayAt(x, y) { return screen.getDisplayNearestPoint({ x: Math.round(x), y: Math.round(y) }); },
+  deskArea: () => screen.getPrimaryDisplay().workArea,
   outfit: () => outfitNow,
   timeOfDay: () => calendar.timeOfDay(),
   cursor: () => screen.getCursorScreenPoint(),
@@ -133,7 +134,7 @@ const world = {
   later(bear, ms, fn) {
     setTimeout(() => { if (bears.has(bear)) { try { fn(); } catch (e) { log('延後動作失敗', e); } } }, ms);
   },
-  canSplit: () => bears.size < 2 && Date.now() - lastSplit >= SPLIT_COOLDOWN,
+  canSplit: () => !desk && bears.size < 2 && Date.now() - lastSplit >= SPLIT_COOLDOWN,
   split(bear) {
     if (!world.canSplit()) return bear.idle();
     lastSplit = Date.now();
@@ -251,7 +252,12 @@ function updateHits(cur) {
 }
 ipcMain.on('drag-start', e => bearOf(e.sender)?.onDragStart());
 ipcMain.on('drag-end', e => bearOf(e.sender)?.onDragEnd());
-ipcMain.on('click', e => bearOf(e.sender)?.onClick());
+ipcMain.on('click', e => {
+  const b = bearOf(e.sender);
+  if (!b) return;
+  b.onClick();
+  if (desk && b === mainBear) showChat(true);   // 工作模式：點熊寶就到對話框打字
+});
 ipcMain.on('pet', e => bearOf(e.sender)?.onPet());
 
 // ---------- 主迴圈 ----------
@@ -305,6 +311,7 @@ function pollForeground() {
 
 function setFullscreen(on) {
   fullscreenOn = on;
+  if (desk) { if (on) hideChat(); else showChat(false); }
   for (const bear of [...bears]) {
     const h = handles.get(bear);
     if (!h || h.win.isDestroyed()) continue;
@@ -343,9 +350,68 @@ function checkAway() {
   mainBear.setAway(idle >= 600);
 }
 
+// ---------- 工作模式：熊寶固定在右下角，旁邊有小對話框 ----------
+// 對話框輸入的文字交給熊寶系統處理（查分海、記帳），把回覆顯示在對話框
+let desk = false, chatWin = null, askFn = null;
+const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
+const CHAT = { w: 330, h: 320 };
+
+function chatBounds() {
+  const a = screen.getPrimaryDisplay().workArea;
+  return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - CHAT.h - 6), width: CHAT.w, height: CHAT.h };
+}
+
+function makeChat() {
+  if (chatWin && !chatWin.isDestroyed()) return chatWin;
+  chatWin = new BrowserWindow({
+    ...chatBounds(), show: false, frame: false, transparent: true, backgroundColor: '#00000000',
+    resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, title: '熊寶工作模式',
+    webPreferences: { preload: path.join(__dirname, 'desk-preload.js'), spellcheck: false }
+  });
+  chatWin.setAlwaysOnTop(true, 'screen-saver');
+  chatWin.loadURL('bearbao://app/src/desk.html');
+  chatWin.on('closed', () => { chatWin = null; });
+  return chatWin;
+}
+
+function showChat(focus) {
+  if (!desk || hidden || fullscreenOn) return;
+  const w = makeChat();
+  w.setBounds(chatBounds());
+  const go = () => {
+    if (w.isDestroyed()) return;
+    if (focus) { w.show(); w.focus(); w.webContents.send('desk-focus'); } else w.showInactive();
+  };
+  if (w.webContents.isLoading()) w.webContents.once('did-finish-load', go); else go();
+}
+function hideChat() { if (chatWin && !chatWin.isDestroyed()) chatWin.hide(); }
+
+function setDesk(on, save = true) {
+  desk = !!on;
+  if (save) { try { fs.writeFileSync(deskFile(), JSON.stringify({ on: desk })); } catch (_) { /* 略過 */ } }
+  if (!started) return;
+  if (desk) {
+    for (const b of [...bears]) if (b.clone) removeClone(b);
+    mainBear?.setDesk(true);
+    showChat(false);
+  } else {
+    mainBear?.setDesk(false);
+    if (chatWin && !chatWin.isDestroyed()) chatWin.close();
+  }
+  if (onChange) onChange();
+}
+
+ipcMain.handle('desk-ask', async (_e, text) => {
+  if (!askFn) return '熊寶系統還沒準備好，請稍後再試';
+  try { return String(await askFn(String(text || '')) || '熊寶系統沒有回覆，請再試一次'); }
+  catch (e) { log('工作模式處理失敗', e); return '連不上熊寶系統，請確認網路後再試一次'; }
+});
+
 // ---------- 系統匣 ----------
 function setHidden(v) {
   hidden = v;
+  if (desk) { if (v) hideChat(); else showChat(false); }
   for (const [, h] of handles) {
     if (h.win.isDestroyed()) continue;
     if (v) h.win.hide(); else h.win.showInactive();
@@ -357,6 +423,8 @@ let onChange = null;
 // 由熊寶系統主程式呼叫：動作圖準備好（沒有就先下載）才讓熊寶出現
 function start(opts = {}) {
   onChange = opts.onChange || null;
+  askFn = opts.ask || null;
+  try { desk = !!JSON.parse(fs.readFileSync(deskFile(), 'utf8')).on; } catch (_) { desk = false; }
   protocol.handle('bearbao', serve);
   gifs.ensure(state => { if (onChange) onChange(state); }).then(ok => { if (ok) begin(); });
 }
@@ -365,6 +433,7 @@ function begin() {
   if (started) return;
   started = true;
   mainBear = createBear();
+  if (desk) { mainBear.setDesk(true); showChat(false); }
   if (onChange) onChange();
 
   setInterval(loop, 33);
@@ -382,9 +451,13 @@ function begin() {
     }, 3000);
   }
 
-  screen.on('display-removed', () => { for (const b of bears) if (b.mode !== 'drag') b.startFall(0); });
-  screen.on('display-metrics-changed', () => { for (const b of bears) if (b.surface?.type === 'floor') b.clampX(); });
-  powerMonitor.on('resume', () => { for (const b of bears) b.startFall(0); });
+  const settle = b => { if (desk && b === mainBear && b.mode !== 'fullscreen') b.placeDesk(); else if (b.mode !== 'drag') b.startFall(0); };
+  screen.on('display-removed', () => { for (const b of bears) settle(b); if (desk && chatWin && !chatWin.isDestroyed()) chatWin.setBounds(chatBounds()); });
+  screen.on('display-metrics-changed', () => {
+    for (const b of bears) if (b.surface?.type === 'floor') b.clampX();
+    if (desk) { if (mainBear && mainBear.mode !== 'fullscreen') mainBear.placeDesk(); if (chatWin && !chatWin.isDestroyed()) chatWin.setBounds(chatBounds()); }
+  });
+  powerMonitor.on('resume', () => { for (const b of bears) settle(b); });
 }
 
 module.exports = {
@@ -392,5 +465,7 @@ module.exports = {
   ready: () => started,
   isHidden: () => hidden,
   setHidden,
+  isDesk: () => desk,
+  setDesk,
   status: () => gifs.status()
 };

@@ -98,6 +98,30 @@ async function tick() {
   checkDue();
 }
 
+/* ── 熊寶工作模式：對話框的文字交給熊寶系統處理 ──
+   用熊寶系統視窗；視窗沒有載入熊寶系統時，在背景開網頁版處理 */
+let helper = null;
+const hasCmd = w => w.webContents.executeJavaScript('typeof window.BearCmd === "object" && typeof window.BearCmd.run === "function"').catch(() => false);
+const onSystem = w => w && !w.isDestroyed() && !w.webContents.isLoading() && w.webContents.getURL().startsWith(URL_HOME);
+async function systemPage() {
+  for (const w of [win, helper]) if (onSystem(w) && await hasCmd(w)) return w;
+  if (!helper || helper.isDestroyed()) {
+    helper = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js') } });
+    helper.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  }
+  if (!onSystem(helper)) { try { await helper.loadURL(URL_HOME); } catch (_) { /* 下面再判斷 */ } }
+  for (let i = 0; i < 40; i++) {
+    if (onSystem(helper) && await hasCmd(helper)) return helper;
+    await new Promise(r => setTimeout(r, 250));
+  }
+  return null;
+}
+async function askSystem(text) {
+  const w = await systemPage();
+  if (!w) return '連不上熊寶系統，請確認網路後再試一次';
+  return w.webContents.executeJavaScript(`window.BearCmd.run(${JSON.stringify(text)})`, true);
+}
+
 /* ── 右下角小圖示 ── */
 function autoStartOn() {
   return app.getLoginItemSettings({ args: ['--hidden'] }).openAtLogin;
@@ -128,6 +152,7 @@ function buildTray() {
   trayMenu = () => Menu.buildFromTemplate([
     { label: '開啟熊寶系統', click: () => showWin() },
     { label: petLabel(), enabled: pet.ready(), click: () => pet.setHidden(!pet.isHidden()) },
+    { label: '熊寶工作模式', type: 'checkbox', checked: pet.isDesk(), enabled: pet.ready(), click: item => pet.setDesk(item.checked) },
     { label: '開機自動啟動', type: 'checkbox', checked: autoStartOn(), click: item => { setAutoStart(item.checked); refreshTray(); } },
     { type: 'separator' },
     { label: '結束熊寶系統', click: () => { quitting = true; app.quit(); } }
@@ -191,7 +216,7 @@ function start() {
 
   /* 熊寶桌寵：動作圖準備好就出現在桌面 */
   let lastPct = -1;
-  pet.start({ onChange: st => {
+  pet.start({ ask: askSystem, onChange: st => {
     if (st && st.phase === 'download' && st.pct === lastPct) return;
     if (st) lastPct = st.pct;
     refreshTray();
@@ -201,5 +226,5 @@ function start() {
   setInterval(tick, 60000);
 }
 
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; if (helper && !helper.isDestroyed()) helper.destroy(); });
 app.on('window-all-closed', () => {});

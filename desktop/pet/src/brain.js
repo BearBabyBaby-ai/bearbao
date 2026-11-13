@@ -56,6 +56,7 @@ class Bear {
     this.sleeping = false;
     this.away = false;
     this.workKind = null;
+    this.desk = false;       // 工作模式：固定在右下角，不隨機移動
     this.drags = [];
     this.lastInteract = Date.now();
     this.lastPet = 0;
@@ -222,7 +223,7 @@ class Bear {
   }
 
   onDragStart() {
-    if (this.mode === 'fullscreen') return;
+    if (this.mode === 'fullscreen' || this.desk) return;
     this.lastInteract = Date.now();
     this.drags.push(Date.now());
     this.surface = null;
@@ -340,6 +341,27 @@ class Bear {
   stopWork() {
     this.workKind = null;
     if (this.mode === 'work') this.anim('stretch_up', () => this.idle());
+  }
+
+  // 工作模式：到主螢幕右下角坐好，之後只在原地做動作
+  setDesk(on) {
+    this.desk = on;
+    if (on) this.placeDesk();
+    else if (this.mode !== 'fullscreen') this.idle(1);
+  }
+
+  placeDesk() {
+    const a = this.world.deskArea();
+    this.surface = { type: 'floor' };
+    this.fx = a.x + a.width - 90;
+    this.fy = a.y + a.height;
+    this.vx = this.vy = 0;
+    this.facing = -1;
+    if (this.sway) this.sway.deg = 0;
+    this.setSwayDeg(0);
+    if (this.mode === 'fullscreen') return;
+    this.setSleeping(false);
+    this.idle(rand(2, 4));
   }
 
   setAway(away) {
@@ -577,7 +599,9 @@ class Bear {
       else { add('sleep', 30); add('yawn', 3); }
     }
 
-    const k = pick(w);
+    // 工作模式：平常的動作照做，只是不走動、不分身（一直待在右下角）
+    const MOVES = ['walk', 'tiptoe', 'run', 'crawl', 'roll', 'split'];
+    const k = pick(this.desk ? w.filter(([n]) => !MOVES.includes(n)) : w);
     switch (k) {
       case 'walk': return this.move('walk', rand(3, 10));
       case 'tiptoe': return this.move('tiptoe', rand(2, 4));

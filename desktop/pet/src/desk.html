@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'unsafe-inline'">
+<title>熊寶工作模式</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 14px/1.45 "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif; color: #573d2a; }
+  #card { position: absolute; inset: 4px; display: flex; flex-direction: column; background: #fffaf2;
+    border: 2px solid #876c4b; border-radius: 16px; box-shadow: 0 4px 14px rgba(87, 61, 42, .25); overflow: hidden; }
+  header { padding: 8px 12px; background: #f6e7cf; border-bottom: 1.5px solid #e2cba6; font-weight: bold; }
+  #log { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { max-width: 86%; padding: 6px 10px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  .bear { align-self: flex-start; background: #fff; border: 1.5px solid #e2cba6; border-bottom-left-radius: 4px; }
+  .me { align-self: flex-end; background: #0a6fb3; color: #fff; border-bottom-right-radius: 4px; }
+  .wait { color: #a08868; }
+  form { display: flex; gap: 6px; padding: 8px; border-top: 1.5px solid #e2cba6; }
+  #input { flex: 1; min-width: 0; font: inherit; color: inherit; padding: 6px 10px; border: 1.5px solid #d6bd96; border-radius: 10px; outline: none; background: #fff; }
+  #input:focus { border-color: #0a6fb3; }
+  #send { font: inherit; font-weight: bold; padding: 6px 12px; border: 0; border-radius: 10px; background: #0a6fb3; color: #fff; cursor: pointer; }
+  #send:disabled { background: #9bb8cc; cursor: default; }
+</style>
+</head>
+<body>
+<div id="card">
+  <header>🐻 熊寶工作模式</header>
+  <div id="log"></div>
+  <form id="form" autocomplete="off">
+    <input id="input" placeholder="例如：11/15 分海、11/14 午餐 120">
+    <button id="send" type="submit">送出</button>
+  </form>
+</div>
+<script src="desk.js"></script>
+</body>
+</html>

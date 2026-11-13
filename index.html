@@ -5665,6 +5665,85 @@ if (window.bearDesktop) {
   };
   Fin.on(() => setTimeout(pushDesk, 1500));
   setTimeout(pushDesk, 1500);
+
+  /* 熊寶桌寵工作模式：對話框輸入的文字交給熊寶系統處理，回覆一段文字
+     「2026/11/15 分海」查奎壁山分海；「2026/11/14 消夜 111」記一筆支出 */
+  window.BearCmd = (() => {
+    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 消夜 111';
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    function takeDate(s) {
+      const t = todayKey(), y = t.slice(0, 4);
+      let m = s.match(/^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/);
+      let key = m && `${m[1]}/${pad2(m[2])}/${pad2(m[3])}`;
+      if (!m) { m = s.match(/^(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?(?=\s|$|[^\d])/); key = m && `${y}/${pad2(m[1])}/${pad2(m[2])}`; }
+      if (!m) return { key: t, rest: s, given: false };
+      if (utcToKey(keyToUTC(key)) !== key) return { bad: true };
+      return { key, rest: s.slice(m[0].length).trim(), given: true };
+    }
+    const dayLabel = k => `${k}（${WEEK[weekdayOf(k)]}）`;
+
+    async function tide(key) {
+      if (!tideLoaded) {
+        loadTideData();
+        for (let i = 0; i < 100 && !tideLoaded && (tideLoading || i < 5); i++) await sleep(200);
+      }
+      if (!tideLoaded) return '分海資料讀取失敗，請確認網路後再試一次';
+      const info = tideDayInfo(key);
+      if (!info.hasData) {
+        const last = tideRows.length ? tideRows[tideRows.length - 1].date : '';
+        return `${dayLabel(key)} 沒有分海資料${last ? `（資料到 ${last}）` : ''}`;
+      }
+      const sm = info.points.filter(p => p.type === 'sep' || p.type === 'mer');
+      const hl = info.points.filter(p => p.type === 'hi' || p.type === 'lo');
+      return [
+        `${dayLabel(key)}奎壁山分海`,
+        sm.length ? sm.map(p => `${p.label} ${p.t}`).join('、') : '這天沒有分海',
+        hl.length ? hl.map(p => `${p.label} ${p.t}`).join('、') : '',
+        info.safety.length ? `安全通行參考：${info.safety.join('、')}` : '',
+        `日出 ${info.sunrise}　日沒 ${info.sunset}`
+      ].filter(Boolean).join('\n');
+    }
+
+    const FOOD = /早餐|午餐|晚餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃/;
+    const TRAFFIC = /計程車|車票|火車|高鐵|公車|客運|機票|船票|停車|悠遊卡|Icash/i;
+    async function ledger(key, item, amount) {
+      if (!Fin.ready()) return '財務管理還沒連線，請先到熊寶系統的「財務管理」完成連線';
+      if (!Fin.data) { try { await Fin.sync(); } catch (_) { /* 用預設類別 */ } }
+      const st = (Fin.data && Fin.data.settings) || {};
+      const exp = st.expense || [], inc = st.income || [], pays = st.payments || [];
+      const same = [...((Fin.data && Fin.data.ledger) || [])].reverse().find(l => String(l['項目'] || '').trim() === item);
+      let type = '支出', cat = '', pay = '';
+      if (same) { type = same['收支'] || '支出'; cat = same['類別'] || ''; pay = same['付款方式'] || ''; }
+      else if (inc.includes(item)) { type = '收入'; cat = item; }
+      else if (exp.includes(item)) cat = item;
+      else if (FOOD.test(item)) cat = '餐飲日用';
+      else if (/加油/.test(item)) cat = '加油';
+      else if (TRAFFIC.test(item)) cat = '交通';
+      const cats = type === '收入' ? inc : exp;
+      if (!cats.includes(cat)) cat = cats.includes('其他') ? '其他' : (cats[0] || '其他');
+      if (!same) pay = type === '支出' && pays.includes('現金') ? '現金' : '';
+      const v = { '收支': type, '日期': key, '金額': String(amount), '類別': cat, '項目': item, '付款方式': pay, '備註': '' };
+      await Fin.call('saveLedger', { item: v });
+      Fin.sync(true).catch(() => {});
+      return `✅ 已記帳：${key} ${type} ${item} ${money(amount)} 元（${[cat, pay].filter(Boolean).join('・')}）`;
+    }
+
+    async function run(text) {
+      const s = String(text || '').replace(/\s+/g, ' ').trim();
+      if (!s) return HELP;
+      try {
+        const d = takeDate(s);
+        if (d.bad) return '日期不正確，請再確認一次';
+        if (/^(奎壁山)?\s*(分海|潮汐)$/.test(d.rest)) return await tide(d.key);
+        const m = d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
+        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim())) return await ledger(d.key, m[1].trim(), Number(m[2]));
+        return HELP;
+      } catch (err) {
+        return '⚠️ ' + (err && err.message ? err.message : '處理失敗，請再試一次');
+      }
+    }
+    return { run };
+  })();
 }
   const Native = (() => {
   const C = window.Capacitor;
