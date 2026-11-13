@@ -1,0 +1,23 @@
+name: 桌寵動作圖打包
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [pet-assets]
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 打包並發布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VER=$(cat VERSION)
+          zip -0 -q -r bearbao-pet-gifs.zip gifs
+          gh release delete "pet-gifs-$VER" --yes --cleanup-tag || true
+          gh release create "pet-gifs-$VER" bearbao-pet-gifs.zip --title "熊寶動作圖 $VER" --notes "熊寶系統電腦版第一次使用桌寵時下載" --prerelease --target pet-assets
