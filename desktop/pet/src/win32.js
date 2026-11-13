@@ -50,7 +50,7 @@ function load() {
 }
 
 const GWL_EXSTYLE = -20;
-const WS_EX_TOOLWINDOW = 0x00000080, WS_EX_NOACTIVATE = 0x08000000;
+const WS_EX_TOOLWINDOW = 0x00000080, WS_EX_NOACTIVATE = 0x08000000, WS_EX_TRANSPARENT = 0x00000020;
 const SKIP_CLASSES = new Set(['Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd',
   'Windows.UI.Core.CoreWindow', 'ApplicationFrameTitleBarWindow', 'TopLevelWindowForOverflowXamlIsland',
   'XamlExplorerHostIslandWindow', 'NotifyIconOverflowWindow']);
@@ -91,19 +91,25 @@ function pidOf(a, hwnd) {
 }
 
 // 由上而下（Z 順序）列出可見的一般視窗，座標為實體像素
+// 只列出目前專注（最前面、正在使用）的那個視窗，熊寶只會站上、攀爬、推動這個視窗。
+// 其他視窗、看不見的透明視窗（畫面疊加層、錄影、輸入法）都不當成地面或牆。
 function listWindows(ownPids) {
   const a = load();
   if (!a) return [];
   const result = [];
+  let fgHwnd = 0;
+  try { fgHwnd = num(a.GetForegroundWindow()); } catch (_) { /* 略過 */ }
+  if (!fgHwnd) return [];
   let cb = null;
   try {
     cb = a.koffi.register((hwnd) => {
       try {
         hwnd = num(hwnd);
+        if (hwnd !== fgHwnd) return true;
         if (!a.IsWindowVisible(hwnd) || a.IsIconic(hwnd)) return true;
         if (ownPids.has(pidOf(a, hwnd))) return true;
         const ex = num(a.GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
-        if (ex & WS_EX_TOOLWINDOW) return true;
+        if (ex & (WS_EX_TOOLWINDOW | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE)) return true;
         if (cloaked(a, hwnd)) return true;
         const cls = text(a.GetClassNameW, hwnd);
         if (SKIP_CLASSES.has(cls)) return true;

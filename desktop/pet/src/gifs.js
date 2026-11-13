@@ -5,7 +5,8 @@ const { app, net } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const log = require('./log');
-const manifest = require('../assets/pack/manifest.json');
+const clips = require('./clips');
+const manifest = clips.manifest;   // 和播放用的是同一份（更新後兩邊一起變）
 
 const VERSION = 'v1';
 const DL_URL = `https://github.com/BearBabyBaby-ai/bearbao/releases/download/pet-gifs-${VERSION}/bearbao-pet-gifs.zip`;
@@ -13,6 +14,19 @@ const RETRY_MS = 5 * 60000;
 // 之後新增的動作圖不重新下載整包，只補缺少的那幾個
 const ONE_URL = name => `https://raw.githubusercontent.com/BearBabyBaby-ai/bearbao/pet-assets/gifs/${encodeURIComponent(name)}`;
 const FEW = 40;
+const LIST_URL = 'https://raw.githubusercontent.com/BearBabyBaby-ai/bearbao/pet-assets/manifest.json';
+const listFile = () => path.join(root(), 'manifest.json');
+
+// 動作清單：先用上次下載的，再到下載點看有沒有更新（新增動作圖不用重新安裝）
+async function refreshList() {
+  try { if (fs.existsSync(listFile())) clips.update(JSON.parse(fs.readFileSync(listFile(), 'utf8'))); } catch (_) { /* 用程式內建的 */ }
+  try {
+    const res = await Promise.race([net.fetch(LIST_URL), new Promise((_, no) => setTimeout(() => no(new Error('逾時')), 8000))]);
+    if (!res.ok) return;
+    const text = await res.text();
+    if (clips.update(JSON.parse(text))) { fs.mkdirSync(root(), { recursive: true }); fs.writeFileSync(listFile(), text); }
+  } catch (_) { /* 沒網路就用現有的 */ }
+}
 
 const root = () => path.join(app.getPath('userData'), 'pet-gifs');
 const dir = () => path.join(root(), 'gifs');
@@ -77,6 +91,7 @@ async function download(onState) {
 
 // 準備動作圖；回傳 true 表示可以讓熊寶出現
 async function ensure(onState = () => {}) {
+  await refreshList();
   if (complete()) { state = { phase: 'ready', pct: 100 }; return true; }
   for (;;) {
     try {

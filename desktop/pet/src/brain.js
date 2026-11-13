@@ -60,7 +60,7 @@ class Bear {
     this.lastInteract = Date.now();
     this.lastPet = 0;
     this.bornAt = Date.now();
-    this.lifeMs = clone ? rand(60, 180) * 1000 : Infinity;
+    this.lifeMs = clone ? rand(30, 60) * 1000 : Infinity;   // 分身存在 30～60 秒
   }
 
   // ---------- 播放 ----------
@@ -566,7 +566,7 @@ class Bear {
     const w = [
       ['walk', 28], ['tiptoe', 4], ['run', onWindow ? 1 : 4], ['crawl', 3], ['roll', onWindow ? 1 : 2],
       ['oneshot', 18], ['tail_wag', 2], ['read_book', 3], ['use_phone', 3], ['play_toy', 2], ['eat_snack', 1.5],
-      ['sit', 5], ['sleep', 2], ['special', 3], ['split', this.clone || this.world.bearCount() > 1 ? 0 : 0.6],
+      ['sit', 5], ['sleep', 2], ['special', 3], ['split', this.clone || !this.world.canSplit() ? 0 : 0.6],
       ['shiver', outfit === 'winter' ? 2 : 0]
     ];
     const add = (k, v) => w.push([k, v]);

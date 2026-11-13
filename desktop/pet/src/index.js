@@ -133,14 +133,22 @@ const world = {
   later(bear, ms, fn) {
     setTimeout(() => { if (bears.has(bear)) { try { fn(); } catch (e) { log('延後動作失敗', e); } } }, ms);
   },
+  canSplit: () => bears.size < 2 && Date.now() - lastSplit >= SPLIT_COOLDOWN,
   split(bear) {
-    if (bears.size > 1) return bear.idle();
+    if (!world.canSplit()) return bear.idle();
+    lastSplit = Date.now();
     bear.effect('exclamation');
     bear.anim('jump', () => bear.idle());
-    const c = createBear({ clone: true, fx: bear.fx + bear.facing * -40, fy: bear.fy - 60, facing: -bear.facing });
-    c.vx = -bear.facing * 120;
+    // 從本尊旁邊的同一個地面出現（不從半空掉下來），離開一點不和本尊重疊
+    const a = bear.wa(), side = bear.fx - a.x > a.x + a.width - bear.fx ? -1 : 1;
+    const c = createBear({ clone: true, fx: bear.fx + side * 110, fy: bear.fy, facing: side });
+    c.vx = side * 60;
   }
 };
+
+// 分身：一小時最多一次（以前沒有冷卻，看起來像無限複製）
+const SPLIT_COOLDOWN = 60 * 60000;
+let lastSplit = Date.now();
 
 // ---------- 熊寶視窗 ----------
 const handles = new Map();
@@ -190,8 +198,8 @@ function removeClone(bear) {
   const h = handles.get(bear);
   if (!h) return;
   if (bear.mode !== 'fullscreen') bear.anim('jump', () => bear.idle());
-  world.send(bear, 'fade', true);
-  setTimeout(() => { if (!h.win.isDestroyed()) h.win.close(); }, 900);
+  world.later(bear, 500, () => world.send(bear, 'fade', true));
+  setTimeout(() => { if (!h.win.isDestroyed()) h.win.close(); }, 2200);
 }
 
 function bearOf(sender) {
@@ -277,7 +285,7 @@ function pollForeground() {
   const fg = win32.foreground(ownPids());
   const isFull = !!fg?.fullscreen;
   fsCount = isFull ? Math.max(1, fsCount + 1) : Math.min(-1, fsCount - 1);
-  if (!fullscreenOn && fsCount >= 2) setFullscreen(true);
+  if (!fullscreenOn && fsCount >= 2) { log('進入全螢幕，熊寶去角落睡覺：' + (fg.exe || fg.cls) + '｜' + fg.title); setFullscreen(true); }
   else if (fullscreenOn && fsCount <= -2) setFullscreen(false);
   if (fullscreenOn) return;
 
@@ -300,7 +308,7 @@ function setFullscreen(on) {
   for (const bear of [...bears]) {
     const h = handles.get(bear);
     if (!h || h.win.isDestroyed()) continue;
-    if (bear.clone) { if (on) h.win.close(); continue; }
+    if (bear.clone) { if (on) removeClone(bear); continue; }   // 分身也是跳一下慢慢淡出，不瞬間消失
     if (on) {
       h.win.setAlwaysOnTop(false);
       bear.workKind = null;

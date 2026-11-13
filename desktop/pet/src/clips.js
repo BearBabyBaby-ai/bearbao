@@ -4,6 +4,20 @@ const path = require('path');
 const manifest = require('../assets/pack/manifest.json');
 
 const byId = new Map(manifest.animations.map(c => [c.id, c]));
+
+// 動作清單更新（新增動作圖時從下載點取得，不用重新安裝）：只接受包含原本所有動作的新清單
+function update(next) {
+  if (!next || !Array.isArray(next.animations) || !next.outfits) return false;
+  const ids = new Set(next.animations.map(a => a.id));
+  if (!manifest.animations.every(a => ids.has(a.id))) return false;
+  manifest.animations = next.animations;
+  manifest.outfits = next.outfits;
+  if (next.effects) manifest.effects = next.effects;
+  if (next.work_animations) manifest.work_animations = next.work_animations;
+  byId.clear();
+  for (const a of manifest.animations) byId.set(a.id, a);
+  return true;
+}
 const SCALE_BASE = manifest.width_px; // 384
 const ANCHOR = manifest.anchor_px;    // 腳底 192, 333
 
@@ -71,4 +85,4 @@ function fileUrl(clip) {
   return 'pack/' + clip.file.split(path.sep).join('/');
 }
 
-module.exports = { manifest, has, get, resolve, hasVariant, specials, fileUrl, nativeFacing, outfitComplete, ALL_ACTIONS, SCALE_BASE, ANCHOR };
+module.exports = { manifest, update, has, get, resolve, hasVariant, specials, fileUrl, nativeFacing, outfitComplete, ALL_ACTIONS, SCALE_BASE, ANCHOR };
