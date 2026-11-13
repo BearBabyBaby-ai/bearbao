@@ -3,13 +3,28 @@
 const clips = require('./clips');
 
 const S = 0.5;                                  // 384 畫布縮成 192
-const W = Math.round(clips.SCALE_BASE * S);     // 視窗邊長
+const PAD = 48;                                  // 甩動傾斜時身體會甩出原本的範圍，視窗四周留空
+const W = Math.round(clips.SCALE_BASE * S) + PAD * 2;   // 視窗邊長
 const AX = clips.ANCHOR.x * S, AY = clips.ANCHOR.y * S;
 const GRAB = { x: 192 * S, y: 76 * S };         // 被抓起時游標對準的點
 const CLIMB_CONTACT = 316;                      // 攀爬／推視窗時手貼的那條線（朝右時）
 const GRIP_Y = 68 * S;                          // 懸掛時雙手的高度
 const HALF_BODY = 36;                           // 身體半寬（判斷撞到邊）
 const G = 1500, MAX_FALL = 1100;
+
+// ---------- 被抓著左右甩動（蚊香眼） ----------
+// 以抓取點為旋轉中心的擺錘：游標加速時身體落後、游標急停或反向時下半身沿原方向甩出去再回彈
+const SWAY = {
+  FAST: 650,            // 游標左右速度超過這個（點／秒）才算快速
+  MAX: 40 * Math.PI / 180,
+  K: 110,               // 回正的力量（擺動快慢）
+  DAMP_SHAKE: 2.2,      // 甩動中：擺幅保留多一點
+  DAMP_CALM: 5.5,       // 停手仍按住：擺幅逐漸收小
+  GAIN: 1 / 200,        // 游標加速度換成擺動的比例（速度越快甩越大）
+  MAX_ACC: 40000,       // 游標瞬間跳動（例如換螢幕）不算，避免突然甩很大
+  KEEP_MS: 650,         // 多久沒有快速反向就算停手
+  RELEASE_MS: 260       // 放開後傾斜角度回正的時間
+};
 
 const SPEED = { walk: 46, tiptoe: 26, run: 150, crawl: 22, roll: 95, climb: 38, push: 32 };
 const MOVE_CLIP = { walk: 'walk', tiptoe: 'tiptoe_right', run: 'run_right', crawl: 'crawl_left', roll: 'roll_left' };
@@ -86,7 +101,7 @@ class Bear {
   display() { return this.world.displayAt(this.fx, this.fy - 40); }
   wa() { return this.display().workArea; }
   floorY() { const a = this.wa(); return a.y + a.height; }
-  windowPos() { return { x: Math.round(this.fx - AX), y: Math.round(this.fy - AY) }; }
+  windowPos() { return { x: Math.round(this.fx - AX - PAD), y: Math.round(this.fy - AY - PAD) }; }
 
   clampX() {
     const a = this.wa();
@@ -157,10 +172,13 @@ class Bear {
   land(hard) {
     this.vy = 0; this.vx = 0;
     if (hard) {
-      this.anim('dust_off', () => {
+      const dust = () => this.anim('dust_off', () => {
         if (this.recentDrags() >= 3) return this.angry();
         this.idle();
       });
+      // 有摔落著地的圖（這套衣服也有）就先摔在地上爬起來，再拍拍屁股
+      if (clips.hasVariant('land_impact', this.outfit())) this.anim('land_impact', dust);
+      else dust();
     } else this.idle(rand(0.5, 2));
   }
 
@@ -211,6 +229,65 @@ class Bear {
     this.setSleeping(false);
     this.setMode('drag', { hist: [] });
     this.play('grab_struggle', { restart: true });
+    const p = this.world.cursor();
+    this.sway = { th: 0, om: 0, vs: 0, lastX: p.x, fastSign: 0, lastRev: 0, active: false, show: 0, deg: this.sway?.deg || 0 };
+  }
+
+  // 這套衣服有蚊香眼的圖才換（避免衣服在動作之間換來換去）
+  canDizzy() { return clips.hasVariant('dizzy_sway', this.outfit()); }
+
+  tickSway(dt, now) {
+    const w = this.sway;
+    const p = this.world.cursor();
+    const v = dt > 0 ? (p.x - w.lastX) / dt : 0;
+    w.lastX = p.x;
+    const prev = w.vs;
+    w.vs += (v - w.vs) * Math.min(1, dt * 25);       // 稍微平滑，避免單一格雜訊
+    const a = dt > 0 ? Math.max(-SWAY.MAX_ACC, Math.min(SWAY.MAX_ACC, (w.vs - prev) / dt)) : 0;
+    // 快速左右反向
+    if (Math.abs(w.vs) > SWAY.FAST) {
+      const sign = Math.sign(w.vs);
+      if (w.fastSign && sign !== w.fastSign) {
+        w.lastRev = now;
+        if (!w.active) w.active = true;
+        if (this.canDizzy()) this.play('dizzy_sway');   // 已經在播就接著播，不從第一格重播
+      }
+      w.fastSign = sign;
+    }
+    // 擺錘（分 4 小步算，比較穩定）
+    const shaking = now - w.lastRev < SWAY.KEEP_MS;
+    const damp = shaking ? SWAY.DAMP_SHAKE : SWAY.DAMP_CALM;
+    for (let i = 0, h = dt / 4; i < 4; i++) {
+      w.om += (-SWAY.K * w.th - damp * w.om + a * SWAY.GAIN) * h;
+      w.th += w.om * h;
+      if (Math.abs(w.th) > SWAY.MAX) { w.th = Math.sign(w.th) * SWAY.MAX; w.om *= -0.25; }
+    }
+    if (w.active) {
+      w.show = Math.min(1, w.show + dt * 8);
+      // 停手後擺幅收小到幾乎不動，回到原本被抓著的樣子
+      if (!shaking && Math.abs(w.th) < 0.012 && Math.abs(w.om) < 0.12) {
+        w.active = false; w.show = 0; w.fastSign = 0;
+        this.play('grab_struggle');   // 換回被抓著的樣子（本來就是就不重播）
+      }
+    }
+    this.setSwayDeg(w.active ? w.th * w.show * 180 / Math.PI : 0);
+  }
+
+  // 傾斜角度交給畫面（以抓取點為中心旋轉）
+  setSwayDeg(deg) {
+    if (!this.sway) this.sway = { deg: 0 };
+    if (Math.abs(deg) < 0.05) deg = 0;
+    if (Math.abs(deg - (this.sway.sent ?? 0)) < 0.05) { this.sway.deg = deg; return; }
+    this.sway.deg = deg; this.sway.sent = deg;
+    this.world.send(this, 'sway', { deg, px: GRAB.x, py: GRAB.y });
+  }
+
+  // 放開後：角度平順回正
+  settleSway(dt) {
+    const d = this.sway?.deg || 0;
+    if (!d) return;
+    const next = d * Math.exp(-dt * 1000 / SWAY.RELEASE_MS * 3);
+    this.setSwayDeg(Math.abs(next) < 0.3 ? 0 : next);
   }
 
   onDragEnd() {
@@ -298,8 +375,9 @@ class Bear {
   // ---------- 每一格 ----------
   tick(dt) {
     const now = Date.now();
+    if (this.mode !== 'drag') this.settleSway(dt);
     switch (this.mode) {
-      case 'drag': return this.tickDrag(now);
+      case 'drag': this.tickDrag(now); return this.tickSway(dt, now);
       case 'fall': return this.tickFall(dt);
       case 'climb': return this.tickClimb(dt);
       case 'hang': if (now >= this.m.until) this.startFall(0); return;
@@ -542,4 +620,4 @@ class Bear {
   }
 }
 
-module.exports = { Bear, W, S, SLEEP_IDS };
+module.exports = { Bear, W, S, PAD, SLEEP_IDS };

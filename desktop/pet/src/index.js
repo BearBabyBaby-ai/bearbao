@@ -79,7 +79,7 @@ function occluded(w, x, y) {
 // 季節或節日服裝要每個動作都有圖才換上，否則全程穿原本的衣服
 const clipsLib = require('./clips');
 function currentOutfit() {
-  const o = calendar.outfit();
+  const o = process.env.BEARBAO_TEST_OUTFIT || calendar.outfit();   // 測試用：指定服裝
   return clipsLib.outfitComplete(o) ? o : 'default';
 }
 let outfitNow = currentOutfit();

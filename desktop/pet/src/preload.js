@@ -3,7 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('pet', {
   on: (channel, fn) => {
-    if (['clip', 'effect', 'sleeping', 'fade', 'hover'].includes(channel)) ipcRenderer.on(channel, (_e, d) => fn(d));
+    if (['clip', 'effect', 'sleeping', 'fade', 'hover', 'sway'].includes(channel)) ipcRenderer.on(channel, (_e, d) => fn(d));
   },
   mask: bits => ipcRenderer.send('mask', bits),
   press: on => ipcRenderer.send('press', !!on),

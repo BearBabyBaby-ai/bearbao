@@ -1,7 +1,8 @@
 'use strict';
 (() => {
-  const SCALE = 0.5, SIZE = 384;
+  const SCALE = 0.5, SIZE = 384, PAD = 48;
   const stage = document.getElementById('stage');
+  const rig = document.getElementById('rig');
   const layer = window.BearEffects.createLayer(stage);
   let img = null, mirror = false, latest = 0;
 
@@ -36,6 +37,14 @@
   window.pet.on('sleeping', on => layer.setSleeping(!!on));
   window.pet.on('fade', () => { stage.style.opacity = '0'; });
 
+  // ---------- 被甩動時的傾斜（以抓取點為中心旋轉） ----------
+  let sway = { deg: 0, px: 96, py: 38 };
+  window.pet.on('sway', d => {
+    sway = d;
+    rig.style.transformOrigin = d.px + 'px ' + d.py + 'px';
+    rig.style.transform = d.deg ? 'rotate(' + d.deg.toFixed(2) + 'deg)' : '';
+  });
+
   // ---------- 只在熊寶身上接收滑鼠 ----------
   // 目前畫格縮成 48×48 的輪廓傳給主程式，由主程式判斷游標有沒有碰到熊寶（分身重疊時也抓得起來）
   const MASK = 48;
@@ -46,10 +55,16 @@
   function sendMask() {
     if (!img || !img.complete || !img.naturalWidth) return;
     try {
+      // 輪廓涵蓋整個視窗（含四周留空與傾斜角度）
+      const k = MASK / (SIZE * SCALE + PAD * 2);
       pctx.setTransform(1, 0, 0, 1, 0, 0);
       pctx.clearRect(0, 0, MASK, MASK);
-      if (mirror) { pctx.translate(MASK, 0); pctx.scale(-1, 1); }
-      pctx.drawImage(img, 0, 0, MASK, MASK);
+      pctx.scale(k, k);
+      pctx.translate(PAD + sway.px, PAD + sway.py);
+      pctx.rotate((sway.deg || 0) * Math.PI / 180);
+      pctx.translate(-sway.px, -sway.py);
+      if (mirror) { pctx.translate(SIZE * SCALE, 0); pctx.scale(-1, 1); }
+      pctx.drawImage(img, 0, 0, SIZE * SCALE, SIZE * SCALE);
       const d = pctx.getImageData(0, 0, MASK, MASK).data;
       const bits = new Uint8Array(MASK * MASK);
       let key = '';
@@ -64,7 +79,7 @@
   let hit = false, down = null, dragging = false;
   let headSince = 0, lastPet = 0;
 
-  function onHead(clientY) { return clientY / SCALE < 200; }
+  function onHead(clientY) { return (clientY - PAD) / SCALE < 200; }
 
   // 主程式通知：游標碰到熊寶（這時視窗才接收滑鼠）或離開
   window.pet.on('hover', on => {

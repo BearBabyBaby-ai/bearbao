@@ -56,6 +56,13 @@ function outfitComplete(outfit) {
   return !!v && ALL_ACTIONS.every(a => v[a] && byId.has(v[a]));
 }
 
+// 這套衣服有沒有這個動作的圖（原裝看動作本身）
+function hasVariant(action, outfit) {
+  if (!outfit || outfit === 'default') return byId.has(action);
+  const v = manifest.outfits[outfit]?.variants?.[action];
+  return !!v && byId.has(v);
+}
+
 function specials(outfit) {
   return (manifest.outfits[outfit]?.specials || []).filter(has);
 }
@@ -64,4 +71,4 @@ function fileUrl(clip) {
   return 'pack/' + clip.file.split(path.sep).join('/');
 }
 
-module.exports = { manifest, has, get, resolve, specials, fileUrl, nativeFacing, outfitComplete, ALL_ACTIONS, SCALE_BASE, ANCHOR };
+module.exports = { manifest, has, get, resolve, hasVariant, specials, fileUrl, nativeFacing, outfitComplete, ALL_ACTIONS, SCALE_BASE, ANCHOR };

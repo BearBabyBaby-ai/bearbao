@@ -10,6 +10,9 @@ const manifest = require('../assets/pack/manifest.json');
 const VERSION = 'v1';
 const DL_URL = `https://github.com/BearBabyBaby-ai/bearbao/releases/download/pet-gifs-${VERSION}/bearbao-pet-gifs.zip`;
 const RETRY_MS = 5 * 60000;
+// 之後新增的動作圖不重新下載整包，只補缺少的那幾個
+const ONE_URL = name => `https://raw.githubusercontent.com/BearBabyBaby-ai/bearbao/pet-assets/gifs/${encodeURIComponent(name)}`;
+const FEW = 40;
 
 const root = () => path.join(app.getPath('userData'), 'pet-gifs');
 const dir = () => path.join(root(), 'gifs');
@@ -18,12 +21,28 @@ const mark = () => path.join(root(), 'version.txt');
 let state = { phase: 'check', pct: 0 };
 const status = () => state;
 
+// 清單裡缺少的動作圖
+function missing() {
+  return manifest.animations.map(a => path.basename(a.file)).filter(n => !fs.existsSync(path.join(dir(), n)));
+}
 // 清單裡每個動作圖都在，才算準備好
 function complete() {
-  try {
-    if (fs.readFileSync(mark(), 'utf8').trim() !== VERSION) return false;
-    return manifest.animations.every(a => fs.existsSync(path.join(dir(), path.basename(a.file))));
-  } catch (_) { return false; }
+  try { return fs.existsSync(mark()) && missing().length === 0; } catch (_) { return false; }
+}
+
+// 只補缺少的幾個動作圖
+async function fetchFew(names, onState) {
+  fs.mkdirSync(dir(), { recursive: true });
+  let done = 0;
+  for (const n of names) {
+    const res = await net.fetch(ONE_URL(n));
+    if (!res.ok) throw new Error('下載失敗 ' + n + ' ' + res.status);
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.slice(0, 3).toString() !== 'GIF') throw new Error('不是動作圖 ' + n);
+    fs.writeFileSync(path.join(dir(), n + '.part'), buf);
+    fs.renameSync(path.join(dir(), n + '.part'), path.join(dir(), n));
+    state = { phase: 'download', pct: Math.floor(++done / names.length * 100) }; onState(state);
+  }
 }
 
 async function download(onState) {
@@ -61,7 +80,11 @@ async function ensure(onState = () => {}) {
   if (complete()) { state = { phase: 'ready', pct: 100 }; return true; }
   for (;;) {
     try {
-      await download(onState);
+      const lack = fs.existsSync(mark()) ? missing() : null;
+      if (lack && lack.length && lack.length <= FEW) await fetchFew(lack, onState);
+      else await download(onState);
+      const rest = missing();
+      if (rest.length && rest.length <= FEW) await fetchFew(rest, onState);   // 整包之後才新增的
       if (complete()) { state = { phase: 'ready', pct: 100 }; onState(state); return true; }
       throw new Error('動作圖不齊全');
     } catch (e) {

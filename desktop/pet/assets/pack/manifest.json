@@ -8451,6 +8451,30 @@
    "after": null,
    "outfit_id": "christmas",
    "variant_for": "draw_map"
+  },
+  {
+   "number": 487,
+   "id": "dizzy_sway",
+   "name": "蚊香眼甩動",
+   "file": "gifs/487_dizzy_sway.gif",
+   "group_id": "window",
+   "group_name": "視窗互動",
+   "view_id": "front",
+   "view_name": "正面",
+   "nominal_facing_deg": 0,
+   "playback": "loop",
+   "duration_ms": 1400,
+   "frame_count": 20,
+   "travel": null,
+   "after": null,
+   "interaction": {
+    "mode": "pointer_attach",
+    "anchor_px": {
+     "x": 192,
+     "y": 76
+    },
+    "next_on_release": "falling"
+   }
   }
  ]
 }
