@@ -6556,13 +6556,8 @@ if (window.bearDesktop) {
     }
     const tideCell = (list, type) => join(list.filter(t => t.type === type).map(t => `${t.time}　${Number.isFinite(t.height) ? t.height + 'cm' : ''}`.trim()));
     async function tides(key, only = []) {
-      const rows = [], foot = [];
+      const rows = [];
       const want = place => !only.length || only.includes(place);
-      // 表格下方：奎壁山的安全通行時間、日出／日沒
-      if (await ensureTide()) {
-        const info = tideDayInfo(key);
-        if (info.hasData) foot.push(['安全通行', join(info.safety)], ['日出／日沒', `${info.sunrise}／${info.sunset}`]);
-      }
       if (!want('奎壁山')) { /* 只查指定地點 */ }
       else if (await ensureTide()) {
         const info = tideDayInfo(key);
@@ -6576,7 +6571,7 @@ if (window.bearDesktop) {
         const day = fc ? forecastDay(fc, place, key) : null;
         rows.push([place, ...(day ? [tideCell(day, '滿潮'), tideCell(day, '乾潮')] : [fc ? '沒有資料' : '讀取失敗', '—'])]);
       }
-      return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows, foot }] };
+      return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows }] };
     }
 
     const FOOD = /早餐|午餐|晚餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃/;
