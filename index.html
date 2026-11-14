@@ -6555,24 +6555,44 @@ if (window.bearDesktop) {
       return found ? tides : null;
     }
     const tideCell = (list, type) => join(list.filter(t => t.type === type).map(t => `${t.time}　${Number.isFinite(t.height) ? t.height + 'cm' : ''}`.trim()));
+    // 池西岩瀑建議觀賞時段，只留 08:00–17:00 之間
+    function chixiDay(fc, key) {
+      const day = forecastDay(fc, '西嶼', key);
+      if (!day) return null;
+      const prev = forecastDay(fc, '西嶼', addDays(key, -1)), next = forecastDay(fc, '西嶼', addDays(key, 1));
+      const toM = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+      const out = [];
+      for (const w of chixiBandWindows(chixiExt(day, prev, next), chixiBands(day))) {
+        const [a, b] = w.split('–').map(toM), s = Math.max(a, 480), e = Math.min(b, 1020);
+        if (e > s) out.push(`${tdHHMM(s)}–${tdHHMM(e)}`);
+      }
+      return out;
+    }
     async function tides(key, only = []) {
-      const rows = [];
       const want = place => !only.length || only.includes(place);
+      let fc = null;
+      try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { return '潮汐資料讀取失敗，請確認網路後再試一次'; }
+      // 潮汐依 30 天潮汐預報：超過預報範圍直接回尚無資訊
+      if (!TIDE_PLACES.some(p => forecastDay(fc, p, key))) return `${md(key)} 潮汐：尚無資訊`;
+      const rows = [], foot = [];
       if (!want('奎壁山')) { /* 只查指定地點 */ }
       else if (await ensureTide()) {
         const info = tideDayInfo(key);
         const pts = info.points.filter(p => p.type === 'hi' || p.type === 'lo').map(p => ({ type: p.label, time: hm2(p.t), height: p.h }));
-        rows.push(['奎壁山', ...(info.hasData ? [tideCell(pts, '滿潮'), tideCell(pts, '乾潮')] : ['沒有資料', '—'])]);
+        rows.push(['奎壁山', ...(info.hasData ? [tideCell(pts, '滿潮'), tideCell(pts, '乾潮')] : ['尚無資訊', '—'])]);
       } else rows.push(['奎壁山', '讀取失敗', '—']);
-      const places = TIDE_PLACES.filter(want);
-      let fc = null;
-      try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { /* 下面標示讀取失敗 */ }
-      for (const place of places) {
-        const day = fc ? forecastDay(fc, place, key) : null;
-        rows.push([place, ...(day ? [tideCell(day, '滿潮'), tideCell(day, '乾潮')] : [fc ? '沒有資料' : '讀取失敗', '—'])]);
+      for (const place of TIDE_PLACES.filter(want)) {
+        const day = forecastDay(fc, place, key);
+        rows.push([place, ...(day ? [tideCell(day, '滿潮'), tideCell(day, '乾潮')] : ['尚無資訊', '—'])]);
       }
-      return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows }] };
+      // 西嶼：池西岩瀑建議觀賞（08:00–17:00）
+      if (want('西嶼')) {
+        const w = chixiDay(fc, key);
+        if (w) foot.push(['池西岩瀑建議觀賞', w.length ? w.join('\n') : '08:00–17:00 之間沒有建議時段']);
+      }
+      return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows, foot }] };
     }
+
 
     const FOOD = /早餐|午餐|晚餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃/;
     const TRAFFIC = /計程車|車票|火車|高鐵|公車|客運|機票|船票|停車|悠遊卡|Icash/i;
