@@ -35,7 +35,7 @@
   // ---------- 表格（分海、潮汐）：資料置中、依種類分底色；點表格存成圖片 ----------
   const TINT = {
     '緩慢分海': ['#e6efff', '#2563eb'], '緩慢合海': ['#fde8ea', '#e11d2e'],
-    '滿潮': ['#fdecec', '#c62828'], '乾潮': ['#e8f1fb', '#1565c0'],
+    '滿潮': ['#f8c6ca', '#b71c1c'], '乾潮': ['#c4dbf5', '#0d47a1'],
     '安全通行': ['#e7f6ec', '#1b7a3d'], '日出／日沒': ['#fff6dc', '#9a6700'],
     '池西岩瀑建議觀賞': ['#fff3c4', '#8a6400']
   };
@@ -50,16 +50,36 @@
     if (byCol && head.includes('地點')) return byCol;
     return TINT[row[0]] || ['#ffffff', INK];
   }
+  // 日期區段潮汐（有「潮別」欄）：連續同一個地點合併；回傳每列第一格要跨幾列（0 表示併到上一列）
+  function mergeRuns(b) {
+    const rows = b.rows || [], out = rows.map(() => 1);
+    if ((b.head || [])[1] !== '潮別') return out;
+    for (let i = 0; i < rows.length;) {
+      let j = i + 1;
+      while (j < rows.length && Array.isArray(rows[j]) && Array.isArray(rows[i]) && rows[j][0] === rows[i][0]) j++;
+      out[i] = j - i; for (let k = i + 1; k < j; k++) out[k] = 0;
+      i = j;
+    }
+    return out;
+  }
+  const ALT_BG = '#efdcbc', SEP_LINE = '#9c7b53';
+  // 每一列屬於第幾個地點（從 0 起），沒有合併時為 -1
+  function placeIndex(runs) { let k = -1; return runs.map(n => (n > 0 ? ++k : k)); }
   function tableEl(b, title) {
     const t = document.createElement('table');
     t.className = 'b-table';
     t.title = '點一下複製成圖片';
-    const tr = (cells, isHead, row) => {
+    const tr = (cells, isHead, row, merge, place = -1) => {
       const r = document.createElement('tr');
+      if (merge > 0 && place > 0) r.className = 'sep';
       cells.forEach((v, i) => {
+        // 同一個地點的滿潮、乾潮合併成一格地點
+        if (i === 0 && merge === 0) return;
         const c = document.createElement(isHead || i === 0 ? 'th' : 'td');
+        if (i === 0 && merge > 1) c.rowSpan = merge;
         c.textContent = v;
         if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i); c.style.background = bg; c.style.color = fg; }
+        if (i === 0 && place >= 0) c.style.background = place % 2 ? ALT_BG : LABEL_BG;
         r.appendChild(c);
       });
       return r;
@@ -75,13 +95,14 @@
       r.append(th, td); return r;
     };
     // 每一列：一般資料、日期分組列（整列）、跨整列的資料（池西岩瀑、尚無資訊）
-    (b.rows || []).forEach(row => {
+    const runs = mergeRuns(b), merged = (b.head || [])[1] === '潮別', places = merged ? placeIndex(runs) : runs.map(() => -1);
+    (b.rows || []).forEach((row, ri) => {
       if (row && row.group) {
         const r = document.createElement('tr');
         const th = document.createElement('th'); th.textContent = row.group; th.colSpan = span + 1; th.className = 'grp';
         r.appendChild(th); t.appendChild(r);
       } else if (row && row.span) t.appendChild(spanRow(...row.span));
-      else t.appendChild(tr(row, false, row));
+      else t.appendChild(tr(row, false, row, runs[ri], places[ri]));
     });
     // 表格下方跨整列的資料
     (b.foot || []).forEach(([label, value]) => t.appendChild(spanRow(label, value)));
@@ -138,15 +159,23 @@
       head.forEach((v, c) => { cell(v, x, widths[c], headH, HEAD_BG, INK, true); x += widths[c]; });
       y += headH;
     }
-    for (const r of body) {
-      const h = hOf(r);
+    const runs = mergeRuns(b), heights = body.map(hOf), merged = head[1] === '潮別', places = placeIndex(runs);
+    for (const [ri, r] of body.entries()) {
+      const h = heights[ri];
       if (r.group) cell(r.group, M, W, h, GROUP_BG, INK, true);
       else if (r.span) {
         cell(r.span[0], M, widths[0], h, LABEL_BG, INK, true);
         cell(r.span[1], M + widths[0], W - widths[0], h, ...(tintOf(r.span[0]) || ['#ffffff', INK]), false);
       } else {
         let x = M;
-        for (let c = 0; c < cols; c++) { cell(r[c], x, widths[c], h, ...cellTint(head, r, c), c === 0); x += widths[c]; }
+        for (let c = 0; c < cols; c++) {
+          const run = c === 0 && ri < runs.length ? runs[ri] : 1;
+          const tint = c === 0 && merged ? [places[ri] % 2 ? ALT_BG : LABEL_BG, INK] : cellTint(head, r, c);
+          if (run > 0) cell(r[c], x, widths[c], run > 1 ? heights.slice(ri, ri + run).reduce((a, v) => a + v, 0) : h, ...tint, c === 0);
+          x += widths[c];
+        }
+        // 地點之間加粗分隔線
+        if (merged && runs[ri] > 0 && places[ri] > 0) { ctx.fillStyle = SEP_LINE; ctx.fillRect(M, y - S, W, 3 * S); }
       }
       y += h;
     }
