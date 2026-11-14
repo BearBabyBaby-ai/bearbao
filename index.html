@@ -2109,13 +2109,822 @@ function renderSubFilters() {
   subFilters.innerHTML = cats.map(c => `<button type="button" class="sub-chip${c === activeSub ? ' active' : ''}" data-sub="${esc(c)}" style="--sc:${catColor(activeType, c)}">${esc(c)}</button>`).join('');
   subFilters.hidden = false;
 }
+/* ===== 複合式搜尋：移植自熊熊綜合系統「澎湖在地探索」（批次生圖）的搜尋 =====
+   可跨區、多分類、村里、主祀、名稱一起搜尋，例如「澎南 湖西 美食」「白沙 早餐 景點」「馬公 媽祖」；
+   澎南（南環）、北環、東環會展開成對應的鄉市與村里。首頁搜尋與熊寶工作模式共用。 */
+const PlaceSearch = (() => {
+  const PENGHU_REGIONS = [
+    { name: '馬公市', short: '馬公', match: ['馬公', '馬公市'] },
+    { name: '湖西鄉', short: '湖西', match: ['湖西', '湖西鄉'] },
+    { name: '白沙鄉', short: '白沙', match: ['白沙', '白沙鄉'] },
+    { name: '西嶼鄉', short: '西嶼', match: ['西嶼', '西嶼鄉'] },
+    { name: '望安鄉', short: '望安', match: ['望安', '望安鄉'] },
+    { name: '七美鄉', short: '七美', match: ['七美', '七美鄉'] }
+  ];
+
+  const DEITY_SYNONYMS = [
+    ['真武大帝', '玄天上帝'],
+    ['天上聖母', '媽祖'],
+    ['玉皇大帝', '玉皇大天尊'],
+    ['哪吒三太子', '哪吒太子', '三太子'],
+    ['南海觀世音菩薩', '觀世音菩薩', '觀音佛祖'],
+    ['文衡關聖帝君', '關聖帝君', '關公', '五天聖帝'],
+    ['土地公', '福德正神']
+  ];
+
+  const QUICK_KEYWORDS = [
+    {
+      "name": "北環島",
+      "aliases": ["北環"],
+      "sheets": [
+        "美食清單",
+        "景點",
+        "廟宇",
+        "其他店家"
+      ],
+      "regions": [
+        "白沙鄉",
+        "西嶼鄉"
+      ],
+      "excludeTerms": {
+        "白沙鄉": [
+          "姑婆",
+          "員貝",
+          "吉貝",
+          "鳥嶼",
+          "目斗"
+        ]
+      }
+    },
+    {
+      "name": "南環島",
+      "aliases": ["南環", "澎南"],
+      "sheets": [
+        "美食清單",
+        "景點",
+        "廟宇",
+        "其他店家"
+      ],
+      "regions": [
+        "馬公市"
+      ],
+      "includeTerms": [
+        "山水",
+        "風櫃",
+        "嵵裡",
+        "井垵",
+        "伍德",
+        "鎖港",
+        "五德",
+        "興仁",
+        "鐵線"
+      ]
+    },
+    {
+      "name": "東環島(湖西)",
+      "aliases": ["東環島", "東環島（湖西）", "東環"],
+      "sheets": [
+        "美食清單",
+        "景點",
+        "廟宇",
+        "其他店家"
+      ],
+      "regions": [
+        "湖西鄉"
+      ]
+    },
+    {
+      "name": "七美",
+      "sheets": ["美食清單", "景點", "廟宇", "其他店家"],
+      "regions": ["七美鄉"]
+    },
+    {
+      "name": "望安",
+      "sheets": ["美食清單", "景點", "廟宇", "其他店家"],
+      "regions": ["望安鄉"]
+    },
+    {
+      "name": "吉貝",
+      "sheets": ["美食清單", "景點", "廟宇", "其他店家"],
+      "regions": ["白沙鄉"],
+      "includeTerms": ["吉貝"]
+    },
+    {
+      "name": "馬公市區",
+      "sheets": [
+        "美食清單",
+        "景點",
+        "廟宇",
+        "其他店家"
+      ],
+      "regions": [
+        "馬公市"
+      ],
+      "excludeTerms": {
+        "馬公市": [
+          "山水",
+          "風櫃",
+          "嵵裡",
+          "井垵",
+          "伍德",
+          "鎖港",
+          "五德",
+          "興仁",
+          "鐵線",
+          "東衛",
+          "菜園",
+          "光華",
+          "西文澳",
+          "西文",
+          "虎井",
+          "桶盤"
+        ]
+      }
+    },
+    {
+      "name": "市區觀光",
+      "aliases": [
+        "古蹟觀光"
+      ],
+      "sheets": [
+        "美食清單"
+      ],
+      "radiusKm": 0.3,
+      "includeAnchors": true,
+      "anchors": [
+        {
+          "name": "篤行十村",
+          "sheet": "景點",
+          "lat": 23.5634336,
+          "lng": 119.5605422
+        },
+        {
+          "name": "澎湖天后宮",
+          "sheet": "廟宇",
+          "lat": 23.564694,
+          "lng": 119.564039
+        },
+        {
+          "name": "四眼井",
+          "sheet": "景點",
+          "lat": 23.5651792,
+          "lng": 119.5649382
+        },
+        {
+          "name": "中央老街",
+          "sheet": "景點",
+          "lat": 23.5647548,
+          "lng": 119.5648526
+        }
+      ],
+      "excludeTerms": {
+        "*": [
+          "虎井",
+          "桶盤",
+          "大倉"
+        ]
+      }
+    }
+  ];
+
+  const ALL_SHEETS = ['美食清單', '景點', '廟宇', '其他店家'];
+
+  const HIDDEN_FOOD_CATEGORIES = new Set(['水果', '伴手禮']);
+
+  const emptySearchBuckets = () => Object.fromEntries(ALL_SHEETS.map(s => [s, []]));
+
+  function normalizeSearchText(value) {
+    let s = String(value ?? '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+    s = s.replace(/通樑/g, '通梁');
+    return s;
+  }
+
+  function splitSearchValues(value) {
+    return [...new Set(String(value ?? '').split(/[\s／/、,，;；|]+/)
+      .map(normalizeSearchText).filter(Boolean))];
+  }
+
+  function getSearchRegion(token) {
+    const text = normalizeSearchText(token).replace(/\s/g, '').replace(/^澎湖縣/, '');
+    return PENGHU_REGIONS.find(region => region.match.some(alias => normalizeSearchText(alias) === text));
+  }
+
+  function normalizeSearchVillage(value) {
+    return normalizeSearchText(value).replace(/[村里]$/, '');
+  }
+
+  function getSearchDeitySynonyms(token) {
+    const text = normalizeSearchText(token);
+    if (!text) return null;
+    return DEITY_SYNONYMS.find(group => group.some(name => {
+      const synonym = normalizeSearchText(name);
+      return synonym === text || (text.length >= 2 && synonym.includes(text));
+    })) || null;
+  }
+
+  function createSearchContext(datasets) {
+    const context = {
+      rows: new WeakMap(), villages: new Set(), locationRegions: new Map(), mainCategories: new Set(), subCategories: new Set(),
+      mainCategorySheets: new Map(), subCategorySheets: new Map(), names: new Set(), contentTerms: new Set(), deities: new Set()
+    };
+    for (const [sheetName, items] of Object.entries(datasets)) {
+      for (const item of items) {
+        const values = Object.entries(item).filter(([key]) => !key.startsWith('_')).map(([, value]) => value);
+        if (Array.isArray(item._raw)) values.push(...item._raw);
+        const mainCategories = splitSearchValues(item['主類別']);
+        const subCategories = sheetName === '美食清單' || sheetName === '其他店家' ? splitSearchValues(item['類別'])
+          : sheetName === '景點' ? splitSearchValues(item['次類別']) : [];
+        if (sheetName === '景點') {
+          if (mainCategories.includes('文化展館') || mainCategories.includes('展館')) {
+            if (!mainCategories.includes('展館')) mainCategories.push('展館');
+          } else if (!mainCategories.includes('景點')) {
+            mainCategories.push('景點');
+          }
+        }
+        const region = getSearchRegion(item['區域(鄉市)']);
+        const regionName = region ? region.name : normalizeSearchText(item['區域(鄉市)']);
+        const address = normalizeSearchText(getFoodField(item, '地址'));
+        const villages = splitSearchValues(item['區域(村里)']).map(normalizeSearchVillage);
+        for (const regionInfo of PENGHU_REGIONS) {
+          const prefix = normalizeSearchText(regionInfo.name);
+          const start = address.indexOf(prefix);
+          if (start < 0) continue;
+          const match = address.slice(start + prefix.length).trim().match(/^([㐀-鿿]{1,8}?)[村里]/);
+          if (match) villages.push(match[1]);
+        }
+        const entry = {
+          regionName, villages: [...new Set(villages.filter(Boolean))], mainCategories, subCategories,
+          name: normalizeSearchText(getItemDisplayName(item, sheetName)), address,
+          villageText: normalizeSearchText(item['區域(村里)']),
+          deity: normalizeSearchText(item['主祀']),
+          text: values.map(normalizeSearchText).filter(Boolean).join('\u0000')
+        };
+        context.rows.set(item, entry);
+        if (entry.name && !entry.name.startsWith('未提供')) context.names.add(entry.name);
+        if (sheetName === '廟宇') splitSearchValues(item['主祀']).forEach(value => context.deities.add(value));
+        for (const key of ['代表餐食／服務', '代表餐食/服務', '推薦菜色／行程', '推薦菜色/行程']) {
+          String(item[key] || '').split(/[／/、,，;；|\r\n]+/).map(normalizeSearchText)
+            .filter(value => value && value.length <= 40).forEach(value => context.contentTerms.add(value));
+        }
+        entry.villages.forEach(value => {
+          context.villages.add(value);
+          if (!context.locationRegions.has(value)) context.locationRegions.set(value, new Set());
+          if (entry.regionName) context.locationRegions.get(value).add(entry.regionName);
+        });
+        if (sheetName !== '廟宇') {
+          for (const [categories, vocabulary, sheetMap] of [
+            [mainCategories, context.mainCategories, context.mainCategorySheets],
+            [subCategories, context.subCategories, context.subCategorySheets]
+          ]) {
+            categories.forEach(value => {
+              vocabulary.add(value);
+              if (!sheetMap.has(value)) sheetMap.set(value, new Set());
+              sheetMap.get(value).add(sheetName);
+            });
+          }
+        }
+      }
+    }
+    return context;
+  }
+
+  function createSearchClause() {
+    return {
+      sheets: new Set(), regions: new Set(), locations: [], mainCategories: [], subCategories: [], deities: [], terms: [], literalTerms: []
+    };
+  }
+
+  function classifySearchToken(token, context) {
+    const sheetAliases = { '美食': '美食清單', '美食清單': '美食清單', '景點': '景點', '廟宇': '廟宇', '廟': '廟宇', '其他店家': '其他店家', '店家': '其他店家' };
+    const region = getSearchRegion(token);
+    if (Object.hasOwn(sheetAliases, token)) return { kind: 'sheets', value: sheetAliases[token] };
+    if (region) return { kind: 'regions', value: region.name };
+    if (context.villages.has(normalizeSearchVillage(token))) return { kind: 'locations', value: token };
+    if (context.subCategories.has(token)) return { kind: 'subCategories', value: token };
+    if (context.mainCategories.has(token)) return { kind: 'mainCategories', value: token };
+    if (context.deities.has(token) || getSearchDeitySynonyms(token)) return { kind: 'deities', value: token };
+    return { kind: 'terms', value: token };
+  }
+
+  function getClauseAllowedSheets(clause, context) {
+    let allowed = new Set(clause.sheets.size ? clause.sheets : ALL_SHEETS);
+    const restrict = choices => { allowed = new Set([...allowed].filter(sheet => choices.has(sheet))); };
+    if (clause.mainCategories.length) {
+      restrict(new Set(clause.mainCategories.flatMap(token => [...(context.mainCategorySheets.get(token) || [])])));
+    }
+    if (clause.subCategories.length) {
+      restrict(new Set(clause.subCategories.flatMap(token => [
+        ...(context.subCategorySheets.get(token) || []), ...(context.mainCategorySheets.get(token) || [])
+      ])));
+    }
+    if (clause.deities.length) restrict(new Set(['廟宇']));
+    return allowed;
+  }
+
+  function getSearchLexicon(context) {
+    if (context.lexicon) return context.lexicon;
+    const words = new Set([
+      ...PENGHU_REGIONS.flatMap(region => [...region.match, `澎湖縣${region.name}`]),
+      '美食', '美食清單', '景點', '廟宇', '廟', '其他店家', '店家',
+      ...context.mainCategories, ...context.subCategories, ...context.contentTerms, ...context.deities, ...DEITY_SYNONYMS.flat(),
+      ...[...context.villages].flatMap(village => [village, `${village}村`, `${village}里`])
+    ].map(normalizeSearchText).filter(Boolean));
+    const index = values => {
+      const result = new Map();
+      for (const value of [...values].sort((a, b) => b.length - a.length)) {
+        if (!result.has(value[0])) result.set(value[0], []);
+        result.get(value[0]).push(value);
+      }
+      return result;
+    };
+    context.lexicon = { words, byFirst: index(words), names: index(context.names) };
+    return context.lexicon;
+  }
+
+  function lexSearchQuery(keyword, context) {
+    const text = normalizeSearchText(keyword);
+    const lexicon = getSearchLexicon(context);
+    const output = [];
+    const separator = char => !char || /[\s,+;|]/.test(char);
+    const wordAt = (value, offset) => (lexicon.byFirst.get(value[offset]) || [])
+      .find(word => value.startsWith(word, offset));
+    const isAnchor = word => ['regions', 'locations', 'sheets'].includes(classifySearchToken(word, context).kind);
+    const emit = (word, literal = false) => output.push(literal
+      ? { kind: 'literalTerms', value: word, text: word }
+      : { ...classifySearchToken(word, context), text: word });
+    const emitOr = () => { if (output.length && output[output.length - 1].kind !== 'or') output.push({ kind: 'or', text: '或' }); };
+    const expandChunk = chunk => {
+      if (lexicon.words.has(chunk)) { emit(chunk); return; }
+      if (context.names.has(chunk) || /^https?:\/\//.test(chunk)) { emit(chunk, true); return; }
+      const next = new Array(chunk.length + 1).fill(null);
+      next[chunk.length] = { end: chunk.length, word: '' };
+      for (let offset = chunk.length - 1; offset >= 0; offset--) {
+        for (const word of lexicon.byFirst.get(chunk[offset]) || []) {
+          const end = offset + word.length;
+          if (end <= chunk.length && next[end] && chunk.startsWith(word, offset)) {
+            next[offset] = { end, word };
+            break;
+          }
+        }
+      }
+      if (next[0]) {
+        for (let offset = 0; offset < chunk.length; offset = next[offset].end) emit(next[offset].word);
+        return;
+      }
+      let hasAnchor = false;
+      for (let offset = 0; offset < chunk.length; offset++) {
+        const word = wordAt(chunk, offset);
+        if (word && isAnchor(word)) { hasAnchor = true; break; }
+      }
+      if (!hasAnchor && !chunk.includes('或')) { emit(chunk); return; }
+      let pending = '';
+      const flush = () => { if (pending) { emit(pending); pending = ''; } };
+      for (let offset = 0; offset < chunk.length;) {
+        const word = wordAt(chunk, offset);
+        if (word && (!pending || (hasAnchor && isAnchor(word)))) {
+          flush(); emit(word); offset += word.length;
+        } else if (chunk[offset] === '或' && offset > 0 && offset < chunk.length - 1) {
+          flush(); emitOr(); offset++;
+        } else {
+          pending += chunk[offset++];
+        }
+      }
+      flush();
+    };
+    for (let offset = 0; offset < text.length;) {
+      const char = text[offset];
+      if (/[\s,+]/.test(char)) { offset++; continue; }
+      if (/[;|]/.test(char)) { emitOr(); offset++; continue; }
+      if (char === '"' || char === "'") {
+        const end = text.indexOf(char, offset + 1);
+        if (end > offset + 1) { emit(text.slice(offset + 1, end), true); offset = end + 1; continue; }
+      }
+      const url = text.slice(offset).match(/^https?:\/\/\S+/);
+      if (url) { emit(url[0], true); offset += url[0].length; continue; }
+      const name = (lexicon.names.get(char) || []).find(value => !lexicon.words.has(value)
+        && text.startsWith(value, offset) && separator(text[offset + value.length]));
+      if (name) { emit(name, true); offset += name.length; continue; }
+      const chunk = text.slice(offset).match(/^[^\s,+;|]+/)[0];
+      if ((chunk === '或' || chunk === 'or') && output.length) emitOr();
+      else expandChunk(chunk);
+      offset += chunk.length;
+    }
+    if (output[output.length - 1]?.kind === 'or') output.pop();
+    return output;
+  }
+
+  function addSearchCondition(clause, token) {
+    const values = clause[token.kind];
+    if (values instanceof Set) values.add(token.value);
+    else if (!values.includes(token.value)) values.push(token.value);
+  }
+
+  function hasSearchContent(clause) {
+    return ['mainCategories', 'subCategories', 'deities', 'terms', 'literalTerms'].some(key => clause[key].length);
+  }
+
+  function splitSearchGeography(geo, context) {
+    const regions = geo.filter(token => token.kind === 'regions');
+    const locations = geo.filter(token => token.kind === 'locations');
+    if (!regions.length || !locations.length) return [geo];
+    const groups = [];
+    const associated = new Set();
+    for (const region of regions) {
+      const local = locations.filter(token => context.locationRegions.get(normalizeSearchVillage(token.value))?.has(region.value));
+      groups.push([region, ...local]);
+      local.forEach(token => associated.add(token));
+    }
+    const independent = locations.filter(token => !associated.has(token));
+    if (independent.length) groups.push(independent);
+    return groups;
+  }
+
+  function compileSearchPair(geo, qualifiers, scopeSheets, context, strictScope) {
+    const clauses = [];
+    const geoGroups = splitSearchGeography(geo, context);
+    const fresh = () => {
+      const clause = createSearchClause();
+      geo.forEach(token => addSearchCondition(clause, token));
+      return clause;
+    };
+    let current = fresh();
+    const finish = () => {
+      if (!current.sheets.size && scopeSheets.size) {
+        const inferred = getClauseAllowedSheets(current, context);
+        const compatible = [...scopeSheets].filter(sheet => inferred.has(sheet));
+        if (strictScope || compatible.length) [...(strictScope ? scopeSheets : compatible)].forEach(sheet => current.sheets.add(sheet));
+      }
+      current.allowedSheets = getClauseAllowedSheets(current, context);
+      for (const group of geoGroups) {
+        const clause = { ...current, regions: new Set(), locations: [] };
+        group.forEach(token => addSearchCondition(clause, token));
+        clauses.push(clause);
+      }
+      current = fresh();
+    };
+    for (const token of qualifiers) {
+      if (token.kind === 'sheets' && hasSearchContent(current)
+        && !getClauseAllowedSheets(current, context).has(token.value)) finish();
+      addSearchCondition(current, token);
+    }
+    finish();
+    return clauses;
+  }
+
+  function parseSearchSegment(tokens, context, previousScope = null) {
+    if (!tokens.length) return [];
+    const isGeo = token => token.kind === 'regions' || token.kind === 'locations';
+    const runs = [];
+    for (const token of tokens) {
+      const kind = isGeo(token) ? 'geo' : 'qualifiers';
+      if (runs[runs.length - 1]?.kind !== kind) runs.push({ kind, tokens: [] });
+      runs[runs.length - 1].tokens.push(token);
+    }
+    const scopeSheets = new Set();
+    let explicitScope = false;
+    if (runs[0].kind === 'qualifiers' && runs[0].tokens.every(token => token.kind === 'sheets')
+      && runs[1]?.kind === 'geo' && (runs.length === 2 || runs[runs.length - 1].kind === 'qualifiers')) {
+      runs.shift().tokens.forEach(token => scopeSheets.add(token.value));
+      explicitScope = true;
+    }
+    const forward = runs[0].kind === 'geo';
+    const pairs = [];
+    let previousGeo = [], previousQualifiers = [];
+    for (let index = 0; index < runs.length;) {
+      let geo = [], qualifiers = [];
+      if (forward) {
+        geo = runs[index++].tokens;
+        if (runs[index]?.kind === 'qualifiers') qualifiers = runs[index++].tokens;
+        else qualifiers = previousQualifiers;
+      } else {
+        qualifiers = runs[index++].tokens;
+        if (runs[index]?.kind === 'geo') geo = runs[index++].tokens;
+        else if (pairs.length) {
+          pairs[pairs.length - 1].qualifiers.push(...qualifiers);
+          break;
+        }
+      }
+      const hasRegion = geo.some(token => token.kind === 'regions');
+      const hasVillage = geo.some(token => token.kind === 'locations');
+      if (!hasRegion && hasVillage && previousGeo.some(token => token.kind === 'locations')) {
+        const inheritedRegions = previousGeo.filter(token => token.kind === 'regions'
+          && geo.some(location => context.locationRegions.get(normalizeSearchVillage(location.value))?.has(token.value)));
+        geo = [...inheritedRegions, ...geo];
+      }
+      if (!geo.length && previousScope) {
+        geo = [
+          ...[...previousScope.regions].map(value => ({ kind: 'regions', value })),
+          ...previousScope.locations.map(value => ({ kind: 'locations', value }))
+        ];
+        if (!qualifiers.some(token => token.kind === 'sheets')) previousScope.sheets.forEach(sheet => scopeSheets.add(sheet));
+      }
+      pairs.push({ geo, qualifiers });
+      previousGeo = geo;
+      previousQualifiers = qualifiers;
+    }
+    return pairs.flatMap((pair, index) => compileSearchPair(pair.geo, pair.qualifiers, scopeSheets, context, index === 0 && explicitScope));
+  }
+
+  function buildSearchPlan(keyword, context) {
+    const lexemes = lexSearchQuery(keyword, context);
+    const segments = [[]];
+    for (const token of lexemes) {
+      if (token.kind === 'or') segments.push([]);
+      else segments[segments.length - 1].push(token);
+    }
+    const clauses = [];
+    for (const tokens of segments) {
+      const parsed = parseSearchSegment(tokens, context, clauses[clauses.length - 1]);
+      clauses.push(...parsed);
+    }
+    const signatures = new Set(), unique = [], sheets = new Set();
+    for (const clause of clauses) {
+      const signature = JSON.stringify(['sheets', 'regions', 'locations', 'mainCategories', 'subCategories', 'deities', 'terms', 'literalTerms']
+        .map(key => [...clause[key]].sort()));
+      if (signatures.has(signature)) continue;
+      signatures.add(signature);
+      unique.push(clause);
+      clause.allowedSheets.forEach(sheet => sheets.add(sheet));
+    }
+    return {
+      tokens: lexemes.filter(token => token.kind !== 'or').map(token => token.text), clauses: unique,
+      defaultTab: sheets.size === 1 ? [...sheets][0] : '全部'
+    };
+  }
+
+  function checkItemMatchesSingleToken(item, sheetName, token, context = null) {
+    const text = normalizeSearchText(token);
+    if (!text) return false;
+    const entry = (context || createSearchContext({ [sheetName]: [item] })).rows.get(item);
+    if (!entry) return false;
+    const region = getSearchRegion(text);
+    if (region) return entry.regionName === region.name;
+    const deityGroup = sheetName === '廟宇' ? getSearchDeitySynonyms(text) : null;
+    if (deityGroup && deityGroup.some(value => entry.deity.includes(normalizeSearchText(value))
+      || entry.text.includes(normalizeSearchText(value)))) return true;
+    if (entry.name.includes(text) || entry.villageText.includes(text) || entry.address.includes(text)
+      || entry.text.includes(text)) return true;
+    return text === '海鮮餐廳' && ['海鮮', '海產'].some(value => entry.text.includes(value));
+  }
+
+  function matchesSearchClause(item, sheetName, plan, context) {
+    if (!plan.allowedSheets.has(sheetName)) return false;
+    const entry = context.rows.get(item);
+    if (!entry) return false;
+    if (plan.regions.size && !plan.regions.has(entry.regionName)) return false;
+    if (plan.locations.length && !plan.locations.some(token => {
+      const village = normalizeSearchVillage(token);
+      return entry.villages.includes(village) || entry.name.includes(village)
+        || entry.villageText.includes(village) || entry.address.includes(village);
+    })) return false;
+    if (plan.mainCategories.length && (sheetName === '廟宇'
+      || !plan.mainCategories.some(token => entry.mainCategories.includes(token)))) return false;
+    if (plan.subCategories.length && (sheetName === '廟宇'
+      || !plan.subCategories.some(token => entry.subCategories.includes(token)
+        || entry.mainCategories.includes(token)))) return false;
+    if (plan.deities.length && (sheetName !== '廟宇'
+      || !plan.deities.some(token => {
+        const synonyms = getSearchDeitySynonyms(token);
+        return synonyms ? synonyms.some(value => entry.deity.includes(normalizeSearchText(value)))
+          : entry.deity.includes(normalizeSearchText(token));
+      }))) return false;
+    return (!plan.terms.length && !plan.literalTerms.length)
+      || plan.terms.some(token => checkItemMatchesSingleToken(item, sheetName, token, context))
+      || plan.literalTerms.some(token => entry.text.includes(token) || entry.name.includes(token));
+  }
+
+  function matchesSearchPlan(item, sheetName, plan, context) {
+    return plan.clauses.some(clause => matchesSearchClause(item, sheetName, clause, context));
+  }
+
+  function findQuickKeyword(kw) {
+    const text = normalizeSearchText(kw).replace(/\s/g, '');
+    return QUICK_KEYWORDS.find(q => [q.name, ...(q.aliases || [])].some(n => normalizeSearchText(n).replace(/\s/g, '') === text)) || null;
+  }
+
+  function villageFromAddress(address) {
+    const m = String(address || '').match(/(?:馬公市|湖西鄉|白沙鄉|西嶼鄉|望安鄉|七美鄉)([㐀-鿿]{1,3}?)[里村]/);
+    return m ? m[1] : '';
+  }
+
+  function buildVillageResolver(datasets) {
+    const refs = [];
+    for (const sheet of ['景點', '廟宇', '其他店家']) {
+      for (const item of datasets[sheet] || []) {
+        const village = String(item['區域(村里)'] || '').trim().replace(/[村里]$/, '');
+        const c = itemCoords(item);
+        if (village && c) refs.push({ ...c, village, region: normalizeRegion(item['區域(鄉市)']) });
+      }
+    }
+    const cache = new WeakMap();
+    return item => {
+      if (cache.has(item)) return cache.get(item);
+      let village = String(item['區域(村里)'] || '').trim().replace(/[村里]$/, '') || villageFromAddress(item['地址']);
+      if (!village) {
+        const c = itemCoords(item), region = normalizeRegion(item['區域(鄉市)']);
+        if (c) {
+          let best = null, bestKm = 1.5;
+          for (const r of refs) {
+            if (r.region !== region) continue;
+            const km = distanceKm(c, r);
+            if (km < bestKm) { bestKm = km; best = r; }
+          }
+          if (best) village = best.village;
+        }
+      }
+      cache.set(item, village);
+      return village;
+    };
+  }
+
+  function runQuickKeyword(preset, datasets) {
+    const buckets = emptySearchBuckets();
+    const resolveVillage = buildVillageResolver(datasets);
+    const anchors = Array.isArray(preset.anchors) ? preset.anchors : [];
+    const radius = Number(preset.radiusKm) || 3;
+    const sheets = (preset.sheets || ['美食清單', '景點']).filter(s => ALL_SHEETS.includes(s));
+    const nearestAnchorKm = c => Math.min(...anchors.map(a => distanceKm(c, a)));
+    const anchorDistances = new WeakMap();
+    for (const sheet of sheets) {
+      for (const item of datasets[sheet] || []) {
+        const region = normalizeRegion(item['區域(鄉市)']);
+        if (Array.isArray(preset.regions) && preset.regions.length && !preset.regions.includes(region)) continue;
+        const locationText = [resolveVillage(item), item['區域(村里)'], item['地址'], sheet === '美食清單' ? '' : getItemDisplayName(item, sheet)].filter(Boolean).join(' ');
+        const exclude = [...((preset.excludeTerms || {})[region] || []), ...((preset.excludeTerms || {})['*'] || [])];
+        if (exclude.some(t => locationText.includes(t))) continue;
+        if (Array.isArray(preset.includeTerms) && preset.includeTerms.length && !preset.includeTerms.some(t => locationText.includes(t))) continue;
+        if (anchors.length) {
+          const c = itemCoords(item);
+          if (!c || nearestAnchorKm(c) > radius) continue;
+          anchorDistances.set(item, nearestAnchorKm(c));
+        }
+        buckets[sheet].push(item);
+      }
+      if (anchors.length) buckets[sheet].sort((a, b) => (anchorDistances.get(a) ?? 0) - (anchorDistances.get(b) ?? 0));
+    }
+    if (preset.includeAnchors) {
+      for (const anchor of anchors) {
+        const sheet = ALL_SHEETS.includes(anchor.sheet) ? anchor.sheet : '景點';
+        const found = (datasets[sheet] || []).find(item => getItemDisplayName(item, sheet).includes(anchor.name) || String(item['廟宇名稱'] || '').includes(anchor.name));
+        if (found && !buckets[sheet].includes(found)) buckets[sheet].unshift(found);
+      }
+    }
+    return buckets;
+  }
+
+  function distanceKm(a, b) {
+    const R = 6371, toRad = x => x * Math.PI / 180, dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+
+  function itemCoords(item) {
+    const parse = (primary, alias) => {
+      const value = [primary, alias].find(v => v != null && String(v).trim() !== '');
+      return value == null ? NaN : Number(String(value).trim().replace(/,/g, ''));
+    };
+    const lat = parse(item['Latitude'], item['緯度']);
+    const lng = parse(item['Longitude'], item['經度']);
+    return Number.isFinite(lat) && Number.isFinite(lng) && lat > 22 && lat < 25 && lng > 118 && lng < 121 ? { lat, lng } : null;
+  }
+
+  function foodCategoryTokens(value) {
+    return [...new Set(String(value || '').split(/[／/]/).map(v => v.trim()).filter(Boolean))];
+  }
+
+  function isVisibleFoodItem(item) {
+    return foodCategoryTokens(item['主類別']).some(value => !HIDDEN_FOOD_CATEGORIES.has(value));
+  }
+
+  function normalizeRegion(value) {
+    const text = String(value || '').trim().replace(/\s+/g, '');
+    const match = PENGHU_REGIONS.find(r => r.match.includes(text));
+    return match ? match.name : text;
+  }
+
+  function cleanTempleName(name) {
+    let s = String(name || '').trim();
+    return s.replace(/^[一-龥A-Za-z0-9]+-(.+)$/, '$1').replace(/-/g, '');
+  }
+
+  function getItemDisplayName(item, sheetName) {
+    if (sheetName === '景點') return item['景點名稱'] || '未提供景點名稱';
+    if (sheetName === '廟宇') return cleanTempleName(item['廟宇名稱'] || '未提供廟宇名稱');
+    if (sheetName === '其他店家') return String(item['名稱'] || '').trim() || '未提供名稱';
+    return getFoodName(item);
+  }
+
+  function getFoodField(item, key) {
+    if (!item) return '';
+    const aliases = {
+      '推薦菜色／行程': ['推薦菜色／行程', '推薦菜色', '推薦品項'],
+      'Latitude': ['Latitude', '緯度'],
+      'Longitude': ['Longitude', '經度'],
+      '電話': ['電話', '聯繫電話'],
+      '地址': ['地址', '店家地址'],
+      '營業時間': ['營業時間', '營業時段'],
+      '短網址': ['短網址', '地圖導航', 'GPS引導', '導航']
+    };
+    const candidates = aliases[key] || [key];
+    for (const field of candidates) {
+      const value = item[field];
+      if (checkValid(value)) return String(value).trim();
+    }
+    return '';
+  }
+
+  function getFoodName(item) {
+    if (!item) return '未提供名稱';
+    const candidates = [
+      item['名稱'], item['店名'], item['店家名稱'], item['餐廳名稱'], item['美食名稱']
+    ];
+    for (const value of candidates) {
+      if (checkValid(value)) return String(value).trim();
+    }
+    return '未提供名稱';
+  }
+
+  function checkValid(val) {
+    if (val === undefined || val === null) return false;
+    const str = String(val).trim();
+    return str !== '' && str !== '無' && str !== '無資料' && str !== '無提供' && str !== 'N/A';
+  }
+
+  const SHEET_OF_TYPE = { '美食': '美食清單', '景點': '景點', '廟宇': '廟宇', '其他店家': '其他店家' };
+  const TYPE_OF_SHEET = { '美食清單': '美食', '景點': '景點', '廟宇': '廟宇', '其他店家': '其他店家' };
+  const AREA_ALIASES = [
+    { keys: ['南環島', '南環', '澎南'], regions: ['馬公'], villages: ['山水', '風櫃', '嵵裡', '井垵', '伍德', '鎖港', '五德', '興仁', '鐵線'] },
+    { keys: ['北環島', '北環'], regions: ['白沙', '西嶼'], villages: [] },
+    { keys: ['東環島', '東環'], regions: ['湖西'], villages: [] }
+  ];
+  const SHEET_WORDS = /其他店家|美食清單|美食|景點|廟宇|店家|廟/g;
+  const STOP = /推薦|有什麼|有哪些|哪裡有|哪裡|好吃的|好吃|好玩的|好玩|吃什麼|去哪裡|去哪|介紹|查詢|搜尋|請問|幫我找|幫我/g;
+  let cache = null;
+  function data() {
+    if (cache && cache.src === allData && cache.n === allData.length) return cache;
+    const sets = emptySearchBuckets(), toD = new Map();
+    for (const d of allData) {
+      const sheet = SHEET_OF_TYPE[d.type];
+      if (!sheet || !d.raw || toD.has(d.raw)) continue;
+      sets[sheet].push(d.raw);
+      toD.set(d.raw, d);
+    }
+    cache = { src: allData, n: allData.length, sets, toD, ctx: createSearchContext(sets) };
+    return cache;
+  }
+  // 整理查詢：去掉「推薦、好吃」這類字，消夜→宵夜，澎南／北環／東環展開成鄉市與村里
+  function prepare(query, ctx) {
+    let s = normalizeSearchText(query).replace(/消夜/g, '宵夜').replace(STOP, ' ');
+    for (const a of AREA_ALIASES) {
+      for (const key of a.keys) {
+        if (!s.includes(key)) continue;
+        const villages = a.villages.filter(v => ctx.villages.has(normalizeSearchVillage(v)));
+        s = s.split(key).join(` ${[...a.regions, ...villages].join(' ')} `);
+      }
+    }
+    return s.replace(/\s+/g, ' ').trim();
+  }
+  // 依查詢找出符合的資料（地圖上的每一筆），回傳 { 類型: [資料…] }
+  function search(query) {
+    const c = data();
+    const raw = normalizeSearchText(query).replace(/消夜/g, '宵夜').replace(STOP, ' ').replace(/\s+/g, ' ').trim();
+    if (!raw) return null;
+    const sheetsAsked = [...new Set((raw.match(SHEET_WORDS) || []).map(w => ({ '美食': '美食清單', '美食清單': '美食清單', '景點': '景點', '廟宇': '廟宇', '廟': '廟宇', '店家': '其他店家', '其他店家': '其他店家' })[w]))];
+    const preset = findQuickKeyword(raw.replace(SHEET_WORDS, ' ').replace(/\s+/g, '').trim());
+    let buckets;
+    if (preset) {
+      buckets = runQuickKeyword(preset, c.sets);
+      if (sheetsAsked.length) for (const s of ALL_SHEETS) if (!sheetsAsked.includes(s)) buckets[s] = [];
+    } else {
+      const text = prepare(query, c.ctx);
+      if (!text) return null;
+      const plan = buildSearchPlan(text, c.ctx);
+      buckets = Object.fromEntries(ALL_SHEETS.map(s => [s, c.sets[s].filter(item => matchesSearchPlan(item, s, plan, c.ctx))]));
+    }
+    const out = {};
+    for (const s of ALL_SHEETS) out[TYPE_OF_SHEET[s]] = (buckets[s] || []).map(item => c.toD.get(item)).filter(Boolean);
+    return out;
+  }
+  // 地圖用：回傳判斷某一筆是否符合的函式；美食、景點、廟宇、其他店家用複合式搜尋，其他類型（港口等）每個字都要對到
+  function matcher(query) {
+    const found = search(query);
+    if (!found) return () => true;
+    const hit = new Set(Object.values(found).flat());
+    const tokens = normalizeSearchText(query).replace(STOP, ' ').split(/\s+/).filter(Boolean);
+    return d => SHEET_OF_TYPE[d.type] ? hit.has(d) : tokens.every(t => { const r = getSearchRegion(t); return r ? d.region === r.name : d.searchText.includes(t); });
+  }
+  const regionOf = token => getSearchRegion(token);
+  return { search, matcher, regionOf, getFoodField, getFoodName, checkValid, cleanTempleName, normalizeSearchText, isVisibleFoodItem };
+})();
+
 function applyFilter() {
   const q = searchInput.value.trim().toLowerCase();
+  const qMatch = q && mapDataLoaded ? PlaceSearch.matcher(q) : (d => d.searchText.includes(q));
   visibleData = allData.filter(d => (!activeRegion || d.region === activeRegion)
     && (!activeType || d.type === activeType)
     && (!activeSub || (activeType === '美食' && MEAL_CHIPS.includes(activeSub) ? mealMatch(d, activeSub)
       : (activeType === '美食' ? d.mainCategory : d.category).split(/[／/]/).map(v => v.trim()).includes(activeSub)))
-    && (!q || d.searchText.includes(q)));
+    && (!q || qMatch(d)));
   if (isMobile() && mapUserPos) {
     const dist = d => Math.hypot(d.lat - mapUserPos.lat, (d.lng - mapUserPos.lng) * Math.cos(mapUserPos.lat * Math.PI / 180));
     visibleData = visibleData.map((d, i) => [d, dist(d), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
@@ -2156,6 +2965,7 @@ function normalizeSheetRow(row, config) {
   }
   if (config.key === '港口、遊客中心') { d.desc = pick('簡易說明'); d.legend = pick('傳說'); d.category = clean(row['主類別']) === '交通設施' ? '港口' : '遊客中心'; }
   if (config.type === SPEED_T) { d.category = pick('類型'); d.speed = pick('速限'); d.dir = pick('拍攝方向'); d.items = pick('取締項目'); d.tech = pick('科技執法種類'); d.unit = pick('管轄分局'); d.service = d.items; }   
+  d.raw = row;   /* 原始欄位，給複合式搜尋用 */
   d.searchText = [d.name, d.region, d.village, d.mainCategory, d.category, d.service, d.recommendation, d.deity, d.address, d.hours, d.type, d.desc || ''].join(' ').toLowerCase();
   return d;
 }
@@ -5676,39 +6486,92 @@ if (window.bearDesktop) {
   /* 熊寶桌寵工作模式：對話框輸入的文字交給熊寶系統處理，回覆一段文字
      「2026/11/15 分海」查奎壁山分海；「2026/11/14 宵夜 111」記一筆支出（消夜一律記成宵夜） */
   window.BearCmd = (() => {
-    const HELP = '看不懂這句，可以這樣輸入：\n2026/11/15 分海\n2026/11/14 宵夜 111\n馬公 午餐推薦\n白沙 景點推薦\n元宵活動\n當前航班\n11/16 高雄 AE361 10:00（免稅卡）';
+    const HELP = '看不懂這句，可以這樣輸入：\n11/15 分海\n11/15 潮汐\n11/14 宵夜 111\n澎南 湖西 美食\n白沙 早餐\n馬公 景點\n2027元宵\n當前航班\n11/16 高雄 AE361 10:00（免稅卡）';
     const sleep = ms => new Promise(r => setTimeout(r, ms));
+    // 日期可以放在句子任何位置：2026/11/15、11/15、11月15日、今天、明天、後天、昨天
     function takeDate(s) {
       const t = todayKey(), y = t.slice(0, 4);
-      let m = s.match(/^(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/);
-      let key = m && `${m[1]}/${pad2(m[2])}/${pad2(m[3])}`;
-      if (!m) { m = s.match(/^(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?(?=\s|$|[^\d])/); key = m && `${y}/${pad2(m[1])}/${pad2(m[2])}`; }
-      if (!m) return { key: t, rest: s, given: false };
+      let m = s.match(/(\d{4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/), key, year = true;
+      if (m) key = `${m[1]}/${pad2(m[2])}/${pad2(m[3])}`;
+      else if ((m = s.match(/(?<![\d\/])(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?(?![\d\/])/))) { key = `${y}/${pad2(m[1])}/${pad2(m[2])}`; year = false; }
+      else if ((m = s.match(/今天|明天|後天|昨天/))) key = addDays(t, { 今天: 0, 明天: 1, 後天: 2, 昨天: -1 }[m[0]]);
+      if (!m) return { key: t, rest: s, given: false, year: false };
       if (utcToKey(keyToUTC(key)) !== key) return { bad: true };
-      return { key, rest: s.slice(m[0].length).trim(), given: true };
+      return { key, rest: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim(), given: true, year };
     }
-    const dayLabel = k => `${k}（${WEEK[weekdayOf(k)]}）`;
+    // 查分海、潮汐時沒寫年份：日期已經過了就是明年（例如 1/1 分海 → 明年 1/1）
+    const ahead = d => (d.given && !d.year && d.key < todayKey()) ? `${Number(d.key.slice(0, 4)) + 1}${d.key.slice(4)}` : d.key;
 
-    async function tide(key) {
+    async function ensureTide() {
       if (!tideLoaded) {
         loadTideData();
         for (let i = 0; i < 100 && !tideLoaded && (tideLoading || i < 5); i++) await sleep(200);
       }
-      if (!tideLoaded) return '分海資料讀取失敗，請確認網路後再試一次';
+      return tideLoaded;
+    }
+    const md = key => key.slice(5);
+    const join = list => list.length ? list.join('\n') : '—';
+
+    // 「11/15 分海」：奎壁山分海，用表格
+    async function tide(key) {
+      if (!(await ensureTide())) return '分海資料讀取失敗，請確認網路後再試一次';
       const info = tideDayInfo(key);
       if (!info.hasData) {
         const last = tideRows.length ? tideRows[tideRows.length - 1].date : '';
-        return `${dayLabel(key)} 沒有分海資料${last ? `（資料到 ${last}）` : ''}`;
+        return `${md(key)} 沒有奎壁山分海資料${last ? `（資料到 ${last}）` : ''}`;
       }
-      const sm = info.points.filter(p => p.type === 'sep' || p.type === 'mer');
-      const hl = info.points.filter(p => p.type === 'hi' || p.type === 'lo');
-      return [
-        `${dayLabel(key)}奎壁山分海`,
-        sm.length ? sm.map(p => `${p.label} ${p.t}`).join('、') : '這天沒有分海',
-        hl.length ? hl.map(p => `${p.label} ${p.t}`).join('、') : '',
-        info.safety.length ? `安全通行參考：${info.safety.join('、')}` : '',
-        `日出 ${info.sunrise}　日沒 ${info.sunset}`
-      ].filter(Boolean).join('\n');
+      const of = type => info.points.filter(p => p.type === type).map(p => hm2(p.t));
+      return { blocks: [
+        { type: 'title', text: `${md(key)}奎壁山分海` },
+        { type: 'table', head: ['項目', '時間'], rows: [
+          ['緩慢分海', join(of('sep'))],
+          ['緩慢合海', join(of('mer'))],
+          ['滿潮', join(of('hi'))],
+          ['乾潮', join(of('lo'))],
+          ['安全通行', join(info.safety)],
+          ['日出／日沒', `${info.sunrise}／${info.sunset}`]
+        ] }
+      ] };
+    }
+
+    // 「11/15 潮汐」：奎壁山＋馬公、西嶼、白沙、七美（30 天潮汐預報同一份資料），用表格
+    const TIDE_PLACES = ['馬公', '西嶼', '白沙', '七美'];
+    function forecastDay(rows, region, key) {
+      const starts = rows.map((r, i) => String(r[0] || '').trim() === '日期' ? i : -1).filter(i => i >= 0);
+      const bi = FORECAST_REGIONS.indexOf(region);
+      if (bi < 0 || bi >= starts.length) return null;
+      const [, mm, dd] = key.split('/').map(Number);
+      let on = false, found = false;
+      const tides = [];
+      for (const raw of rows.slice(starts[bi] + 1, starts[bi + 1] ?? rows.length)) {
+        const [dateCell, type, time, height] = raw.slice(0, 4).map(c => String(c ?? '').trim());
+        if (dateCell && dateCell.includes('/')) {
+          const m = dateCell.match(/(\d{1,2})\s*\/\s*(\d{1,2})/);
+          on = !!m && Number(m[1]) === mm && Number(m[2]) === dd;
+          if (on) found = true; else if (found) break;
+        }
+        if (on && type && time.includes(':')) tides.push({ type, time: hm2(time), height: parseFloat(height) });
+      }
+      return found ? tides : null;
+    }
+    const tideCell = (list, type) => join(list.filter(t => t.type === type).map(t => `${t.time}　${Number.isFinite(t.height) ? t.height + 'cm' : ''}`.trim()));
+    async function tides(key, only = []) {
+      const rows = [];
+      const want = place => !only.length || only.includes(place);
+      if (!want('奎壁山')) { /* 只查指定地點 */ }
+      else if (await ensureTide()) {
+        const info = tideDayInfo(key);
+        const pts = info.points.filter(p => p.type === 'hi' || p.type === 'lo').map(p => ({ type: p.label, time: hm2(p.t), height: p.h }));
+        rows.push(['奎壁山', ...(info.hasData ? [tideCell(pts, '滿潮'), tideCell(pts, '乾潮')] : ['沒有資料', '—'])]);
+      } else rows.push(['奎壁山', '讀取失敗', '—']);
+      const places = TIDE_PLACES.filter(want);
+      let fc = null;
+      try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { /* 下面標示讀取失敗 */ }
+      for (const place of places) {
+        const day = fc ? forecastDay(fc, place, key) : null;
+        rows.push([place, ...(day ? [tideCell(day, '滿潮'), tideCell(day, '乾潮')] : [fc ? '沒有資料' : '讀取失敗', '—'])]);
+      }
+      return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows }] };
     }
 
     const FOOD = /早餐|午餐|晚餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃/;
@@ -5738,18 +6601,19 @@ if (window.bearDesktop) {
     }
 
 
-    /* ── 美食、景點：照熊熊綜合系統「批次景點生圖 v13」的 TXT 格式 ── */
-    const REGIONS = { '馬公': '馬公市', '湖西': '湖西鄉', '白沙': '白沙鄉', '西嶼': '西嶼鄉', '望安': '望安鄉', '七美': '七美鄉' };
-    function takeRegion(s) {
-      const m = s.match(/^(馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?\s*/);
-      return m ? { region: REGIONS[m[1]], short: m[1], rest: s.slice(m[0].length).trim() } : { region: '', short: '', rest: s.replace(/^澎湖\s*/, '') };
-    }
+    /* ── 美食、景點、廟宇、其他店家：首頁同一套複合式搜尋；TXT 照熊熊綜合系統「批次景點生圖 v13」的格式 ── */
     const shuffle = list => { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-    const valid = v => { const t = String(v ?? '').trim(); return t !== '' && !['無', '無資料', '無提供', 'N/A'].includes(t); };
+    const valid = v => PlaceSearch.checkValid(v);
     const linkOf = d => validFullUrl(d.mapUrl) || validFullUrl(d.fullUrl) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.name} ${d.lat},${d.lng}`)}`;
     async function places() {
       for (let i = 0; i < 75 && !mapDataLoaded; i++) await sleep(200);
       return mapDataLoaded ? allData : null;
+    }
+    const REGION_NAMES = ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'];
+    function regionsIn(s) {
+      const found = [];
+      for (const r of REGION_NAMES) if (s.includes(r) || s.includes(r.slice(0, 2))) found.push(r);
+      return found;
     }
     const randomStyles = (pool, n) => shuffle(pool).slice(0, n).join('、');
     const FOOD_ELEM = { '馬公市': '虹橋、音符', '西嶼鄉': '柱狀玄武岩、古厝、燈塔', '湖西鄉': '沙灘、摩西分海、浮球造景、盪鞦韆', '白沙鄉': '盪鞦韆、水上活動、吉貝沙尾、梭子蟹', '七美鄉': '雙心石滬、浮潛、燈塔', '望安鄉': '古厝、綠蠵龜、貓咪、沙灘' };
@@ -5771,77 +6635,109 @@ if (window.bearDesktop) {
 ================================================== 【視覺總體指令規範格式】大標題(格式)：${titleString} 四周裝飾元素（固定於底圖邊緣分布）： ${elementLabel}：${elements} 縮圖核心內容：景點資料時，每一個景點必須呈現景點影像，並清楚疊加景點名稱。依本檔以下完整內容直接生成圖片 語言：繁體中文(圖片內文字內容須確認繁體中文) 版面大小： Height=841mm Width=1189mm 解析度設定：8K (118900 x84100) a0橫向尺寸 dpi=(1200, 1200) 整體風格:${selectedStyles} 排版強制指令: 圖資採減少個別區塊分隔感。🛑【絕對嚴禁使用九宮格、方格矩陣、表格列表或任何制式化的對稱排列】。各區塊必須自然融合於整體畫面中，請自行發揮最適合上述風格的排版設計，不侷限特定排版，但務必消除個別圖塊生硬的幾何邊界感。禁止出現任何 香蕉字眼 或 香蕉圖示禁止顯示「主標題、次標題、縮圖文字、中心影像」等系統標籤字樣；此規則不得套用於景點名稱，景點名稱屬必要成品文字請提升整張圖片的清晰度，特別是文字部分，讓筆畫更銳利、邊緣更乾淨，避免模糊不清須以高解析度、高清晰度繁體中文呈現 【視覺總體指令規範】大標題： ${titleString} 四周裝飾元素（固定於底圖邊緣分布）： ${region}知名景點的細膩蠟筆素描插畫，包含：${elements}。這些插畫須均勻分布在畫面四周，作為畫框感裝飾。縮圖核心內容：景點資料時，景點名稱必須直接呈現在對應景點旁；不得刪減。底部小字： ${footerText} 【圖卡個別內容指令】 `;
     }
     const SEP = '\n----------------------------------------\n\n';
-    function foodItem(d, publish) {
-      const lines = [['店名', d.name], ['推薦菜色', d.recommendation], ['營業時間', d.hours], ['電話', d.phone], ['地址', d.address]]
+    const TEMPLE_ELEM = { '馬公市': '虹橋、音符', '西嶼鄉': '柱狀玄武岩、古厝、燈塔', '湖西鄉': '沙灘、摩西分海、浮球造景、盪鞦韆', '白沙鄉': '盪鞦韆、香煙裊裊', '七美鄉': '雙心石滬、浮潛、燈塔', '望安鄉': '古厝、綠蠵龜、貓咪、沙灘' };
+    const F = (raw, key) => PlaceSearch.getFoodField(raw, key);
+    function foodItem(raw, publish) {
+      const lines = [['店名', PlaceSearch.getFoodName(raw)], ['推薦菜色', F(raw, '推薦菜色／行程')], ['營業時間', F(raw, '營業時間')], ['電話', F(raw, '電話')], ['地址', F(raw, '地址')]]
         .filter(([, v]) => valid(v)).map(([k, v]) => `${k}：${String(v).trim()}`);
-      if (publish && valid(d.mapUrl)) lines.push(`短網址：${d.mapUrl}`);
+      const short = F(raw, '短網址');
+      if (publish && short) lines.push(`短網址：${short}`);
       return lines.join('\n');
     }
-    function spotItem(d, publish) {
+    function spotItem(raw, publish) {
       let t = '';
-      if (valid(d.region)) t += `區域(鄉市)：${d.region}\n`;
-      if (valid(d.category)) t += `類別：${d.category}\n`;
-      t += `景點名稱：${d.name}\n`;
-      if (publish) { t += `緯度：${d.lat}\n經度：${d.lng}\n`; }
-      if (valid(d.mapUrl)) t += `短網址：${d.mapUrl}\n`;
-      if (!publish && valid(d.image)) t += `圖資來源網址：${String(d.image).trim()} ｜ 圖像規則：以此原始景點圖片作為主要視覺參考，保留景點主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
+      if (valid(raw['區域(鄉市)'])) t += `區域(鄉市)：${raw['區域(鄉市)']}\n`;
+      if (valid(raw['次類別'])) t += `類別：${raw['次類別']}\n`;
+      t += `景點名稱：${raw['景點名稱'] || '未提供名稱'}\n`;
+      if (publish && valid(raw['Latitude'])) t += `緯度：${String(raw['Latitude']).trim()}\n`;
+      if (publish && valid(raw['Longitude'])) t += `經度：${String(raw['Longitude']).trim()}\n`;
+      if (valid(raw['短網址'])) t += `短網址：${raw['短網址']}\n`;
+      const img = String(raw['圖資來源'] || raw['景點圖資'] || '').trim();
+      if (!publish && img) t += `圖資來源網址：${img} ｜ 圖像規則：以此原始景點圖片作為主要視覺參考，保留景點主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
       return t.trimEnd();
     }
-    function txtFiles(kind, list, region, subTitle, night) {
-      const area = region || '澎湖';
+    function templeItem(raw) {
+      let t = '';
+      const r1 = valid(raw['區域(鄉市)']) ? raw['區域(鄉市)'] : '', r2 = valid(raw['區域(村里)']) ? raw['區域(村里)'] : '';
+      if (r1 || r2) t += `區域(鄉市)-區域(村里)：${r1}${r1 && r2 ? '-' : ''}${r2}\n`;
+      t += `廟宇名稱：${raw['廟宇名稱'] || '未提供名稱'}\n`;
+      for (const k of ['主祀', '地址', '電話']) if (valid(raw[k])) t += `${k}：${raw[k]}\n`;
+      if (valid(raw['Latitude'])) t += `緯度：${raw['Latitude']}\n`;
+      if (valid(raw['Longitude'])) t += `經度：${raw['Longitude']}\n`;
+      if (valid(raw['短網址'])) t += `短網址：${raw['短網址']}\n`;
+      return t.trimEnd();
+    }
+    // 兩份 TXT：AI 生圖指令（檔頭＋每筆）、發布用（標題＋每筆）
+    function txtFiles(type, list, region, subTitle, night, prefix, areaLabel) {
+      const area = areaLabel || region || '澎湖';
       const title = `${area}-${subTitle}推薦`;
-      let label, elements, styles, footer;
-      if (kind === 'spot') {
-        label = '白天元素'; elements = SPOT_ELEM[region] || '';
+      let label = '白天元素', elements, styles, footer, ai, pub;
+      if (type === '景點') {
+        elements = SPOT_ELEM[region] || '';
         styles = randomStyles(['童趣', '攝影', '新海城', '卡通', '微立體'], 3);
         footer = '此DM畫面僅為AI美化示意圖，須以實際景點位置、實況為準。';
+        ai = d => spotItem(d.raw, false); pub = d => spotItem(d.raw, true);
+      } else if (type === '廟宇') {
+        elements = ['香煙裊裊', TEMPLE_ELEM[region]].filter(Boolean).join('、');
+        styles = randomStyles(['莊嚴', '攝影', '新海城'], 3);
+        footer = '此DM畫面僅為AI美化示意圖，須以實際廟宇位置、實際廟宇外觀、實際主祀神明為準。';
+        ai = d => templeItem(d.raw); pub = ai;
       } else {
-        const reg = FOOD_ELEM[region] || '';
         label = night ? '夜晚元素' : '白天元素';
-        elements = [night ? '星空、月亮' : '仙人掌冰、生魚片', reg].filter(Boolean).join('、');
+        elements = [night ? '星空、月亮' : '仙人掌冰、生魚片', FOOD_ELEM[region]].filter(Boolean).join('、');
         styles = randomStyles(['童趣', '攝影', '新海城', '卡通'], 3);
         footer = '此DM畫面僅為AI美化示意圖，須以實際料理為準。';
+        ai = d => foodItem(d.raw, false); pub = d => foodItem(d.raw, true);
       }
-      const item = kind === 'spot' ? spotItem : foodItem;
-      const ai = v13Header(title, label, elements, styles, area, footer) + list.map(d => item(d, false) + SEP).join('');
-      const pub = `${title}\n\n` + list.map(d => item(d, true) + SEP).join('');
-      const base = `澎湖_${region || '全區'}_${subTitle}`;
+      const base = `澎湖_${(areaLabel || region || '全區').replace(/、/g, '_')}_${prefix ? `${type}_` : ''}${subTitle}`;
       return [
-        { label: '⬇ AI 生圖指令 TXT', name: `${base}_AI生圖指令.txt`, content: ai },
-        { label: '⬇ 發布用 TXT', name: `${base}_發布用.txt`, content: pub }
+        { label: `⬇ ${prefix}AI 生圖指令 TXT`, name: `${base}_AI生圖指令.txt`, content: v13Header(title, label, elements, styles, area, footer) + list.map(d => ai(d) + SEP).join('') },
+        { label: `⬇ ${prefix}發布用 TXT`, name: `${base}_發布用.txt`, content: `${title}\n\n` + list.map(d => pub(d) + SEP).join('') }
       ];
     }
-
-    async function food(r, cat) {
-      const all = await places();
-      if (!all) return '美食資料讀取失敗，請確認網路後再試一次';
-      cat = cat.replace(/消夜/g, '宵夜');
-      const hit = d => d.type === '美食' && (!r.region || d.region === r.region) && (!cat
-        || d.category.split(/[／/、]/).map(x => x.trim()).includes(cat) || d.category.includes(cat) || d.mainCategory.includes(cat));
-      const list = shuffle(all.filter(hit)).slice(0, 7);
-      const area = r.short || '澎湖';
-      if (!list.length) return `找不到${area}${cat ? `「${cat}」` : ''}的美食資料`;
-      const blocks = [{ type: 'title', text: `${area} ${cat || '美食'}推薦` }];
-      list.forEach(d => {
-        blocks.push({ type: 'text', text: [d.name, valid(d.category) && `類別：${d.category}`, valid(d.hours) && `營業時間：${d.hours}`, valid(d.phone) && `電話：${d.phone}`].filter(Boolean).join('\n') });
-        blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
-      });
-      const night = /宵夜|酒吧|晚餐|居酒屋|BBQ|燒烤|餐酒館|串燒|夜景/.test(cat);
-      return { blocks, files: txtFiles('food', list, r.region, cat || '全區清單', night) };
+    const lines = (...xs) => xs.filter(Boolean).join('\n');
+    const SHOW = {
+      '美食': d => lines(d.name, valid(d.category) && `類別：${d.category}`, valid(d.hours) && `營業時間：${d.hours}`, valid(d.phone) && `電話：${d.phone}`),
+      '景點': d => lines(d.name, valid(d.category) && `類別：${d.category}`),
+      '廟宇': d => lines(d.name, valid(d.deity) && `主祀：${d.deity}`),
+      '其他店家': d => lines(d.name, valid(d.category) && `類別：${d.category}`, valid(d.hours) && `營業時間：${d.hours}`, valid(d.phone) && `電話：${d.phone}`)
+    };
+    const SUBJECT_WORDS = /澎湖|澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|市區觀光|古蹟觀光|其他店家|美食清單|美食|景點|廟宇|店家|廟|推薦|有什麼|有哪些|哪裡有|哪裡|好吃的|好吃|好玩的|好玩|吃什麼|去哪裡|去哪|介紹|查詢|搜尋|請問|幫我找|幫我|(馬公|湖西|白沙|西嶼|望安|七美)(市|鄉)?/g;
+    // 複合式搜尋：每一類隨機挑 7 筆；美食、景點、廟宇附兩份 TXT
+    async function searchPlaces(query) {
+      if (!(await places())) return '資料讀取失敗，請確認網路後再試一次';
+      const found = PlaceSearch.search(query);
+      // 美食不列水果、伴手禮（和熊熊綜合系統的搜尋一樣）
+      if (found && found['美食']) found['美食'] = found['美食'].filter(d => PlaceSearch.isVisibleFoodItem(d.raw));
+      const groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
+      const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
+      if (!groups.length) return null;
+      const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
+      const blocks = [{ type: 'title', text: query.replace(/消夜/g, '宵夜') }], files = [];
+      for (const [type, list] of groups) {
+        const pick = shuffle(list).slice(0, 7);
+        if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
+        pick.forEach(d => {
+          blocks.push({ type: 'text', text: SHOW[type](d) });
+          blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
+        });
+        if (type === '其他店家') continue;
+        const regs = [...new Set(pick.map(d => d.region))];
+        const region = regs.length === 1 ? regs[0] : '';
+        const label = region || areaWords.join('、');
+        const subTitle = type === '景點' ? (topic || '景點') : type === '廟宇' ? (topic || '全區廟宇') : (topic || '全區清單');
+        files.push(...txtFiles(type, pick, region, subTitle, /宵夜|酒吧|晚餐|居酒屋|BBQ|燒烤|餐酒館|串燒|夜景/.test(topic), groups.length > 1 ? `${type} ` : '', label));
+      }
+      return { blocks, files };
     }
-
-    async function spots(r) {
-      const all = await places();
-      if (!all) return '景點資料讀取失敗，請確認網路後再試一次';
-      const list = shuffle(all.filter(d => d.type === '景點' && (!r.region || d.region === r.region))).slice(0, 7);
-      const area = r.short || '澎湖';
-      if (!list.length) return `找不到${area}的景點資料`;
-      const blocks = [{ type: 'title', text: `${area} 景點推薦` }];
-      list.forEach(d => {
-        blocks.push({ type: 'text', text: [d.name, valid(d.category) && `類別：${d.category}`].filter(Boolean).join('\n') });
-        blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
-      });
-      return { blocks, files: txtFiles('spot', list, r.region, '景點', false) };
+    // 搜尋不到地點時，再找活動名稱
+    async function searchActivities(query) {
+      try { if (typeof Cal !== 'undefined' && Cal.load) await Cal.load(); } catch (_) { return null; }
+      const words = query.split(/\s+/).filter(w => w.length >= 2);
+      const list = (typeof Cal !== 'undefined' ? Cal.all() : []).filter(it => it.end >= todayKey() && words.some(w => plainText(it.name).includes(w) || String(it.cat || '').includes(w)))
+        .sort((a, b) => a.start.localeCompare(b.start)).slice(0, 7);
+      if (!list.length) return null;
+      return { blocks: [{ type: 'title', text: query }, ...list.map(it => ({ type: 'text', text: lines(`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`) }))] };
     }
 
     /* ── 元宵活動：元宵資訊頁同一份資料與 TXT 格式 ── */
@@ -5849,12 +6745,13 @@ if (window.bearDesktop) {
       const all = await places();
       if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
       const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; };
-      const list = Lantern.temples().filter(d => !r.region || d.region === r.region)
+      const inYear = text => !r.year || String(text || '').includes(r.year);
+      const list = Lantern.temples().filter(d => (!r.regions.length || r.regions.includes(d.region)) && inYear(d.lantern.dates))
         .sort((a, b) => order(a.region) - order(b.region) || a.village.localeCompare(b.village, 'zh-Hant') || a.name.localeCompare(b.name, 'zh-Hant'));
       let acts = [];
-      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey()); } } catch (_) { /* 沒有活動資料 */ }
-      const area = r.short || '澎湖';
-      if (!list.length && !acts.length) return `${area}目前沒有元宵活動資料`;
+      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start)); } } catch (_) { /* 沒有活動資料 */ }
+      const area = (r.regions.length ? r.regions.map(x => x.slice(0, 2)).join('、') : '澎湖') + (r.year ? ` ${r.year}` : '');
+      if (!list.length && !acts.length) return `${area} 目前沒有元宵活動資料`;
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
       const groups = new Map();
       list.forEach(d => {
@@ -5875,7 +6772,7 @@ if (window.bearDesktop) {
       acts.forEach(it => blocks.push({ type: 'text', text: [`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`].filter(Boolean).join('\n') }));
       const files = [];
       if (list.length) {
-        const t = Lantern.buildTxt(list, r.region, '');
+        const t = Lantern.buildTxt(list, r.regions.length === 1 ? r.regions[0] : '', '');
         files.push({ label: '⬇ AI 生圖指令 TXT', name: `澎湖元宵_${t.scope}_AI生圖指令.txt`, content: t.ai });
         files.push({ label: '⬇ 發布用 TXT', name: `澎湖元宵_${t.scope}_發布用.txt`, content: t.pub });
       }
@@ -5910,24 +6807,34 @@ if (window.bearDesktop) {
       return { blocks: [{ type: 'title', text: '澎湖機場 接下來的航班' }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有接下來的出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有接下來的抵達班次' }])] };
     }
 
+    // 判斷要做什麼：不用照固定格式，關鍵字在句子任何位置都可以
+    const QUERY_WORDS = /推薦|美食|景點|廟|店家|元宵|乞龜|分海|潮汐|航班|班機/;
     async function run(text) {
       const s = String(text || '').replace(/\s+/g, ' ').trim();
       if (!s) return HELP;
       try {
-        if (/^(?:當前|現在|目前|今日|今天)?\s*(?:航班|班機|班次)$/.test(s)) return await flights('');
-        const fc = s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
-        if (fc) return await flights(fc[1] + fc[2]);
-        const rg = takeRegion(s);
-        if (/^景點(?:推薦)?$/.test(rg.rest)) return await spots(rg);
-        if (/^元宵(?:活動)?(?:推薦)?$/.test(rg.rest)) return await lantern(rg);
-        const fm = rg.rest.match(/^(.*?)\s*(?:推薦|美食)$/);
-        if (fm && !/\d/.test(fm[1])) return await food(rg, fm[1].trim().replace(/^美食$/, ''));
+        // 航班：句子有航班、班機、飛機，或只打航班代號
+        const code = s.toUpperCase().replace(/\s|-/g, '').match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
+        if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
         const d = takeDate(s);
         if (d.bad) return '日期不正確，請再確認一次';
-        if (/^(奎壁山)?\s*(分海|潮汐)$/.test(d.rest)) return await tide(d.key);
+        // 奎壁山分海、潮汐（日期已過沒寫年份就是明年）
+        if (/分海|摩西/.test(s)) return await tide(ahead(d));
+        if (/潮汐|漲潮|退潮|滿潮|乾潮|潮水/.test(s)) {
+          const only = ['奎壁山', ...TIDE_PLACES].filter(p => s.includes(p));
+          return await tides(ahead(d), only);
+        }
+        // 元宵（可加年份、鄉市）：2027元宵、馬公 元宵
+        if (/元宵|乞龜/.test(s)) {
+          const year = (s.match(/(20\d{2})/) || [])[1] || '';
+          return await lantern({ regions: regionsIn(s), year });
+        }
+        // 記帳：最後是金額（例如 11/14 宵夜 111、午餐 120）
         const m = d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
-        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim())) return await ledger(d.key, m[1].trim(), Number(m[2]));
-        return HELP;
+        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return await ledger(d.key, m[1].trim(), Number(m[2]));
+        // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
+        const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '');
+        return (await searchPlaces(q)) || (await searchActivities(q)) || `找不到「${q}」的資料\n\n${HELP.replace('看不懂這句，', '')}`;
       } catch (err) {
         return '⚠️ ' + (err && err.message ? err.message : '處理失敗，請再試一次');
       }

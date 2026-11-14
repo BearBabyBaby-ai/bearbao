@@ -37,6 +37,15 @@
     if (typeof reply === 'string' || !reply || !Array.isArray(reply.blocks)) return add(String(reply || '熊寶系統沒有回覆，請再試一次'), 'bear');
     const d = bubble('bear rich');
     for (const b of reply.blocks) {
+      if (b.type === 'table') {
+        const t = document.createElement('table');
+        t.className = 'b-table';
+        const tr = cells => { const r = document.createElement('tr'); cells.forEach(([tag, v]) => { const c = document.createElement(tag); c.textContent = v; r.appendChild(c); }); return r; };
+        if (Array.isArray(b.head)) t.appendChild(tr(b.head.map(v => ['th', v])));
+        (b.rows || []).forEach(row => t.appendChild(tr(row.map((v, i) => [i === 0 ? 'th' : 'td', v]))));
+        d.appendChild(t);
+        continue;
+      }
       const el = document.createElement(b.type === 'link' ? 'a' : 'div');
       el.className = 'b-' + b.type;
       el.textContent = b.text;
@@ -260,7 +269,7 @@
     scroll();
   }
 
-  add('要查什麼或記什麼，直接打給我：\n2026/11/15 分海\n2026/11/14 宵夜 111\n馬公 午餐推薦\n白沙 景點推薦\n元宵活動\n當前航班\n11/16 高雄 AE361 10:00（免稅卡）', 'bear');
+  add('要查什麼或記什麼，直接打給我（不用照固定格式）：\n11/15 分海\n11/15 潮汐\n11/14 宵夜 111\n澎南 湖西 美食\n白沙 早餐\n馬公 景點\n2027元宵\n當前航班\n11/16 高雄 AE361 10:00（免稅卡）', 'bear');
 
   form.addEventListener('submit', async e => {
     e.preventDefault();
@@ -291,5 +300,18 @@
     }
   });
 
-  window.desk.onFocus(() => input.focus());
+  // 右上角：縮小（只留標題列）、恢復（展開回原本大小）
+  const miniBtn = document.getElementById('mini'), restoreBtn = document.getElementById('restore');
+  function setMini(on) {
+    document.body.classList.toggle('mini', on);
+    miniBtn.disabled = on;
+    restoreBtn.disabled = !on;
+    window.desk.mini(on);
+    if (!on) { scroll(); input.focus(); }
+  }
+  miniBtn.addEventListener('click', () => setMini(true));
+  restoreBtn.addEventListener('click', () => setMini(false));
+
+  // 點熊寶：縮小中就先恢復，再到輸入框打字
+  window.desk.onFocus(() => { if (document.body.classList.contains('mini')) setMini(false); else input.focus(); });
 })();

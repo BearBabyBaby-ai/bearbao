@@ -352,13 +352,15 @@ function checkAway() {
 
 // ---------- 工作模式：熊寶固定在右下角，旁邊有小對話框 ----------
 // 對話框輸入的文字交給熊寶系統處理（查分海、記帳），把回覆顯示在對話框
-let desk = false, chatWin = null, askFn = null;
+let desk = false, chatWin = null, askFn = null, chatMini = false;
 const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
-const CHAT = { w: 380, h: 480 };
+const CHAT = { w: 380, h: 480, mini: 48 };
 
+// 縮小時只留標題列，一樣貼在熊寶旁邊的下緣
 function chatBounds() {
   const a = screen.getPrimaryDisplay().workArea;
-  return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - CHAT.h - 6), width: CHAT.w, height: CHAT.h };
+  const h = chatMini ? CHAT.mini : CHAT.h;
+  return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - h - 6), width: CHAT.w, height: h };
 }
 
 function makeChat() {
@@ -366,7 +368,7 @@ function makeChat() {
   chatWin = new BrowserWindow({
     ...chatBounds(), show: false, frame: false, transparent: true, backgroundColor: '#00000000',
     resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
-    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, title: '熊寶工作模式',
+    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, title: '熊寶工作中',
     webPreferences: { preload: path.join(__dirname, 'desk-preload.js'), spellcheck: false }
   });
   chatWin.setAlwaysOnTop(true, 'screen-saver');
@@ -377,7 +379,7 @@ function makeChat() {
   });
   chatWin.webContents.on('will-navigate', e => e.preventDefault());
   chatWin.loadURL('bearbao://app/src/desk.html');
-  chatWin.on('closed', () => { chatWin = null; });
+  chatWin.on('closed', () => { chatWin = null; chatMini = false; });
   return chatWin;
 }
 
@@ -417,6 +419,11 @@ ipcMain.handle('desk-save', async (_e, name, data) => {
   if (r.canceled || !r.filePath) return '';
   await fs.promises.writeFile(r.filePath, typeof data === 'string' ? data : Buffer.from(data));
   return r.filePath;
+});
+
+ipcMain.on('desk-mini', (_e, on) => {
+  chatMini = !!on;
+  if (chatWin && !chatWin.isDestroyed()) chatWin.setBounds(chatBounds());
 });
 
 ipcMain.handle('desk-ask', async (_e, text) => {
