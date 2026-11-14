@@ -6844,9 +6844,21 @@ if (window.bearDesktop) {
       if (!groups.length) return null;
       const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
       const blocks = [{ type: 'title', text: query.replace(/消夜/g, '宵夜') }], files = [], copyAll = [];
+      // 只打地區（例如 七美、吉貝）：該地區所有資訊全部列出，美食、景點、廟宇、其他店家各自一鍵複製
+      const rest = query.replace(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|市區觀光|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g, ' ').trim();
+      const regionOnly = !rest;
+      const OTHER_PUB = raw => lines(`名稱：${raw['名稱'] || raw['店名'] || '未提供名稱'}`, valid(raw['地址']) && `地址：${raw['地址']}`, valid(raw['電話']) && `電話：${raw['電話']}`, valid(raw['短網址']) && `短網址：${raw['短網址']}`);
       for (const [type, list] of groups) {
-        const pick = shuffle(list).slice(0, 7);
+        // 景點、廟宇列完整的；只打地區時每一種都列完整的；其他隨機挑 7 筆
+        const pick = regionOnly || type === '景點' || type === '廟宇' ? list : shuffle(list).slice(0, 7);
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
+        if (regionOnly) {
+          const PUB_ALL = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)), '其他店家': d => OTHER_PUB(d.raw) };
+          const items = pick.map(d => noFull(PUB_ALL[type] ? PUB_ALL[type](d) : SHOW[type](d)));
+          pick.forEach((d, i) => blocks.push(type === '其他店家' ? { type: 'text', text: SHOW[type](d) } : { type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          blocks.push({ type: 'copy', label: `📋 一鍵複製（${type}）`, text: `${blocks[0].text} ${type}\n\n` + items.map(t => t + SEP).join('') });
+          continue;
+        }
         // 美食、景點、廟宇：照發布用 TXT 的格式顯示，點一下複製（只放短網址）；不提供 TXT 下載
         const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)) };
         if (PUB[type]) {
@@ -6868,7 +6880,7 @@ if (window.bearDesktop) {
       }
       // 一鍵複製：整個搜尋結果，照發布用 TXT 的格式（標題＋每筆＋分隔線）
       const copy = copyAll.length ? `${blocks[0].text}\n\n` + copyAll.map(t => t + SEP).join('') : '';
-      return { blocks, files, copy };
+      return { blocks, files: regionOnly ? [] : files, copy: regionOnly ? '' : copy };
     }
     // 搜尋不到地點時，再找活動名稱
     async function searchActivities(query) {
@@ -7023,10 +7035,12 @@ if (window.bearDesktop) {
         // 只打日期：列出那天有資料的項目，點一下看那一種
         if (d.given && !d.rest) return await overview(ahead(d));
         // 記帳：最後是金額（例如 11/14 宵夜 111、午餐 120）
-        const m = d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
-        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(d.key, m[1].trim(), Number(m[2]));
+        // 7-11、小七：查其他店家（不是記帳）；「11/14 7-11 午餐 500」這種才是記帳
+        const STORE = /^(?:7\s*-\s*11|711|小七|7-?eleven|seven\s*-?\s*eleven)$/i;
+        const m = STORE.test(d.rest.trim()) ? null : d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
+        if (m && !/-$/.test(m[1].trim()) && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(d.key, m[1].trim(), Number(m[2]));
         // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
-        const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '');
+        const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '').replace(/小七|(?<![\d-])711(?!\d)|7-?eleven|seven\s*-?\s*eleven/gi, '7-11');
         // 元宵活動名稱（例如 2027 超級龜龜）：直接查元宵，只列那個活動
         const words = q.split(' ').filter(w => w && !/^20\d{2}$/.test(w) && !REGION_NAMES.some(r => w === r || w === r.slice(0, 2)));
         if (words.length && (await places())) {

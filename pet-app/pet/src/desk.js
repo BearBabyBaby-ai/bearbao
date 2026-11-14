@@ -194,6 +194,22 @@
         d.append(t, hint);
         continue;
       }
+      // 每一種各自的一鍵複製（只打地區時）
+      if (b.type === 'copy') {
+        const row = document.createElement('div');
+        row.className = 'files';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = b.label || '📋 一鍵複製';
+        btn.addEventListener('click', () => {
+          window.desk.copy(b.text);
+          btn.textContent = '✅ 已複製';
+          setTimeout(() => { btn.textContent = b.label || '📋 一鍵複製'; }, 2000);
+        });
+        row.appendChild(btn);
+        d.appendChild(row);
+        continue;
+      }
       if (b.type === 'pub') {
         const el = document.createElement('div');
         el.className = 'b-pub';
