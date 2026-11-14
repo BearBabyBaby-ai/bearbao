@@ -6768,29 +6768,32 @@ if (window.bearDesktop) {
       if (publish && short && !/google\.[a-z.]+\/maps|maps\.google\./i.test(short)) lines.push(`短網址：${short}`);
       return lines.join('\n');
     }
-    function spotItem(raw, publish) {
+    // 景點、廟宇每筆內容：照熊熊綜合系統「批次生圖指令」v13（buildItemText）
+    const templeName = name => String(name || '').trim().replace(/^[一-龥A-Za-z0-9]+-(.+)$/, '$1').replace(/-/g, '');
+    const imgOf = raw => String(raw['圖資來源'] || raw['景點圖資'] || raw['廟宇圖資'] || '').trim();
+    function spotItem(raw) {
       let t = '';
       if (valid(raw['區域(鄉市)'])) t += `區域(鄉市)：${raw['區域(鄉市)']}\n`;
       if (valid(raw['次類別'])) t += `類別：${raw['次類別']}\n`;
       t += `景點名稱：${raw['景點名稱'] || '未提供名稱'}\n`;
-      if (publish && valid(raw['Latitude'])) t += `緯度：${String(raw['Latitude']).trim()}\n`;
-      if (publish && valid(raw['Longitude'])) t += `經度：${String(raw['Longitude']).trim()}\n`;
+      if (valid(raw['地址'])) t += `地址：${raw['地址']}\n`;
       if (valid(raw['短網址'])) t += `短網址：${raw['短網址']}\n`;
-      const img = String(raw['圖資來源'] || raw['景點圖資'] || '').trim();
-      if (!publish && img) t += `圖資來源網址：${img} ｜ 圖像規則：以此原始景點圖片作為主要視覺參考，保留景點主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
+      if (imgOf(raw)) t += `圖資來源網址：${imgOf(raw)} ｜ 圖像規則：以此原始景點圖片作為主要視覺參考，保留景點主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
       return t.trimEnd();
     }
     function templeItem(raw) {
       let t = '';
       const r1 = valid(raw['區域(鄉市)']) ? raw['區域(鄉市)'] : '', r2 = valid(raw['區域(村里)']) ? raw['區域(村里)'] : '';
       if (r1 || r2) t += `區域：${r1}${r1 && r2 ? '-' : ''}${r2}\n`;
-      t += `廟宇名稱：${raw['廟宇名稱'] || '未提供名稱'}\n`;
-      for (const k of ['主祀', '地址', '電話']) if (valid(raw[k])) t += `${k}：${raw[k]}\n`;
-      if (valid(raw['Latitude'])) t += `緯度：${raw['Latitude']}\n`;
-      if (valid(raw['Longitude'])) t += `經度：${raw['Longitude']}\n`;
-      if (valid(raw['短網址'])) t += `短網址：${raw['短網址']}\n`;
+      t += `廟宇名稱：${templeName(raw['廟宇名稱']) || '未提供名稱'}\n`;
+      for (const k of ['主祀', '地址', '電話', '短網址']) if (valid(raw[k])) t += `${k}：${raw[k]}\n`;
+      if (imgOf(raw)) t += `圖資來源網址：${imgOf(raw)} ｜ 圖像規則：以此原始廟宇圖片作為主要視覺參考，保留廟宇主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
       return t.trimEnd();
     }
+    // v13 發布用：去掉區域、類別、圖資來源網址；AI 生圖指令：去掉區域、類別、地址、緯度、經度
+    const stripMeta = t => String(t).split('\n').filter(l => !/^\s*(?:區域(?:[（(]鄉市[）)])?|類別)\s*[：:]/.test(l)).join('\n').trimEnd();
+    const pubText = t => stripMeta(t).split('\n').filter(l => !/^\s*(?:圖資來源網址|景點圖資網址|廟宇圖資網址)\s*[：:]/.test(l)).join('\n').trimEnd();
+    const aiText = t => stripMeta(t).split('\n').filter(l => !/^\s*(?:地址|緯度|經度)\s*[：:]/.test(l)).join('\n').trimEnd();
     // 兩份 TXT：AI 生圖指令（檔頭＋每筆）、發布用（標題＋每筆）
     function txtFiles(type, list, region, subTitle, night, prefix, areaLabel) {
       const area = areaLabel || region || '澎湖';
@@ -6800,12 +6803,12 @@ if (window.bearDesktop) {
         elements = SPOT_ELEM[region] || '';
         styles = randomStyles(['童趣', '攝影', '新海城', '卡通', '微立體'], 3);
         footer = '此DM畫面僅為AI美化示意圖，須以實際景點位置、實況為準。';
-        ai = d => spotItem(d.raw, false); pub = d => spotItem(d.raw, true);
+        ai = d => aiText(spotItem(d.raw)); pub = d => pubText(spotItem(d.raw));
       } else if (type === '廟宇') {
         elements = ['香煙裊裊', TEMPLE_ELEM[region]].filter(Boolean).join('、');
         styles = randomStyles(['莊嚴', '攝影', '新海城'], 3);
         footer = '此DM畫面僅為AI美化示意圖，須以實際廟宇位置、實際廟宇外觀、實際主祀神明為準。';
-        ai = d => templeItem(d.raw); pub = ai;
+        ai = d => aiText(templeItem(d.raw)); pub = d => pubText(templeItem(d.raw));
       } else {
         label = night ? '夜晚元素' : '白天元素';
         elements = [night ? '星空、月亮' : '仙人掌冰、生魚片', FOOD_ELEM[region]].filter(Boolean).join('、');
@@ -6846,7 +6849,7 @@ if (window.bearDesktop) {
         const pick = shuffle(list).slice(0, 7);
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
         // 美食、景點、廟宇：照發布用 TXT 的格式顯示，點一下複製（只放短網址）；不提供 TXT 下載
-        const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => spotItem(d.raw, true), '廟宇': d => templeItem(d.raw) };
+        const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)) };
         if (PUB[type]) {
           const items = pick.map(d => noFull(PUB[type](d)));
           pick.forEach((d, i) => blocks.push({ type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
