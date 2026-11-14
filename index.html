@@ -6923,10 +6923,11 @@ if (window.bearDesktop) {
       const inYear = text => !r.year || String(text || '').includes(r.year);
       // 指定日期（只打日期時點「元宵活動」）：只列那天的活動
       const onDay = d => { if (!r.date) return true; const g = Lantern.dateRange(d.lantern.dates); return Boolean(g) && g.start <= r.date && r.date <= g.end; };
-      const list = Lantern.temples().filter(d => (!r.regions.length || r.regions.includes(d.region)) && inYear(d.lantern.dates) && onDay(d))
+      const byName = d => !r.name || r.name.every(w => [d.lantern.theme, d.lantern.content, d.lantern.gov].join(' ').includes(w));
+      const list = Lantern.temples().filter(d => (!r.regions.length || r.regions.includes(d.region)) && inYear(d.lantern.dates) && onDay(d) && byName(d))
         .sort((a, b) => order(a.region) - order(b.region) || a.village.localeCompare(b.village, 'zh-Hant') || a.name.localeCompare(b.name, 'zh-Hant'));
       let acts = [];
-      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start) && (!r.date || (it.start <= r.date && r.date <= it.end))); } } catch (_) { /* 沒有活動資料 */ }
+      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start) && (!r.date || (it.start <= r.date && r.date <= it.end)) && (!r.name || r.name.every(w => plainText(it.name).includes(w)))); } } catch (_) { /* 沒有活動資料 */ }
       const area = (r.regions.length ? r.regions.map(x => x.slice(0, 2)).join('、') : '澎湖') + (r.date ? ` ${r.date}` : r.year ? ` ${r.year}` : '');
       if (!list.length && !acts.length) return `${area} 目前沒有元宵活動資料`;
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
@@ -7024,6 +7025,12 @@ if (window.bearDesktop) {
         if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return await ledger(d.key, m[1].trim(), Number(m[2]));
         // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
         const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '');
+        // 元宵活動名稱（例如 2027 超級龜龜）：直接查元宵，只列那個活動
+        const words = q.split(' ').filter(w => w && !/^20\d{2}$/.test(w) && !REGION_NAMES.some(r => w === r || w === r.slice(0, 2)));
+        if (words.length && (await places())) {
+          const named = Lantern.temples().some(t => { const L = t.lantern, txt = [L.theme, L.content, L.gov].join(' '); return words.every(w => txt.includes(w)); });
+          if (named) return await lantern({ regions: regionsIn(q), year: (q.match(/(20\d{2})/) || [])[1] || '', name: words });
+        }
         return (await searchPlaces(q)) || (await searchActivities(q)) || `找不到「${q}」的資料\n\n${HELP.replace('看不懂這句，', '')}`;
       } catch (err) {
         return '⚠️ ' + (err && err.message ? err.message : '處理失敗，請再試一次');
