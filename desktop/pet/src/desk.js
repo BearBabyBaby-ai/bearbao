@@ -44,7 +44,12 @@
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
   function cellTint(head, row, c) {
     // 日期區段潮汐（橫向）：地點、潮別兩欄是項目欄，底色依潮別（滿潮、乾潮、池西岩瀑建議觀賞）
-    if (head[1] === '潮別') return c < 2 ? [LABEL_BG, INK] : (TINT[row[1]] || TINT[row[0] + row[1]] || ['#ffffff', INK]);
+    // 每個地點一種底色（地點、潮別欄較深）；滿潮、乾潮用字色區分
+    if (head[1] === '潮別') {
+      const [bg, deep] = PLACE_BG[row[0]] || ['#ffffff', LABEL_BG];
+      if (c < 2) return [deep, INK];
+      return [bg, (PLACE_FG[row[1]] || (TINT[row[0] + row[1]] || [])[1] || INK)];
+    }
     if (c === 0) return [LABEL_BG, INK];
     const byCol = TINT[head[c]];
     if (byCol && head.includes('地點')) return byCol;
@@ -62,7 +67,13 @@
     }
     return out;
   }
-  const ALT_BG = '#efdcbc', SEP_LINE = '#9c7b53';
+  const SEP_LINE = '#9c7b53';
+  // 日期區段潮汐：每個地點一種底色 [資料格, 地點與潮別欄]
+  const PLACE_BG = {
+    '奎壁山': ['#e4f3e1', '#c9e6c3'], '馬公': ['#e2edfa', '#c3d8f2'], '西嶼': ['#f1e4f5', '#dfc6e8'],
+    '白沙': ['#fdeedd', '#f6d6b2'], '七美': ['#dff3f2', '#b9e2df'], '池西岩瀑': ['#fff3c4', '#f5df8f']
+  };
+  const PLACE_FG = { '滿潮': '#c62828', '乾潮': '#1565c0', '建議觀賞': '#8a6400' };
   // 每一列屬於第幾個地點（從 0 起），沒有合併時為 -1
   function placeIndex(runs) { let k = -1; return runs.map(n => (n > 0 ? ++k : k)); }
   function tableEl(b, title) {
@@ -79,7 +90,6 @@
         if (i === 0 && merge > 1) c.rowSpan = merge;
         c.textContent = v;
         if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i); c.style.background = bg; c.style.color = fg; }
-        if (i === 0 && place >= 0) c.style.background = place % 2 ? ALT_BG : LABEL_BG;
         r.appendChild(c);
       });
       return r;
@@ -170,7 +180,7 @@
         let x = M;
         for (let c = 0; c < cols; c++) {
           const run = c === 0 && ri < runs.length ? runs[ri] : 1;
-          const tint = c === 0 && merged ? [places[ri] % 2 ? ALT_BG : LABEL_BG, INK] : cellTint(head, r, c);
+          const tint = cellTint(head, r, c);
           if (run > 0) cell(r[c], x, widths[c], run > 1 ? heights.slice(ri, ri + run).reduce((a, v) => a + v, 0) : h, ...tint, c === 0);
           x += widths[c];
         }
