@@ -6662,8 +6662,9 @@ if (window.bearDesktop) {
       const want = place => !only.length || only.includes(place);
       let fc = null;
       try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { return '潮汐資料讀取失敗，請確認網路後再試一次'; }
-      // 潮汐依 30 天潮汐預報：超過預報範圍直接回尚無資訊
-      if (!TIDE_PLACES.some(p => forecastDay(fc, p, key))) return `${md(key)} 潮汐：尚無資訊`;
+      // 馬公、西嶼、白沙、七美依 30 天潮汐預報，超過範圍寫尚無資訊；奎壁山用分海資料，有資料就照常顯示
+      const inFc = TIDE_PLACES.some(p => forecastDay(fc, p, key));
+      if (!inFc && !(want('奎壁山') && (await ensureTide()) && tideDayInfo(key).hasData)) return `${md(key)} 潮汐：尚無資訊`;
       const rows = [], foot = [];
       if (!want('奎壁山')) { /* 只查指定地點 */ }
       else if (await ensureTide()) {
@@ -6677,8 +6678,8 @@ if (window.bearDesktop) {
       }
       // 西嶼：池西岩瀑建議觀賞（08:00–17:00）
       if (want('西嶼')) {
-        const w = chixiDay(fc, key);
-        if (w) foot.push(['池西岩瀑建議觀賞', w.length ? w.join('\n') : '08:00–17:00 之間沒有建議時段']);
+        const w = inFc ? chixiDay(fc, key) : null;
+        foot.push(['池西岩瀑建議觀賞', w ? (w.length ? w.join('\n') : '08:00–17:00 之間沒有建議時段') : '尚無資訊']);
       }
       return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows, foot }] };
     }
@@ -6688,12 +6689,12 @@ if (window.bearDesktop) {
       let fc = null;
       try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { return '潮汐資料讀取失敗，請確認網路後再試一次'; }
       const inFc = k => TIDE_PLACES.some(p => forecastDay(fc, p, k));
-      if (!r.days.some(inFc)) return `${md(r.from)}–${md(r.to)} 潮汐：尚無資訊`;
       const tideOk = want('奎壁山') ? await ensureTide() : false;
+      // 奎壁山用分海資料，超過 30 天預報也照常顯示；其他地點超過範圍寫尚無資訊
+      if (!r.days.some(k => inFc(k) || (tideOk && tideDayInfo(k).hasData))) return `${md(r.from)}–${md(r.to)} 潮汐：尚無資訊`;
       // 每天每個地點的潮汐；超過 30 天潮汐預報的日子為 null（尚無資訊）
       const dayOf = (place, key) => {
-        if (!inFc(key)) return null;
-        if (place !== '奎壁山') return forecastDay(fc, place, key);
+        if (place !== '奎壁山') return inFc(key) ? forecastDay(fc, place, key) : null;
         if (!tideOk) return null;
         const info = tideDayInfo(key);
         return info.hasData ? info.points.filter(p => p.type === 'hi' || p.type === 'lo').map(p => ({ type: p.label, time: hm2(p.t), height: p.h })) : null;
