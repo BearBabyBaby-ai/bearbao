@@ -441,10 +441,20 @@ ipcMain.handle('desk-ask', async (_e, text) => {
 function setHidden(v) {
   hidden = v;
   if (desk) { if (v) hideChat(); else showChat(false); }
-  for (const [, h] of handles) {
+  for (const [b, h] of handles) {
     if (h.win.isDestroyed()) continue;
-    if (v) h.win.hide(); else h.win.showInactive();
+    // 隱藏時放開正在抓的熊寶；重新出現時 Windows 會重設點穿與最上層，這裡重新設一次並清掉記住的狀態，
+    // 讓游標碰到熊寶時重新判斷（之前再出現後抓不起來、不能互動）
+    h.pressed = false;
+    if (b.mode === 'drag') { try { b.onDragEnd(); } catch (_) { /* 略過 */ } }
+    if (v) { h.win.hide(); continue; }
+    h.interactive = false;
+    h.win.setIgnoreMouseEvents(true);
+    h.win.setAlwaysOnTop(true, 'screen-saver');
+    h.win.showInactive();
+    if (h.ready) h.win.webContents.send('hover', false);
   }
+  last = Date.now();
   if (onChange) onChange();
 }
 
