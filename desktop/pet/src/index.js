@@ -1,7 +1,7 @@
 'use strict';
 // 熊寶桌寵（併入熊寶系統電腦版）：由熊寶系統主程式啟動，共用右下角小圖示
 // 動作圖第一次使用時下載到使用者資料夾，之後不用再下載
-const { app, BrowserWindow, ipcMain, screen, powerMonitor, protocol, shell, dialog, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, powerMonitor, protocol, shell, dialog, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const log = require('./log');
@@ -422,6 +422,7 @@ ipcMain.handle('desk-save', async (_e, name, data) => {
 });
 
 ipcMain.on('desk-copy', (_e, text) => clipboard.writeText(String(text || '')));
+ipcMain.handle('desk-copy-image', (_e, png) => { clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(png))); return true; });
 
 ipcMain.on('desk-mini', (_e, on) => {
   chatMini = !!on;

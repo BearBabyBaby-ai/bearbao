@@ -49,7 +49,7 @@
   function tableEl(b, title) {
     const t = document.createElement('table');
     t.className = 'b-table';
-    t.title = '點一下存成圖片';
+    t.title = '點一下複製成圖片';
     const tr = (cells, isHead, row) => {
       const r = document.createElement('tr');
       cells.forEach((v, i) => {
@@ -75,7 +75,7 @@
     t.addEventListener('click', () => saveTableImage(b, title, hint));
     const hint = document.createElement('div');
     hint.className = 'b-hint';
-    hint.textContent = '📷 點表格存成圖片';
+    hint.textContent = '📷 點表格複製成圖片';
     return [t, hint];
   }
   // 把表格畫成圖片（2 倍解析度），標題在上方
@@ -135,15 +135,15 @@
     });
     return cv;
   }
+  // 點表格：把表格畫成圖片直接複製到剪貼簿（不用另存）
   function saveTableImage(b, title, hint) {
     const cv = tableCanvas(b, title);
     cv.toBlob(async blob => {
       if (!blob) return;
-      const name = `${title.replace(/\//g, '-').replace(/\s+/g, '')}.png`;
       try {
-        const where = await window.desk.save(name, new Uint8Array(await blob.arrayBuffer()));
-        if (where && hint) { hint.textContent = '✅ 已存成圖片'; setTimeout(() => { hint.textContent = '📷 點表格存成圖片'; }, 3000); }
-      } catch (_) { if (hint) hint.textContent = '⚠️ 圖片儲存失敗'; }
+        await window.desk.copyImage(new Uint8Array(await blob.arrayBuffer()));
+        if (hint) { hint.textContent = '✅ 已複製成圖片，可直接貼上'; setTimeout(() => { hint.textContent = '📷 點表格複製成圖片'; }, 3000); }
+      } catch (_) { if (hint) hint.textContent = '⚠️ 圖片複製失敗'; }
     }, 'image/png');
   }
 
