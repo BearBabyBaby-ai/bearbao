@@ -49,7 +49,7 @@
   let groove = null;
   window.pet.on('groove', d => {
     if (!d || !d.ms) { groove = null; if (!sway.deg) rig.style.transform = ''; return; }
-    groove = { t0: performance.now(), ms: d.ms };
+    groove = { t0: performance.now(), ms: d.ms, amp: d.amp ?? 3, bounce: d.bounce ?? 2.5 };
     rig.style.transformOrigin = d.px + 'px ' + d.py + 'px';
     const step = now => {
       if (!groove || sway.deg) return;
@@ -57,8 +57,8 @@
       if (t >= groove.ms) { groove = null; rig.style.transform = ''; return; }
       const env = Math.min(1, t / 400, (groove.ms - t) / 400);   // 開始、結束慢慢來
       const beat = (t / 1100) * Math.PI * 2;                     // 一拍 1.1 秒
-      const deg = Math.sin(beat) * 3 * env;
-      const dy = -Math.abs(Math.sin(beat)) * 2.5 * env;
+      const deg = Math.sin(beat) * groove.amp * env;
+      const dy = -Math.abs(Math.sin(beat)) * groove.bounce * env;
       rig.style.transform = 'translateY(' + dy.toFixed(1) + 'px) rotate(' + deg.toFixed(2) + 'deg)';
       requestAnimationFrame(step);
     };

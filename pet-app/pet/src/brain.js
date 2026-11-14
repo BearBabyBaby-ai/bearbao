@@ -69,7 +69,7 @@ class Bear {
 
   play(action, { restart = false } = {}) {
     // 換成別的動作時，小跳舞的擺動停下來
-    if (this.grooving && action !== 'idle_blink') { this.grooving = false; this.world.send(this, 'groove', { ms: 0 }); }
+    if (this.grooving && (action !== 'idle_blink' || this.mode === 'hold')) { this.grooving = false; this.world.send(this, 'groove', { ms: 0 }); }
     const { clip, mirror } = clips.resolve(action, this.outfit(), this.facing);
     const changed = !this.cur || this.cur.id !== clip.id || this.cur.mirror !== mirror;
     if (changed || restart) {
@@ -409,6 +409,15 @@ class Bear {
   tick(dt) {
     const now = Date.now();
     if (this.mode !== 'drag') this.settleSway(dt);
+    // 工作模式坐著時：每隔一陣子稍微搖一搖（幅度很小、不彈起）
+    if (this.desk && this.mode === 'hold' && this.m.action === 'sit_down') {
+      if (!this.m.nextSway) this.m.nextSway = now + 2500;
+      else if (now >= this.m.nextSway) {
+        this.m.nextSway = now + rand(4000, 8000);
+        this.grooving = true;
+        this.world.send(this, 'groove', { ms: 2400, px: AX, py: AY, amp: 2.5, bounce: 0 });
+      }
+    }
     switch (this.mode) {
       case 'drag': this.tickDrag(now); return this.tickSway(dt, now);
       case 'fall': return this.tickFall(dt);
