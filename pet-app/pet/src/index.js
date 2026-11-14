@@ -443,16 +443,16 @@ function setHidden(v) {
   if (desk) { if (v) hideChat(); else showChat(false); }
   for (const [b, h] of handles) {
     if (h.win.isDestroyed()) continue;
-    // 隱藏時放開正在抓的熊寶；重新出現時 Windows 會重設點穿與最上層，這裡重新設一次並清掉記住的狀態，
-    // 讓游標碰到熊寶時重新判斷（之前再出現後抓不起來、不能互動）
     h.pressed = false;
     if (b.mode === 'drag') { try { b.onDragEnd(); } catch (_) { /* 略過 */ } }
-    if (v) { h.win.hide(); continue; }
+    // 不把熊寶視窗藏起來（Windows 藏起來再叫回來後，滑鼠偵測得到卻點不到）：
+    // 隱藏＝變透明＋點穿；顯示＝變回不透明，視窗一直都在
     h.interactive = false;
     h.win.setIgnoreMouseEvents(true);
-    h.win.setAlwaysOnTop(true, 'screen-saver');
-    h.win.showInactive();
     if (h.ready) h.win.webContents.send('hover', false);
+    if (v) { h.win.setOpacity(0); continue; }
+    h.win.setOpacity(1);
+    if (!h.win.isVisible()) h.win.showInactive();
   }
   last = Date.now();
   if (onChange) onChange();
