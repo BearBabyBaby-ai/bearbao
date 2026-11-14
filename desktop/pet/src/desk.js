@@ -78,7 +78,9 @@
   const AIRLINES = { B7: '立榮航空', AE: '華信航空' };
   const pad2 = n => String(n).padStart(2, '0');
 
-  function parseCard(text) {
+  // live：打字途中用，資料不齊也先回傳（缺的欄位空白）；送出時要日期、時間都有
+  function parseCard(text, live) {
+    const named = /^免稅卡/.test(text);
     const s = text.replace(/^免稅卡\s*/, '').trim();
     const tokens = s.split(/\s+/);
     let date = '', time = '', flight = '', transport = '';
@@ -88,20 +90,23 @@
       if (!date && (m = t.match(/^(?:\d{4}[\/\-.])?(\d{1,2})[\/\-.](\d{1,2})$/))) date = `${pad2(m[1])}/${pad2(m[2])}`;
       else if (!time && (m = t.match(/^(\d{1,2})[:：](\d{2})$/))) time = `${pad2(m[1])}:${m[2]}`;
       else if (!flight && (m = t.toUpperCase().match(/^(B7|AE|DA)-?(\d{2,4})$/))) { flight = `${m[1]}-${m[2]}`; transport = 'airport'; }
+      else if (/^[\d\/\-.:：]+$/.test(t) || (live && /^(B7|AE|DA)-?\d{0,1}$/i.test(t))) continue;   // 還沒打完的日期、時間、航班
       else rest.push(t);
     }
-    if (!date || !time) return null;
+    if (live) {
+      // 看得出是免稅卡才即時顯示：有航班代號加日期或時間、或日期加時間、或開頭打「免稅卡」
+      if (!(named || (flight && (date || time)) || (date && time))) return null;
+    } else if (!date || !time) return null;
     if (!flight) {
-      // 沒有航班代號：當成船班，第一個不是地名的當船名
-      if (!rest.length) return null;
-      transport = 'port';
+      // 沒有航班代號：第一個不是地名的當船名，當成船班
       const idx = rest.findIndex(t => !/港|嘉義|布袋|高雄|台南|臺南|台中|臺中|台北|臺北/.test(t));
-      flight = idx >= 0 ? rest.splice(idx, 1)[0] : rest.shift();
+      if (idx >= 0) { flight = rest.splice(idx, 1)[0]; transport = 'port'; }
     }
     let dest = rest.join(' ');
     const rule = DEST_RULES.find(r => r.keys.includes(dest) && (!r.transport || r.transport === transport));
     if (rule) dest = rule.value;
     if (!dest && transport === 'port') dest = PORT_DEST;
+    if (!live && !flight) return null;
     return { date, time, flight, dest, transport };
   }
 
@@ -157,24 +162,24 @@
     } catch (_) { return fallback; }
   }
 
-  async function drawCard(c) {
+  async function drawCard(c, canvas = document.createElement('canvas')) {
     const img = await background();
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+    if (canvas.width !== img.naturalWidth || canvas.height !== img.naturalHeight) { canvas.width = img.naturalWidth; canvas.height = img.naturalHeight; }
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     ctx.drawImage(img, 0, 0);
-    const right = destRight(ctx, canvas);
+    if (img.destRight == null) img.destRight = destRight(ctx, canvas);   // 白色區塊右緣只跟底圖有關，算一次就好
+    const right = img.destRight;
     const font = size => `bold ${size}px ${CARD.family}`;
     const pos = CARD.text;
     ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.fillStyle = CARD.color;
     const chk = CARD.check[c.transport];
     if (chk) { ctx.font = `bold ${CARD.checkSize}px Arial`; ctx.fillText('✔', chk.x, chk.y); }
     ctx.font = font(CARD.size);
-    ctx.fillText(c.date, pos.date.x, pos.date.y);
-    ctx.fillText(c.time, pos.time.x, pos.time.y);
+    if (c.date) ctx.fillText(c.date, pos.date.x, pos.date.y);
+    if (c.time) ctx.fillText(c.time, pos.time.x, pos.time.y);
     const airline = c.transport === 'airport' ? AIRLINES[c.flight.slice(0, 2)] : '';
     if (airline) { ctx.fillText(airline, pos.flight.x, pos.flight.y - 120); ctx.fillText(c.flight, pos.flight.x, pos.flight.y + 140); }
-    else ctx.fillText(c.flight, pos.flight.x, pos.flight.y);
+    else if (c.flight) ctx.fillText(c.flight, pos.flight.x, pos.flight.y);
     if (c.dest) {
       let s = CARD.size;
       const ink = t => { const m = ctx.measureText(t); return m.actualBoundingBoxRight > 0 ? m.actualBoundingBoxRight : m.width; };
@@ -186,6 +191,46 @@
     return canvas;
   }
 
+  const cardInfo = c => [`離境日期：${c.date || '（未填）'}`, `${c.transport === 'port' ? '船班' : '航班'}：${c.flight || '（未填）'}`, `離境時間：${c.time || '（未填）'}`, `目的地：${c.dest || '（未填）'}`].join('\n');
+  function thumb(canvas, img) {
+    const small = document.createElement('canvas');
+    small.width = 280; small.height = Math.round(canvas.height * 280 / canvas.width);
+    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
+    img.src = small.toDataURL('image/jpeg', 0.9);
+  }
+
+  // ---------- 免稅卡即時顯示：打字時就更新預覽（和航班卡產生器一樣） ----------
+  let live = null, liveTimer = 0, liveSeq = 0;
+  const liveCanvas = document.createElement('canvas');
+  function clearLive() { clearTimeout(liveTimer); liveSeq++; if (live) { live.box.remove(); live = null; } }
+  function scheduleLive() {
+    clearTimeout(liveTimer);
+    liveTimer = setTimeout(updateLive, 120);
+  }
+  async function updateLive() {
+    const c = parseCard(input.value.trim().replace(/\s+/g, ' '), true);
+    if (!c) { clearLive(); return; }
+    const seq = ++liveSeq;
+    if (!live) {
+      const box = bubble('bear rich live');
+      const title = document.createElement('div'); title.className = 'b-title'; title.textContent = '免稅卡（即時預覽）';
+      const info = document.createElement('div'); info.className = 'b-text';
+      const img = document.createElement('img'); img.className = 'card'; img.addEventListener('load', scroll);
+      box.append(title, info, img);
+      live = { box, info, img };
+    }
+    live.info.textContent = cardInfo(c) + (bg ? '' : '\n底圖載入中…');
+    scroll();
+    try {
+      await drawCard(c, liveCanvas);
+      if (seq !== liveSeq || !live) return;
+      live.info.textContent = cardInfo(c) + (date_time_ok(c) ? '\n按 Enter 或「送出」產生可下載的免稅卡' : '');
+      thumb(liveCanvas, live.img);
+    } catch (e) { if (live && seq === liveSeq) live.info.textContent = cardInfo(c) + '\n⚠️ ' + e.message; }
+  }
+  const date_time_ok = c => !!(c.date && c.time && c.flight);
+  input.addEventListener('input', scheduleLive);
+
   async function dutyFree(c) {
     const d = bubble('bear rich');
     const title = document.createElement('div');
@@ -193,17 +238,14 @@
     title.textContent = '免稅卡';
     const info = document.createElement('div');
     info.className = 'b-text';
-    info.textContent = [`離境日期：${c.date}`, `${c.transport === 'port' ? '船班' : '航班'}：${c.flight}`, `離境時間：${c.time}`, `目的地：${c.dest || '（未填）'}`].join('\n');
+    info.textContent = cardInfo(c);
     d.append(title, info);
     scroll();
     let canvas;
     try { canvas = await drawCard(c); } catch (e) { info.textContent += '\n⚠️ ' + e.message; return; }
     const prev = document.createElement('img');
     prev.className = 'card';
-    const small = document.createElement('canvas');
-    small.width = 280; small.height = Math.round(canvas.height * 280 / canvas.width);
-    small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
-    prev.src = small.toDataURL('image/jpeg', 0.9);
+    thumb(canvas, prev);
     if (!canvas.exportable) info.textContent += '\n⚠️ 底圖只能顯示、無法匯出 JPG，請確認 Drive 圖片已開放「知道連結的任何人」檢視';
     const row = document.createElement('div');
     row.className = 'files';
@@ -224,13 +266,19 @@
     e.preventDefault();
     const text = input.value.trim();
     if (!text || send.disabled) return;
+    const one = text.replace(/\s+/g, ' ');
+    const draft = parseCard(one, true);
+    clearLive();
     add(text, 'me');
     input.value = '';
     send.disabled = true;
     try {
-      const card = parseCard(text.replace(/\s+/g, ' '));
+      const card = parseCard(one);
       if (card) await dutyFree(card);
-      else {
+      else if (draft) {
+        const lack = [!draft.date && '離境日期', !draft.flight && '航班', !draft.time && '離境時間'].filter(Boolean);
+        add(`免稅卡還缺：${lack.join('、')}\n例如：11/16 高雄 AE361 10:00`, 'bear');
+      } else {
         const wait = add('熊寶處理中…', 'bear wait');
         let reply;
         try { reply = await window.desk.ask(text); } catch (_) { reply = '連不上熊寶系統，請確認網路後再試一次'; }
