@@ -6,5 +6,6 @@ contextBridge.exposeInMainWorld('desk', {
   ask: text => ipcRenderer.invoke('desk-ask', text),
   save: (name, data) => ipcRenderer.invoke('desk-save', name, data),
   mini: on => ipcRenderer.send('desk-mini', on),
+  copy: text => ipcRenderer.send('desk-copy', String(text)),
   onFocus: fn => ipcRenderer.on('desk-focus', () => fn())
 });

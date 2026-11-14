@@ -6717,6 +6717,8 @@ if (window.bearDesktop) {
       for (const [type, list] of groups) {
         const pick = shuffle(list).slice(0, 7);
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
+        // 美食：照發布用 TXT 的格式顯示，點一下複製；不提供 TXT 下載
+        if (type === '美食') { pick.forEach(d => blocks.push({ type: 'copy', text: foodItem(d.raw, true) })); continue; }
         pick.forEach(d => {
           blocks.push({ type: 'text', text: SHOW[type](d) });
           blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });

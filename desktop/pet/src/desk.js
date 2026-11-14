@@ -157,6 +157,19 @@
         d.append(...tableEl(b, title));
         continue;
       }
+      if (b.type === 'copy') {
+        const el = document.createElement('div');
+        el.className = 'b-copy';
+        el.textContent = b.text;
+        el.title = '點一下複製';
+        el.addEventListener('click', () => {
+          window.desk.copy(b.text);
+          el.classList.add('done');
+          setTimeout(() => el.classList.remove('done'), 1500);
+        });
+        d.appendChild(el);
+        continue;
+      }
       const el = document.createElement(b.type === 'link' ? 'a' : 'div');
       el.className = 'b-' + b.type;
       el.textContent = b.text;
