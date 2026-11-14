@@ -56,9 +56,9 @@
       const t = now - groove.t0;
       if (t >= groove.ms) { groove = null; rig.style.transform = ''; return; }
       const env = Math.min(1, t / 400, (groove.ms - t) / 400);   // 開始、結束慢慢來
-      const beat = (t / 900) * Math.PI * 2;                      // 一拍 0.9 秒
-      const deg = Math.sin(beat) * 7 * env;
-      const dy = -Math.abs(Math.sin(beat)) * 7 * env;
+      const beat = (t / 1100) * Math.PI * 2;                     // 一拍 1.1 秒
+      const deg = Math.sin(beat) * 3 * env;
+      const dy = -Math.abs(Math.sin(beat)) * 2.5 * env;
       rig.style.transform = 'translateY(' + dy.toFixed(1) + 'px) rotate(' + deg.toFixed(2) + 'deg)';
       requestAnimationFrame(step);
     };
