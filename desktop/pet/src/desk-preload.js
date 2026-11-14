@@ -8,5 +8,5 @@ contextBridge.exposeInMainWorld('desk', {
   mini: on => ipcRenderer.send('desk-mini', on),
   copy: text => ipcRenderer.send('desk-copy', String(text)),
   copyImage: png => ipcRenderer.invoke('desk-copy-image', png),
-  onFocus: fn => ipcRenderer.on('desk-focus', () => fn())
+  onFocus: fn => ipcRenderer.on('desk-focus', (_e, toggle) => fn(toggle))
 });

@@ -483,6 +483,9 @@
     setMini(!document.body.classList.contains('mini'));
   });
 
-  // 點熊寶：縮小中就先恢復，再到輸入框打字
-  window.desk.onFocus(() => { if (document.body.classList.contains('mini')) setMini(false); else input.focus(); });
+  // 點熊寶：和點標題一樣，縮小／恢復切換（恢復時到輸入框打字）
+  window.desk.onFocus(toggle => {
+    const mini = document.body.classList.contains('mini');
+    if (toggle) setMini(!mini); else if (mini) setMini(false); else input.focus();
+  });
 })();

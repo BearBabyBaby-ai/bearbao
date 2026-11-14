@@ -390,7 +390,8 @@ function showChat(focus) {
   w.setBounds(chatBounds());
   const go = () => {
     if (w.isDestroyed()) return;
-    if (focus) { w.show(); w.focus(); w.webContents.send('desk-focus'); } else w.showInactive();
+    // 點熊寶：對話框已經出現就縮小／恢復切換；原本沒出現就只叫出來
+    if (focus) { const shown = w.isVisible(); w.show(); w.focus(); w.webContents.send('desk-focus', shown); } else w.showInactive();
   };
   if (w.webContents.isLoading()) w.webContents.once('did-finish-load', go); else go();
 }

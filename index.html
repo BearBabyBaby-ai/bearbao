@@ -6927,8 +6927,16 @@ if (window.bearDesktop) {
 
     // 判斷要做什麼：不用照固定格式，關鍵字在句子任何位置都可以
     const QUERY_WORDS = /推薦|美食|景點|廟|店家|元宵|乞龜|分海|潮汐|航班|班機/;
+    // 問句：拿掉問句的字再判斷（午餐吃啥 → 午餐；白沙有啥好玩 → 白沙 景點；明天會分海嗎 → 明天 分海）
+    function plain(text) {
+      return String(text || '')
+        .replace(/好玩的?|好逛的?|玩什麼|玩啥|玩甚麼|可以玩/g, ' 景點 ')
+        .replace(/(?:要|可以)?吃(?:啥|什麼|甚麼|些什麼)|有(?:啥|什麼|甚麼|沒有)|去哪裡?|哪裡|哪邊|推薦一下|好吃的?|會不會|會|可以|嗎|呢|啊|吧|[？?！!。，,]/g, ' ')
+        .replace(/(^|\s)[吃玩的](?=\s|$)/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+    }
     async function run(text) {
-      const s = String(text || '').replace(/\s+/g, ' ').trim();
+      const s = plain(String(text || '').replace(/\s+/g, ' ').trim());
       if (!s) return HELP;
       try {
         // 航班：句子有航班、班機、飛機，或只打航班代號
