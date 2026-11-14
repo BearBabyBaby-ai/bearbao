@@ -6703,13 +6703,13 @@ if (window.bearDesktop) {
         const days = r.days.map(k => dayOf(place, k));
         rows.push([place, '滿潮', ...days.map(d => d ? tideCell(d, '滿潮') : '尚無資訊')]);
         rows.push([place, '乾潮', ...days.map(d => d ? tideCell(d, '乾潮') : '尚無資訊')]);
+        // 池西岩瀑在西嶼：放在西嶼底下（同一格地點、同一個底色），建議觀賞 08:00–17:00
+        if (place === '西嶼') rows.push(['西嶼', '池西岩瀑', ...r.days.map(k => {
+          if (!inFc(k)) return '尚無資訊';
+          const w = chixiDay(fc, k);
+          return w ? (w.length ? w.join('\n') : '沒有建議時段') : '尚無資訊';
+        })]);
       }
-      // 西嶼：池西岩瀑建議觀賞（08:00–17:00）
-      if (want('西嶼')) rows.push(['池西岩瀑', '建議觀賞', ...r.days.map(k => {
-        if (!inFc(k)) return '尚無資訊';
-        const w = chixiDay(fc, k);
-        return w ? (w.length ? w.join('\n') : '沒有建議時段') : '尚無資訊';
-      })]);
       return { blocks: [{ type: 'title', text: `${md(r.from)}–${md(r.to)} 潮汐` }, { type: 'table', head: ['地點', '潮別', ...r.days.map(k => wk(k).replace('（', '\n（'))], rows }] };
     }
 

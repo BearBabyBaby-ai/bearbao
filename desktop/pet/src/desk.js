@@ -73,7 +73,7 @@
     '奎壁山': ['#e4f3e1', '#c9e6c3'], '馬公': ['#e2edfa', '#c3d8f2'], '西嶼': ['#f1e4f5', '#dfc6e8'],
     '白沙': ['#fdeedd', '#f6d6b2'], '七美': ['#dff3f2', '#b9e2df'], '池西岩瀑': ['#fff3c4', '#f5df8f']
   };
-  const PLACE_FG = { '滿潮': '#c62828', '乾潮': '#1565c0', '建議觀賞': '#8a6400' };
+  const PLACE_FG = { '滿潮': '#c62828', '乾潮': '#1565c0', '池西岩瀑': '#8a6400' };
   // 每一列屬於第幾個地點（從 0 起），沒有合併時為 -1
   function placeIndex(runs) { let k = -1; return runs.map(n => (n > 0 ? ++k : k)); }
   function tableEl(b, title) {
