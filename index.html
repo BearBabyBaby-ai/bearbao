@@ -2111,7 +2111,7 @@ function renderSubFilters() {
 }
 /* ===== 複合式搜尋：移植自熊熊綜合系統「澎湖在地探索」（批次生圖）的搜尋 =====
    可跨區、多分類、村里、主祀、名稱一起搜尋，例如「澎南 湖西 美食」「白沙 早餐 景點」「馬公 媽祖」；
-   澎南（南環）、北環、東環會展開成對應的鄉市與村里。首頁搜尋與熊寶工作模式共用。 */
+   澎南（南環）、北環、東環會展開成對應的鄉市與村里。只給熊寶桌寵工作模式用（首頁搜尋不變）。 */
 const PlaceSearch = (() => {
   const PENGHU_REGIONS = [
     { name: '馬公市', short: '馬公', match: ['馬公', '馬公市'] },
@@ -2919,12 +2919,11 @@ const PlaceSearch = (() => {
 
 function applyFilter() {
   const q = searchInput.value.trim().toLowerCase();
-  const qMatch = q && mapDataLoaded ? PlaceSearch.matcher(q) : (d => d.searchText.includes(q));
   visibleData = allData.filter(d => (!activeRegion || d.region === activeRegion)
     && (!activeType || d.type === activeType)
     && (!activeSub || (activeType === '美食' && MEAL_CHIPS.includes(activeSub) ? mealMatch(d, activeSub)
       : (activeType === '美食' ? d.mainCategory : d.category).split(/[／/]/).map(v => v.trim()).includes(activeSub)))
-    && (!q || qMatch(d)));
+    && (!q || d.searchText.includes(q)));
   if (isMobile() && mapUserPos) {
     const dist = d => Math.hypot(d.lat - mapUserPos.lat, (d.lng - mapUserPos.lng) * Math.cos(mapUserPos.lat * Math.PI / 180));
     visibleData = visibleData.map((d, i) => [d, dist(d), i]).sort((a, b) => a[1] - b[1] || a[2] - b[2]).map(x => x[0]);
