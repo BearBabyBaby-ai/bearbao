@@ -6717,13 +6717,18 @@ if (window.bearDesktop) {
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
       const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
-      const blocks = [{ type: 'title', text: query.replace(/消夜/g, '宵夜') }], files = [];
+      const blocks = [{ type: 'title', text: query.replace(/消夜/g, '宵夜') }], files = [], copyAll = [];
       for (const [type, list] of groups) {
         const pick = shuffle(list).slice(0, 7);
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
         // 美食、景點、廟宇：照發布用 TXT 的格式顯示，點一下複製（只放短網址）；不提供 TXT 下載
         const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => spotItem(d.raw, true), '廟宇': d => templeItem(d.raw) };
-        if (PUB[type]) { pick.forEach(d => blocks.push({ type: 'copy', text: noFull(PUB[type](d)) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) })); continue; }
+        if (PUB[type]) {
+          const items = pick.map(d => noFull(PUB[type](d)));
+          pick.forEach((d, i) => blocks.push({ type: 'pub', text: items[i] }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          copyAll.push(...items);
+          continue;
+        }
         pick.forEach(d => {
           blocks.push({ type: 'text', text: SHOW[type](d) });
           blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
@@ -6735,7 +6740,9 @@ if (window.bearDesktop) {
         const subTitle = type === '景點' ? (topic || '景點') : type === '廟宇' ? (topic || '全區廟宇') : (topic || '全區清單');
         files.push(...txtFiles(type, pick, region, subTitle, /宵夜|酒吧|晚餐|居酒屋|BBQ|燒烤|餐酒館|串燒|夜景/.test(topic), groups.length > 1 ? `${type} ` : '', label));
       }
-      return { blocks, files };
+      // 一鍵複製：整個搜尋結果，照發布用 TXT 的格式（標題＋每筆＋分隔線）
+      const copy = copyAll.length ? `${blocks[0].text}\n\n` + copyAll.map(t => t + SEP).join('') : '';
+      return { blocks, files, copy };
     }
     // 搜尋不到地點時，再找活動名稱
     async function searchActivities(query) {
@@ -6778,8 +6785,10 @@ if (window.bearDesktop) {
       });
       acts.forEach(it => blocks.push({ type: 'text', text: [`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`].filter(Boolean).join('\n') }));
       // 每間廟宇照發布用 TXT 的格式顯示，點一下複製（只放短網址）
-      list.forEach(d => blocks.push({ type: 'copy', text: noFull(Lantern.publishText(d)) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
-      return { blocks };
+      const items = list.map(d => noFull(Lantern.publishText(d)));
+      list.forEach((d, i) => blocks.push({ type: 'pub', text: items[i] }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+      // 一鍵複製：整個結果，照發布用 TXT 的格式
+      return { blocks, copy: items.length ? `${blocks[0].text}\n\n` + items.map(t => t + SEP).join('') : '' };
     }
 
     /* ── 航班：機場航班頁同一份資料；點一下用 Flightradar24 查詢 ── */

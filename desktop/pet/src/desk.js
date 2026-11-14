@@ -157,16 +157,10 @@
         d.append(...tableEl(b, title));
         continue;
       }
-      if (b.type === 'copy') {
+      if (b.type === 'pub') {
         const el = document.createElement('div');
-        el.className = 'b-copy';
+        el.className = 'b-pub';
         el.textContent = b.text;
-        el.title = '點一下複製';
-        el.addEventListener('click', () => {
-          window.desk.copy(b.text);
-          el.classList.add('done');
-          setTimeout(() => el.classList.remove('done'), 1500);
-        });
         d.appendChild(el);
         continue;
       }
@@ -175,6 +169,21 @@
       el.textContent = b.text;
       if (b.type === 'link') { el.href = b.url; el.addEventListener('click', e => { e.preventDefault(); window.open(b.url); }); }
       d.appendChild(el);
+    }
+    // 一鍵複製：整個搜尋結果
+    if (reply.copy) {
+      const row = document.createElement('div');
+      row.className = 'files';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.textContent = '📋 一鍵複製';
+      btn.addEventListener('click', () => {
+        window.desk.copy(reply.copy);
+        btn.textContent = '✅ 已複製全部';
+        setTimeout(() => { btn.textContent = '📋 一鍵複製'; }, 2000);
+      });
+      row.appendChild(btn);
+      d.appendChild(row);
     }
     if (Array.isArray(reply.files) && reply.files.length) {
       const row = document.createElement('div');
