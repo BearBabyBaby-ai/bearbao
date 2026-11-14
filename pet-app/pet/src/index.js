@@ -62,7 +62,9 @@ function toDip(r) {
 
 function pollWindows() {
   if (!win32.available() || hidden) return;
-  const list = win32.listWindows(ownPids()).map(w => ({ hwnd: w.hwnd, zoomed: w.zoomed, rect: toDip(w.rect) }));
+  // 座標換算失敗（不是數字）的視窗不算，避免熊寶站上去後位置變成不是數字而卡住
+  const list = win32.listWindows(ownPids()).map(w => ({ hwnd: w.hwnd, zoomed: w.zoomed, rect: toDip(w.rect) }))
+    .filter(w => [w.rect.x, w.rect.y, w.rect.width, w.rect.height].every(Number.isFinite));
   windows = list;
   windowMap = new Map(list.map(w => [w.hwnd, w]));
 }
@@ -286,6 +288,15 @@ function loop() {
         if (!h.fallSince) h.fallSince = now;
         else if (now - h.fallSince > 6000) { h.fallSince = 0; bear.fy = bear.floorY(); bear.vy = 0; bear.vx = 0; bear.surface = { type: 'floor' }; bear.clampX(); bear.land(false); }
       } else h.fallSince = 0;
+      // 防卡住三：位置變成不是數字（log 裡的 conversion failure）→ 回到上一個正常位置，從那裡往下掉
+      if (!Number.isFinite(bear.fx) || !Number.isFinite(bear.fy)) {
+        if (!h.badLogged) { h.badLogged = true; log('熊寶位置異常，已復原：' + JSON.stringify({ mode: bear.mode, surface: bear.surface, fx: String(bear.fx), fy: String(bear.fy), vx: String(bear.vx), vy: String(bear.vy), m: Object.keys(bear.m || {}) })); }
+        const a = screen.getPrimaryDisplay().workArea;
+        bear.fx = h.good ? h.good.fx : a.x + a.width / 2;
+        bear.fy = h.good ? h.good.fy : a.y + a.height;
+        bear.vx = 0; bear.vy = 0;
+        bear.startFall(0);
+      } else h.good = { fx: bear.fx, fy: bear.fy };
       const p = bear.windowPos();
       const [x, y] = h.win.getPosition();
       if (x !== p.x || y !== p.y) h.win.setPosition(p.x, p.y);
