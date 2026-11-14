@@ -18,8 +18,9 @@
     opacity: 0; transition: opacity .25s, transform .25s; pointer-events: none; }
   #bubble::after { content: ""; position: absolute; left: 50%; bottom: -6px; margin-left: -5px; border: 5px solid transparent; border-top-color: #876c4b; border-bottom: 0; }
   #bubble.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  body.hit { cursor: grab; }
-  body.dragging { cursor: grabbing; }
+  /* 游標：碰到熊寶時張開的熊掌、抓起來時合掌（熱點照素材 manifest 的 hotspot_32_px） */
+  body.hit { cursor: url('bear-paw-open-32.png') 16 15, grab; }
+  body.dragging { cursor: url('bear-paw-grab-32.png') 16 4, grabbing; }
 </style>
 </head>
 <body>
