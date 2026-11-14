@@ -105,15 +105,37 @@
     return { date, time, flight, dest, transport };
   }
 
+  // 底圖：照「航班卡產生器」原本的方式，從 Google Drive 載入（先用可匯出 JPG 的方式，失敗再改為僅顯示）
+  const BG_FILE_ID = '1dJADWzapJZLBWNMiTBY9Xi5WjKwmcUxh';
+  // Drive 縮圖網址會先轉址，轉址那一步沒有跨網域許可，所以先直接讀轉址後的同一張圖（可匯出 JPG）
+  const BG_URLS = [
+    `https://lh3.googleusercontent.com/d/${BG_FILE_ID}=w10000`,
+    `https://drive.google.com/thumbnail?id=${BG_FILE_ID}&sz=w10000`,
+    `https://drive.google.com/uc?export=view&id=${BG_FILE_ID}`
+  ];
+  function loadImage(url, useCORS) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      if (useCORS) image.crossOrigin = 'anonymous';
+      image.referrerPolicy = 'no-referrer';
+      const timer = setTimeout(() => { image.onload = image.onerror = null; image.src = ''; reject(new Error('timeout')); }, 20000);
+      image.onload = () => { clearTimeout(timer); image.naturalWidth ? resolve(image) : reject(new Error('invalid')); };
+      image.onerror = () => { clearTimeout(timer); reject(new Error('error')); };
+      image.src = url;
+    });
+  }
   let bg = null;
   function background() {
     if (bg) return bg;
-    bg = new Promise((resolve, reject) => {
-      const img = new Image();
-      img.onload = () => resolve(img);
-      img.onerror = () => { bg = null; reject(new Error('免稅卡底圖讀取失敗')); };
-      img.src = '../assets/dutyfree.jpg';
-    });
+    bg = (async () => {
+      for (const useCORS of [true, false]) {
+        for (const url of BG_URLS) {
+          try { const img = await loadImage(url, useCORS); img.exportable = useCORS; return img; } catch (_) { /* 換下一個 */ }
+        }
+      }
+      throw new Error('免稅卡底圖載入失敗，請確認網路，以及 Drive 圖片已開放「知道連結的任何人」檢視');
+    })();
+    bg.catch(() => { bg = null; });
     return bg;
   }
 
@@ -160,6 +182,7 @@
       while (s > CARD.minSize && pos.dest.x + ink(c.dest) > right) { s -= 5; ctx.font = font(s); }
       ctx.fillText(c.dest, pos.dest.x, pos.dest.y);
     }
+    canvas.exportable = img.exportable;
     return canvas;
   }
 
@@ -181,6 +204,7 @@
     small.width = 280; small.height = Math.round(canvas.height * 280 / canvas.width);
     small.getContext('2d').drawImage(canvas, 0, 0, small.width, small.height);
     prev.src = small.toDataURL('image/jpeg', 0.9);
+    if (!canvas.exportable) info.textContent += '\n⚠️ 底圖只能顯示、無法匯出 JPG，請確認 Drive 圖片已開放「知道連結的任何人」檢視';
     const row = document.createElement('div');
     row.className = 'files';
     const btn = document.createElement('button');
