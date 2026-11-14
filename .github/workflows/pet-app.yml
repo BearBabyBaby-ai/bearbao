@@ -1,0 +1,37 @@
+name: 熊寶桌寵獨立版建置
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'pet-app/**'
+      - '.github/workflows/pet-app.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 建置安裝程式
+        working-directory: pet-app
+        shell: bash
+        run: |
+          npm install --no-audit --no-fund
+          npm run dist
+
+      - name: 發布到 Releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete pet-app-build --yes --cleanup-tag || true
+          gh release create pet-app-build pet-app/dist/bearbao-pet-setup.exe --title "熊寶桌寵安裝程式" --notes "自動建置：${GITHUB_SHA}" --prerelease

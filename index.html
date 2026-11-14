@@ -6992,9 +6992,12 @@ if (window.bearDesktop) {
         .replace(/(^|\s)[吃玩的](?=\s|$)/g, ' ')
         .replace(/\s+/g, ' ').trim();
     }
-    async function run(text) {
+    // opts.query：獨立的熊寶桌寵只能查詢，不寫入熊寶系統（不能記帳）
+    async function run(text, opts = {}) {
+      const QO = !!(opts && opts.query);
+      const help = QO ? HELP.replace('\n11/14 宵夜 111', '') : HELP;
       const s = plain(String(text || '').replace(/\s+/g, ' ').trim());
-      if (!s) return HELP;
+      if (!s) return help;
       try {
         // 航班：句子有航班、班機、飛機，或只打航班代號
         const code = s.toUpperCase().replace(/\s|-/g, '').match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
@@ -7021,7 +7024,7 @@ if (window.bearDesktop) {
         if (d.given && !d.rest) return await overview(ahead(d));
         // 記帳：最後是金額（例如 11/14 宵夜 111、午餐 120）
         const m = d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
-        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return await ledger(d.key, m[1].trim(), Number(m[2]));
+        if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(d.key, m[1].trim(), Number(m[2]));
         // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
         const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '');
         // 元宵活動名稱（例如 2027 超級龜龜）：直接查元宵，只列那個活動
@@ -7030,7 +7033,7 @@ if (window.bearDesktop) {
           const named = Lantern.temples().some(t => { const L = t.lantern, txt = [L.theme, L.content, L.gov].join(' '); return words.every(w => txt.includes(w)); });
           if (named) return await lantern({ regions: regionsIn(q), year: (q.match(/(20\d{2})/) || [])[1] || '', name: words });
         }
-        return (await searchPlaces(q)) || (await searchActivities(q)) || `找不到「${q}」的資料\n\n${HELP.replace('看不懂這句，', '')}`;
+        return (await searchPlaces(q)) || (await searchActivities(q)) || `找不到「${q}」的資料\n\n${help.replace('看不懂這句，', '')}`;
       } catch (err) {
         return '⚠️ ' + (err && err.message ? err.message : '處理失敗，請再試一次');
       }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'unsafe-inline'">
+<title>熊寶工作中</title>
+<style>
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 14px/1.45 "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif; color: #573d2a; }
+  #card { position: absolute; inset: 4px; display: flex; flex-direction: column; background: #fffaf2;
+    border: 2px solid #876c4b; border-radius: 16px; box-shadow: 0 4px 14px rgba(87, 61, 42, .25); overflow: hidden; }
+  header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #f6e7cf; border-bottom: 1.5px solid #e2cba6; font-weight: bold; }
+  header { cursor: pointer; user-select: none; }
+  header img { width: 24px; height: 24px; border-radius: 6px; }
+  header span { flex: 1; }
+  .hbtn { width: 26px; height: 26px; border: 0; border-radius: 7px; background: transparent; color: #876c4b; font: bold 15px/1 system-ui, sans-serif; cursor: pointer; }
+  .hbtn:hover:not(:disabled) { background: #ead6b5; }
+  .hbtn:disabled { opacity: .35; cursor: default; }
+  body.mini header { border-bottom: 0; }
+  body.mini #log, body.mini form { display: none; }
+  body.mini header { gap: 4px; padding: 6px 6px; font-size: 13px; }
+  body.mini header img { width: 20px; height: 20px; }
+  body.mini .hbtn { width: 24px; }
+  #log { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .msg { flex-shrink: 0; max-width: 86%; padding: 6px 10px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  .bear { align-self: flex-start; background: #fff; border: 1.5px solid #e2cba6; border-bottom-left-radius: 4px; }
+  .me { align-self: flex-end; background: #0a6fb3; color: #fff; border-bottom-right-radius: 4px; }
+  .wait { color: #a08868; }
+  .rich { display: flex; flex-direction: column; gap: 4px; white-space: normal; }
+  .b-title { font-weight: bold; font-size: 15px; }
+  .b-head { font-weight: bold; margin-top: 4px; }
+  .b-text { white-space: pre-wrap; margin-top: 4px; }
+  .b-link { color: #0a6fb3; text-decoration: none; cursor: pointer; white-space: pre-wrap; }
+  .b-link:hover { text-decoration: underline; }
+  .b-table { border-collapse: collapse; margin-top: 6px; font-size: 12.5px; line-height: 1.4; }
+  .b-table { cursor: pointer; }
+  .b-table th, .b-table td { border: 1px solid #e2cba6; padding: 3px 6px; white-space: pre; text-align: center; vertical-align: middle; }
+  .msg.rich:has(.b-table) { max-width: 97%; overflow-x: auto; }
+  .b-table tr:first-child th { background: #f6e7cf; }
+  .b-table td { font-variant-numeric: tabular-nums; }
+  .b-table tr:not(:first-child) th { font-weight: bold; white-space: nowrap; }
+  .b-table th.grp { background: #efdcbc; text-align: center; }
+  .b-table.b-pick { cursor: default; }
+  .b-table.b-pick:hover { outline: none; }
+  .b-pick tr:not(:first-child) { cursor: pointer; }
+  .b-pick tr:not(:first-child):hover th, .b-pick tr:not(:first-child):hover td { background: #e8f1fb; }
+  .b-pick td { text-align: left; }
+  .b-table:hover { outline: 2px solid #0a6fb3; outline-offset: 1px; }
+  .b-pub { white-space: pre-wrap; margin-top: 6px; padding: 6px 8px; border: 1px dashed #d6bd96; border-radius: 8px; }
+  .b-hint { font-size: 12px; color: #a08868; margin-top: 4px; }
+  .card { width: 140px; border: 1px solid #e2cba6; border-radius: 6px; margin-top: 6px; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .files button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1.5px solid #0a6fb3; border-radius: 8px; background: #fff; color: #0a6fb3; cursor: pointer; }
+  .files button:hover { background: #e8f2fa; }
+  form { display: flex; gap: 6px; padding: 8px; border-top: 1.5px solid #e2cba6; }
+  #input { flex: 1; min-width: 0; font: inherit; color: inherit; padding: 6px 10px; border: 1.5px solid #d6bd96; border-radius: 10px; outline: none; background: #fff; }
+  #input:focus { border-color: #0a6fb3; }
+  #send { font: inherit; font-weight: bold; padding: 6px 12px; border: 0; border-radius: 10px; background: #0a6fb3; color: #fff; cursor: pointer; }
+  #send:disabled { background: #9bb8cc; cursor: default; }
+</style>
+</head>
+<body>
+<div id="card">
+  <header><img src="bear-icon.png" alt=""><span>熊寶工作中</span><button id="mini" class="hbtn" type="button" title="縮小" aria-label="縮小">－</button><button id="restore" class="hbtn" type="button" title="恢復" aria-label="恢復" disabled>□</button></header>
+  <div id="log"></div>
+  <form id="form" autocomplete="off">
+    <input id="input" placeholder="例如：11/15 分海、馬公 午餐推薦">
+    <button id="send" type="submit">送出</button>
+  </form>
+</div>
+<script src="desk.js"></script>
+</body>
+</html>

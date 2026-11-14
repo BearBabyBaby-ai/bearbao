@@ -1,0 +1,63 @@
+{
+  "name": "bearbao-pet",
+  "productName": "熊寶桌寵",
+  "version": "2.0.0",
+  "description": "熊寶桌寵",
+  "main": "main.js",
+  "author": "BearBabyBaby-ai",
+  "private": true,
+  "scripts": {
+    "dist": "electron-builder --win nsis --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "26.18.0"
+  },
+  "dependencies": {
+    "koffi": "2.16.3",
+    "extract-zip": "2.0.1"
+  },
+  "build": {
+    "appId": "io.github.bearbabybaby_ai.bearbaopet",
+    "productName": "熊寶桌寵",
+    "artifactName": "bearbao-pet-setup.${ext}",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "system-preload.js",
+      "icon.png",
+      "package.json",
+      "pet/**",
+      "!node_modules/koffi/build/koffi/!(win32_x64)/**",
+      "!node_modules/koffi/src/**",
+      "!node_modules/koffi/doc/**",
+      "!node_modules/koffi/vendor/**"
+    ],
+    "asarUnpack": [
+      "node_modules/koffi/**"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "executableName": "BearbaoPet",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "熊寶桌寵",
+      "uninstallDisplayName": "熊寶桌寵",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "language": "1028",
+      "runAfterFinish": true
+    }
+  }
+}
