@@ -45,6 +45,26 @@
     rig.style.transform = d.deg ? 'rotate(' + d.deg.toFixed(2) + 'deg)' : '';
   });
 
+  // ---------- 小跳舞（工作模式閒著時）：左右擺＋跟著節拍輕輕彈起，以腳底為中心 ----------
+  let groove = null;
+  window.pet.on('groove', d => {
+    if (!d || !d.ms) { groove = null; if (!sway.deg) rig.style.transform = ''; return; }
+    groove = { t0: performance.now(), ms: d.ms };
+    rig.style.transformOrigin = d.px + 'px ' + d.py + 'px';
+    const step = now => {
+      if (!groove || sway.deg) return;
+      const t = now - groove.t0;
+      if (t >= groove.ms) { groove = null; rig.style.transform = ''; return; }
+      const env = Math.min(1, t / 400, (groove.ms - t) / 400);   // 開始、結束慢慢來
+      const beat = (t / 900) * Math.PI * 2;                      // 一拍 0.9 秒
+      const deg = Math.sin(beat) * 7 * env;
+      const dy = -Math.abs(Math.sin(beat)) * 7 * env;
+      rig.style.transform = 'translateY(' + dy.toFixed(1) + 'px) rotate(' + deg.toFixed(2) + 'deg)';
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  });
+
   // ---------- 只在熊寶身上接收滑鼠 ----------
   // 目前畫格縮成 48×48 的輪廓傳給主程式，由主程式判斷游標有沒有碰到熊寶（分身重疊時也抓得起來）
   const MASK = 48;

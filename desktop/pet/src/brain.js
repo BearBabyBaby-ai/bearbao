@@ -68,6 +68,8 @@ class Bear {
   outfit() { return this.world.outfit(); }
 
   play(action, { restart = false } = {}) {
+    // 換成別的動作時，小跳舞的擺動停下來
+    if (this.grooving && action !== 'idle_blink') { this.grooving = false; this.world.send(this, 'groove', { ms: 0 }); }
     const { clip, mirror } = clips.resolve(action, this.outfit(), this.facing);
     const changed = !this.cur || this.cur.id !== clip.id || this.cur.mirror !== mirror;
     if (changed || restart) {
@@ -609,6 +611,8 @@ class Bear {
       else { add('sleep', 30); add('yawn', 3); }
     }
 
+    // 工作模式：閒著時偶爾小跳舞（左右擺＋輕輕彈），少一點呆呆歪頭
+    if (this.desk) add('groove', 14);
     // 工作模式：平常的動作照做，只是不走動、不分身（一直待在右下角）
     const MOVES = ['walk', 'tiptoe', 'run', 'crawl', 'roll', 'split'];
     const k = pick(this.desk ? w.filter(([n]) => !MOVES.includes(n)) : w);
@@ -621,8 +625,16 @@ class Bear {
         const c = clips.get('roll_left');
         return this.move('roll', c.duration_ms / 1000);
       }
+      case 'groove': {
+        // 小跳舞：正面待機的動作圖，加上畫面左右擺動、跟著節拍輕輕彈起（以腳底為中心）
+        const sec = rand(3, 6);
+        this.hold('idle_blink', sec, () => this.idle());
+        this.grooving = true;
+        this.world.send(this, 'groove', { ms: sec * 1000, px: AX, py: AY });
+        return;
+      }
       case 'oneshot': {
-        const id = pick([['sniff', 2], ['look_back', 2], ['scratch_head', 2], ['curious_tilt', 2], ['clap', 1],
+        const id = pick([['sniff', 2], ['look_back', 2], ['scratch_head', 2], ['curious_tilt', this.desk ? 0.3 : 2], ['clap', 1],
           ['wave', 1], ['jump', 1.5], ['ears_perk', 1], ['facepalm', 1], ['point_down', 1], ['beckon', 1],
           ['giggle', 1], ['blow_kiss', 1], ['yawn', 1], ['stretch_up', 1], ['duck', 1], ['dust_off', 1]]);
         return this.anim(id, () => this.idle());
