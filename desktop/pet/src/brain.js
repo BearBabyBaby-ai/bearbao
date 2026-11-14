@@ -102,7 +102,8 @@ class Bear {
   display() { return this.world.displayAt(this.fx, this.fy - 40); }
   wa() { return this.display().workArea; }
   floorY() { const a = this.wa(); return a.y + a.height; }
-  windowPos() { return { x: Math.round(this.fx - AX - PAD), y: Math.round(this.fy - AY - PAD) }; }
+  // Math.round 在 -0.5～0 之間會得到 -0，Electron 的 setPosition 不收 -0（conversion failure，熊寶就卡住）→ 一律轉成 0
+  windowPos() { return { x: Math.round(this.fx - AX - PAD) || 0, y: Math.round(this.fy - AY - PAD) || 0 }; }
 
   clampX() {
     const a = this.wa();
