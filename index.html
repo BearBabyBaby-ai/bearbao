@@ -6769,7 +6769,6 @@ if (window.bearDesktop) {
       return lines.join('\n');
     }
     // 景點、廟宇每筆內容：照熊熊綜合系統「批次生圖指令」v13（buildItemText）
-    const templeName = name => String(name || '').trim().replace(/^[一-龥A-Za-z0-9]+-(.+)$/, '$1').replace(/-/g, '');
     const imgOf = raw => String(raw['圖資來源'] || raw['景點圖資'] || raw['廟宇圖資'] || '').trim();
     function spotItem(raw) {
       let t = '';
@@ -6785,7 +6784,7 @@ if (window.bearDesktop) {
       let t = '';
       const r1 = valid(raw['區域(鄉市)']) ? raw['區域(鄉市)'] : '', r2 = valid(raw['區域(村里)']) ? raw['區域(村里)'] : '';
       if (r1 || r2) t += `區域：${r1}${r1 && r2 ? '-' : ''}${r2}\n`;
-      t += `廟宇名稱：${templeName(raw['廟宇名稱']) || '未提供名稱'}\n`;
+      t += `廟宇名稱：${raw['廟宇名稱'] || '未提供名稱'}\n`;
       for (const k of ['主祀', '地址', '電話', '短網址']) if (valid(raw[k])) t += `${k}：${raw[k]}\n`;
       if (imgOf(raw)) t += `圖資來源網址：${imgOf(raw)} ｜ 圖像規則：以此原始廟宇圖片作為主要視覺參考，保留廟宇主體外觀與辨識特徵，並自然融入整體版面與風格。\n`;
       return t.trimEnd();
