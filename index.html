@@ -6499,6 +6499,26 @@ if (window.bearDesktop) {
       if (utcToKey(keyToUTC(key)) !== key) return { bad: true };
       return { key, rest: (s.slice(0, m.index) + ' ' + s.slice(m.index + m[0].length)).replace(/\s+/g, ' ').trim(), given: true, year };
     }
+    // 日期區段：11/15-11/17、11/15~11/17、11/15到11/17、11/15-17、11/30-12/02（最多 31 天）
+    function takeRange(s) {
+      const m = s.match(/(?:(\d{4})\s*[\/.年]\s*)?(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?\s*(?:-|~|～|–|—|到|至)\s*(?:(?:(\d{4})\s*[\/.年]\s*)?(\d{1,2})\s*[\/月]\s*)?(\d{1,2})\s*日?(?![\d\/:])/);
+      if (!m) return null;
+      const t = todayKey();
+      const y1 = m[1] || t.slice(0, 4);
+      let from = `${y1}/${pad2(m[2])}/${pad2(m[3])}`;
+      if (utcToKey(keyToUTC(from)) !== from) return { bad: true };
+      // 沒寫年份：起日已經過了就是明年（照摩西分海時刻表的判斷）
+      if (!m[1] && from < t) from = `${Number(y1) + 1}${from.slice(4)}`;
+      const y2 = m[4] || from.slice(0, 4);
+      let to = `${y2}/${pad2(m[5] || from.slice(5, 7))}/${pad2(m[6])}`;
+      if (utcToKey(keyToUTC(to)) !== to) return { bad: true };
+      if (!m[4] && to < from) to = `${Number(y2) + 1}${to.slice(4)}`;
+      if (to < from) [from, to] = [to, from];
+      const days = [];
+      for (let k = from; k <= to && days.length < 31; k = addDays(k, 1)) days.push(k);
+      return { from, to: days[days.length - 1], days };
+    }
+    const wk = k => `${k.slice(5)}（${'日一二三四五六'[new Date(keyToUTC(k)).getUTCDay()]}）`;
     // 查分海、潮汐時沒寫年份：日期已經過了就是明年（例如 1/1 分海 → 明年 1/1）
     const ahead = d => (d.given && !d.year && d.key < todayKey()) ? `${Number(d.key.slice(0, 4)) + 1}${d.key.slice(4)}` : d.key;
 
@@ -6511,6 +6531,16 @@ if (window.bearDesktop) {
     }
     const md = key => key.slice(5);
     const join = list => list.length ? list.join('\n') : '—';
+    // 潮汐、分海只顯示 05:00–18:00 之間的資料
+    const toMin = t => { const m = String(t).match(/(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : -1; };
+    const inDay = t => { const v = toMin(t); return v >= 300 && v <= 1080; };
+    const clipDay = w => {
+      const m = String(w).match(/(\d{1,2}:\d{2})\s*[-–~～]\s*(\d{1,2}:\d{2})/);
+      if (!m) return inDay(w) ? w : '';
+      const a = Math.max(toMin(m[1]), 300), b = Math.min(toMin(m[2]), 1080);
+      return b > a ? `${tdHHMM(a)}-${tdHHMM(b)}` : '';
+    };
+    const dayWins = list => (list || []).map(clipDay).filter(Boolean);
 
     // 「11/15 分海」：奎壁山分海，用表格
     async function tide(key) {
@@ -6520,7 +6550,7 @@ if (window.bearDesktop) {
         const last = tideRows.length ? tideRows[tideRows.length - 1].date : '';
         return `${md(key)} 沒有奎壁山分海資料${last ? `（資料到 ${last}）` : ''}`;
       }
-      const of = type => info.points.filter(p => p.type === type).map(p => hm2(p.t));
+      const of = type => info.points.filter(p => p.type === type).map(p => hm2(p.t)).filter(inDay);
       return { blocks: [
         { type: 'title', text: `${md(key)}奎壁山分海` },
         { type: 'table', head: ['項目', '時間'], rows: [
@@ -6528,8 +6558,32 @@ if (window.bearDesktop) {
           ['緩慢合海', join(of('mer'))],
           ['滿潮', join(of('hi'))],
           ['乾潮', join(of('lo'))],
-          ['安全通行', join(info.safety)],
+          ['安全通行', join(dayWins(info.safety))],
           ['日出／日沒', `${info.sunrise}／${info.sunset}`]
+        ] }
+      ] };
+    }
+
+    // 「11/15-11/17 分海」：一張表格，每天一欄
+    async function tideRange(r) {
+      if (!(await ensureTide())) return '分海資料讀取失敗，請確認網路後再試一次';
+      const infos = r.days.map(k => tideDayInfo(k));
+      if (!infos.some(i => i.hasData)) {
+        const last = tideRows.length ? tideRows[tideRows.length - 1].date : '';
+        return `${md(r.from)}–${md(r.to)} 沒有奎壁山分海資料${last ? `（資料到 ${last}）` : ''}`;
+      }
+      const cell = (info, f) => info.hasData ? f(info) : '尚無資訊';
+      const of = type => info => join(info.points.filter(p => p.type === type).map(p => hm2(p.t)).filter(inDay));
+      const row = (label, f) => [label, ...infos.map(i => cell(i, f))];
+      return { blocks: [
+        { type: 'title', text: `${md(r.from)}–${md(r.to)}奎壁山分海` },
+        { type: 'table', head: ['項目', ...r.days.map(k => wk(k).replace('（', '\n（'))], rows: [
+          row('緩慢分海', of('sep')),
+          row('緩慢合海', of('mer')),
+          row('滿潮', of('hi')),
+          row('乾潮', of('lo')),
+          row('安全通行', i => join(dayWins(i.safety))),
+          row('日出／日沒', i => `${i.sunrise}\n${i.sunset}`)
         ] }
       ] };
     }
@@ -6554,7 +6608,7 @@ if (window.bearDesktop) {
       }
       return found ? tides : null;
     }
-    const tideCell = (list, type) => join(list.filter(t => t.type === type).map(t => `${t.time}　${Number.isFinite(t.height) ? t.height + 'cm' : ''}`.trim()));
+    const tideCell = (list, type) => join(list.filter(t => t.type === type && inDay(t.time)).map(t => `${t.time}　${Number.isFinite(t.height) ? t.height + 'cm' : ''}`.trim()));
     // 池西岩瀑建議觀賞時段，只留 08:00–17:00 之間
     function chixiDay(fc, key) {
       const day = forecastDay(fc, '西嶼', key);
@@ -6591,6 +6645,36 @@ if (window.bearDesktop) {
         if (w) foot.push(['池西岩瀑建議觀賞', w.length ? w.join('\n') : '08:00–17:00 之間沒有建議時段']);
       }
       return { blocks: [{ type: 'title', text: `${md(key)} 潮汐` }, { type: 'table', head: ['地點', '滿潮', '乾潮'], rows, foot }] };
+    }
+    // 「11/15-11/17 潮汐」：全部日期合成一張橫向表格，每天一欄；每個地點分滿潮、乾潮兩列
+    async function tidesRange(r, only = []) {
+      const want = place => !only.length || only.includes(place);
+      let fc = null;
+      try { if (!forecastRows) forecastRows = await fetchForecastRows(); fc = forecastRows; } catch (_) { return '潮汐資料讀取失敗，請確認網路後再試一次'; }
+      const inFc = k => TIDE_PLACES.some(p => forecastDay(fc, p, k));
+      if (!r.days.some(inFc)) return `${md(r.from)}–${md(r.to)} 潮汐：尚無資訊`;
+      const tideOk = want('奎壁山') ? await ensureTide() : false;
+      // 每天每個地點的潮汐；超過 30 天潮汐預報的日子為 null（尚無資訊）
+      const dayOf = (place, key) => {
+        if (!inFc(key)) return null;
+        if (place !== '奎壁山') return forecastDay(fc, place, key);
+        if (!tideOk) return null;
+        const info = tideDayInfo(key);
+        return info.hasData ? info.points.filter(p => p.type === 'hi' || p.type === 'lo').map(p => ({ type: p.label, time: hm2(p.t), height: p.h })) : null;
+      };
+      const rows = [];
+      for (const place of ['奎壁山', ...TIDE_PLACES].filter(want)) {
+        const days = r.days.map(k => dayOf(place, k));
+        rows.push([place, '滿潮', ...days.map(d => d ? tideCell(d, '滿潮') : '尚無資訊')]);
+        rows.push([place, '乾潮', ...days.map(d => d ? tideCell(d, '乾潮') : '尚無資訊')]);
+      }
+      // 西嶼：池西岩瀑建議觀賞（08:00–17:00）
+      if (want('西嶼')) rows.push(['池西岩瀑', '建議觀賞', ...r.days.map(k => {
+        if (!inFc(k)) return '尚無資訊';
+        const w = chixiDay(fc, k);
+        return w ? (w.length ? w.join('\n') : '沒有建議時段') : '尚無資訊';
+      })]);
+      return { blocks: [{ type: 'title', text: `${md(r.from)}–${md(r.to)} 潮汐` }, { type: 'table', head: ['地點', '潮別', ...r.days.map(k => wk(k).replace('（', '\n（'))], rows }] };
     }
 
 
@@ -6852,11 +6936,15 @@ if (window.bearDesktop) {
         if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
         const d = takeDate(s);
         if (d.bad) return '日期不正確，請再確認一次';
-        // 奎壁山分海、潮汐（日期已過沒寫年份就是明年）
-        if (/分海|摩西/.test(s)) return await tide(ahead(d));
-        if (/潮汐|漲潮|退潮|滿潮|乾潮|潮水/.test(s)) {
+        // 奎壁山分海、潮汐（日期已過沒寫年份就是明年）；「奎壁山」加日期也是查分海
+        const isTide = /潮汐|漲潮|退潮|滿潮|乾潮|潮水/.test(s);
+        const isSplit = /分海|摩西/.test(s) || (!isTide && d.given && s.includes('奎壁山'));
+        if (isSplit || isTide) {
+          const r = takeRange(s);
+          if (r && r.bad) return '日期不正確，請再確認一次';
           const only = ['奎壁山', ...TIDE_PLACES].filter(p => s.includes(p));
-          return await tides(ahead(d), only);
+          if (isSplit) return r ? await tideRange(r) : await tide(ahead(d));
+          return r ? await tidesRange(r, only) : await tides(ahead(d), only);
         }
         // 元宵（可加年份、鄉市）：2027元宵、馬公 元宵
         if (/元宵|乞龜/.test(s)) {

@@ -8,7 +8,7 @@ const log = require('./log');
 const calendar = require('./calendar');
 const win32 = require('./win32');
 const activity = require('./activity');
-const { Bear, W } = require('./brain');
+const { Bear, W, S: brainS } = require('./brain');
 
 process.on('uncaughtException', e => log('未預期的錯誤', e));
 process.on('unhandledRejection', e => log('未處理的錯誤', e));
@@ -356,11 +356,13 @@ let desk = false, chatWin = null, askFn = null, chatMini = false;
 const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
 const CHAT = { w: 380, h: 480, mini: 48 };
 
-// 縮小時只留標題列，一樣貼在熊寶旁邊的下緣
+// 縮小時只留標題列：寬度同熊寶動畫，縮到最右下角、熊寶動畫正上方
+const BEAR_W = Math.round(clipsLib.SCALE_BASE * brainS);          // 熊寶動畫寬度
+const BEAR_TOP = Math.round(clipsLib.ANCHOR.y * brainS);          // 腳底到動畫頂端
 function chatBounds() {
   const a = screen.getPrimaryDisplay().workArea;
-  const h = chatMini ? CHAT.mini : CHAT.h;
-  return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - h - 6), width: CHAT.w, height: h };
+  if (chatMini) return { x: a.x + a.width - BEAR_W, y: Math.round(a.y + a.height - BEAR_TOP - CHAT.mini), width: BEAR_W, height: CHAT.mini };
+  return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - CHAT.h - 6), width: CHAT.w, height: CHAT.h };
 }
 
 function makeChat() {
@@ -368,10 +370,9 @@ function makeChat() {
   chatWin = new BrowserWindow({
     ...chatBounds(), show: false, frame: false, transparent: true, backgroundColor: '#00000000',
     resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
-    skipTaskbar: true, alwaysOnTop: true, hasShadow: false, title: '熊寶工作中',
+    skipTaskbar: true, alwaysOnTop: false, hasShadow: false, title: '熊寶工作中',
     webPreferences: { preload: path.join(__dirname, 'desk-preload.js'), spellcheck: false }
   });
-  chatWin.setAlwaysOnTop(true, 'screen-saver');
   // 對話框裡的連結（地圖、Flightradar24）用瀏覽器開啟
   chatWin.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https:\/\//.test(url)) shell.openExternal(url);

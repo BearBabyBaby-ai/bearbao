@@ -39,12 +39,15 @@
     '安全通行': ['#e7f6ec', '#1b7a3d'], '日出／日沒': ['#fff6dc', '#9a6700'],
     '池西岩瀑建議觀賞': ['#fff3c4', '#8a6400']
   };
-  const HEAD_BG = '#f6e7cf', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#573d2a';
+  const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#573d2a';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
+  const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
   function cellTint(head, row, c) {
+    // 日期區段潮汐（橫向）：地點、潮別兩欄是項目欄，底色依潮別（滿潮、乾潮、池西岩瀑建議觀賞）
+    if (head[1] === '潮別') return c < 2 ? [LABEL_BG, INK] : (TINT[row[1]] || TINT[row[0] + row[1]] || ['#ffffff', INK]);
     if (c === 0) return [LABEL_BG, INK];
     const byCol = TINT[head[c]];
-    if (byCol && head[0] === '地點') return byCol;
+    if (byCol && head.includes('地點')) return byCol;
     return TINT[row[0]] || ['#ffffff', INK];
   }
   function tableEl(b, title) {
@@ -62,17 +65,26 @@
       return r;
     };
     if (Array.isArray(b.head)) t.appendChild(tr(b.head, true));
-    (b.rows || []).forEach(row => t.appendChild(tr(row, false, row)));
-    // 表格下方跨整列的資料（潮汐的安全通行、日出／日沒）
     const span = Math.max((b.head || []).length - 1, 1);
-    (b.foot || []).forEach(([label, value]) => {
+    const spanRow = (label, value) => {
       const r = document.createElement('tr');
       const th = document.createElement('th'); th.textContent = label;
       const td = document.createElement('td'); td.textContent = value; td.colSpan = span;
-      const [bg, fg] = TINT[label] || ['#ffffff', INK];
+      const [bg, fg] = tintOf(label) || ['#ffffff', INK];
       td.style.background = bg; td.style.color = fg;
-      r.append(th, td); t.appendChild(r);
+      r.append(th, td); return r;
+    };
+    // 每一列：一般資料、日期分組列（整列）、跨整列的資料（池西岩瀑、尚無資訊）
+    (b.rows || []).forEach(row => {
+      if (row && row.group) {
+        const r = document.createElement('tr');
+        const th = document.createElement('th'); th.textContent = row.group; th.colSpan = span + 1; th.className = 'grp';
+        r.appendChild(th); t.appendChild(r);
+      } else if (row && row.span) t.appendChild(spanRow(...row.span));
+      else t.appendChild(tr(row, false, row));
     });
+    // 表格下方跨整列的資料
+    (b.foot || []).forEach(([label, value]) => t.appendChild(spanRow(label, value)));
     t.addEventListener('click', () => saveTableImage(b, title, hint));
     const hint = document.createElement('div');
     hint.className = 'b-hint';
@@ -82,58 +94,62 @@
   // 把表格畫成圖片（2 倍解析度），標題在上方
   function tableCanvas(b, title) {
     const S = 2, FONT = '"Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif';
-    const head = b.head || [], rows = b.rows || [];
-    const all = [head, ...rows];
+    const head = b.head || [];
+    // 全部列：一般資料（陣列）、日期分組列 {group}、跨整列資料 {span}；表格下方的 foot 也是跨整列
+    const body = [...(b.rows || []), ...(b.foot || []).map(f => ({ span: f }))];
+    const plain = body.filter(Array.isArray);
+    const all = [head, ...plain];
     const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
     const fontOf = bold => `${bold ? 'bold ' : ''}${15 * S}px ${FONT}`;
     const LH = 22 * S, PADX = 14 * S, PADY = 8 * S, M = 16 * S, TITLE = 26 * S;
-    const cols = head.length || Math.max(...rows.map(r => r.length));
-    const widths = Array.from({ length: cols }, (_, c) => Math.max(...all.map((r, ri) => {
-      ctx.font = fontOf(ri === 0 || c === 0);
-      return Math.max(...String(r[c] ?? '').split('\n').map(l => ctx.measureText(l).width));
-    })) + PADX * 2);
-    const foot = b.foot || [];
-    // 跨整列的資料：第一欄要放得下標題，其餘欄合起來要放得下內容
-    foot.forEach(([label, value]) => {
-      ctx.font = fontOf(true); widths[0] = Math.max(widths[0], ctx.measureText(label).width + PADX * 2);
-      ctx.font = fontOf(false);
-      const need = Math.max(...String(value).split('\n').map(l => ctx.measureText(l).width)) + PADX * 2, have = widths.slice(1).reduce((a, w) => a + w, 0);
-      if (need > have && cols > 1) widths[cols - 1] += need - have;
-    });
-    const heights = all.map(r => Math.max(...r.map(v => String(v ?? '').split('\n').length)) * LH + PADY * 2);
-    const footH = foot.map(([, v]) => String(v).split('\n').length * LH + PADY * 2);
-    const W = widths.reduce((a, b) => a + b, 0), H = heights.reduce((a, b) => a + b, 0) + footH.reduce((a, b) => a + b, 0);
+    const lines = v => String(v ?? '').split('\n');
+    const textW = (v, bold) => { ctx.font = fontOf(bold); return Math.max(...lines(v).map(l => ctx.measureText(l).width)); };
+    const cols = head.length || Math.max(...plain.map(r => r.length));
+    const widths = Array.from({ length: cols }, (_, c) => Math.max(...all.map((r, ri) => textW(r[c], ri === 0 || c === 0))) + PADX * 2);
+    for (const r of body) {
+      if (r.span) {
+        const [label, value] = r.span;
+        widths[0] = Math.max(widths[0], textW(label, true) + PADX * 2);
+        const need = textW(value, false) + PADX * 2, have = widths.slice(1).reduce((a, w) => a + w, 0);
+        if (need > have && cols > 1) widths[cols - 1] += need - have;
+      } else if (r.group) {
+        const need = textW(r.group, true) + PADX * 2, have = widths.reduce((a, w) => a + w, 0);
+        if (need > have) widths[cols - 1] += need - have;
+      }
+    }
+    const W = widths.reduce((a, w) => a + w, 0);
+    const hOf = r => (r.group ? 1 : r.span ? Math.max(lines(r.span[0]).length, lines(r.span[1]).length) : Math.max(...r.map(v => lines(v).length))) * LH + PADY * 2;
+    const headH = Math.max(...head.map(v => lines(v).length), 1) * LH + PADY * 2;
+    const H = (head.length ? headH : 0) + body.reduce((a, r) => a + hOf(r), 0);
     cv.width = W + M * 2; cv.height = H + M * 2 + TITLE + 8 * S;
     ctx.fillStyle = '#fffaf2'; ctx.fillRect(0, 0, cv.width, cv.height);
     ctx.fillStyle = INK; ctx.font = `bold ${19 * S}px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
     ctx.fillText(title, M, M + TITLE / 2);
     let y = M + TITLE + 8 * S;
-    all.forEach((r, ri) => {
+    const cell = (text, x, w, h, bg, fg, bold) => {
+      ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, h - S);
+      const ls = lines(text);
+      ctx.fillStyle = fg; ctx.font = fontOf(bold); ctx.textAlign = 'center';
+      ls.forEach((l, li) => ctx.fillText(l, x + w / 2, y + h / 2 + (li - (ls.length - 1) / 2) * LH));
+    };
+    if (head.length) {
       let x = M;
-      for (let c = 0; c < cols; c++) {
-        const [bg, fg] = ri === 0 ? [HEAD_BG, INK] : cellTint(head, r, c);
-        ctx.fillStyle = bg; ctx.fillRect(x, y, widths[c], heights[ri]);
-        ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, widths[c] - S, heights[ri] - S);
-        const lines = String(r[c] ?? '').split('\n');
-        ctx.fillStyle = fg; ctx.font = fontOf(ri === 0 || c === 0); ctx.textAlign = 'center';
-        lines.forEach((l, li) => ctx.fillText(l, x + widths[c] / 2, y + heights[ri] / 2 + (li - (lines.length - 1) / 2) * LH));
-        x += widths[c];
+      head.forEach((v, c) => { cell(v, x, widths[c], headH, HEAD_BG, INK, true); x += widths[c]; });
+      y += headH;
+    }
+    for (const r of body) {
+      const h = hOf(r);
+      if (r.group) cell(r.group, M, W, h, GROUP_BG, INK, true);
+      else if (r.span) {
+        cell(r.span[0], M, widths[0], h, LABEL_BG, INK, true);
+        cell(r.span[1], M + widths[0], W - widths[0], h, ...(tintOf(r.span[0]) || ['#ffffff', INK]), false);
+      } else {
+        let x = M;
+        for (let c = 0; c < cols; c++) { cell(r[c], x, widths[c], h, ...cellTint(head, r, c), c === 0); x += widths[c]; }
       }
-      y += heights[ri];
-    });
-    foot.forEach(([label, value], fi) => {
-      const cells = [[label, widths[0], LABEL_BG, INK, true], [value, W - widths[0], ...(TINT[label] || ['#ffffff', INK]), false]];
-      let x = M;
-      for (const [text, w, bg, fg, bold] of cells) {
-        ctx.fillStyle = bg; ctx.fillRect(x, y, w, footH[fi]);
-        ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, footH[fi] - S);
-        const lines = String(text).split('\n');
-        ctx.fillStyle = fg; ctx.font = fontOf(bold); ctx.textAlign = 'center';
-        lines.forEach((l, li) => ctx.fillText(l, x + w / 2, y + footH[fi] / 2 + (li - (lines.length - 1) / 2) * LH));
-        x += w;
-      }
-      y += footH[fi];
-    });
+      y += h;
+    }
     return cv;
   }
   // 點表格：把表格畫成圖片直接複製到剪貼簿（不用另存）
@@ -397,7 +413,23 @@
     btn.textContent = '⬇ 下載免稅卡 JPG';
     const name = `免稅航班卡_${c.date.replace(/\//g, '')}_${c.flight}.jpg`;
     btn.addEventListener('click', () => canvas.toBlob(async b => { if (b) saveFile(btn, name, new Uint8Array(await b.arrayBuffer())); }, 'image/jpeg', 0.85));
-    row.appendChild(btn);
+    // 一鍵複製圖片：直接放進剪貼簿，可直接貼上（下載照舊）
+    const cp = document.createElement('button');
+    cp.type = 'button';
+    cp.textContent = '📋 一鍵複製圖片';
+    cp.addEventListener('click', () => {
+      try {
+        canvas.toBlob(async b => {
+          if (!b) { cp.textContent = '⚠️ 圖片複製失敗'; return; }
+          try {
+            await window.desk.copyImage(new Uint8Array(await b.arrayBuffer()));
+            cp.textContent = '✅ 已複製，可直接貼上';
+          } catch (_) { cp.textContent = '⚠️ 圖片複製失敗'; }
+          setTimeout(() => { cp.textContent = '📋 一鍵複製圖片'; }, 3000);
+        }, 'image/png');
+      } catch (_) { cp.textContent = '⚠️ 底圖無法匯出，不能複製'; }
+    });
+    row.append(btn, cp);
     d.append(prev, row);
     prev.addEventListener('load', scroll);
     scroll();
@@ -445,6 +477,11 @@
   }
   miniBtn.addEventListener('click', () => setMini(true));
   restoreBtn.addEventListener('click', () => setMini(false));
+  // 點標題列也能縮小／恢復（按鈕本身照舊）
+  document.querySelector('header').addEventListener('click', e => {
+    if (e.target.closest('button')) return;
+    setMini(!document.body.classList.contains('mini'));
+  });
 
   // 點熊寶：縮小中就先恢復，再到輸入框打字
   window.desk.onFocus(() => { if (document.body.classList.contains('mini')) setMini(false); else input.focus(); });
