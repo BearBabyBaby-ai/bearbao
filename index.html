@@ -6839,6 +6839,11 @@ if (window.bearDesktop) {
       const found = PlaceSearch.search(query);
       // 美食不列水果、伴手禮（和熊熊綜合系統的搜尋一樣）
       if (found && found['美食']) found['美食'] = found['美食'].filter(d => PlaceSearch.isVisibleFoodItem(d.raw));
+      // 白沙、北環島：照熊熊綜合系統北環島的規則，排除白沙鄉所屬離島（姑婆、員貝、吉貝、鳥嶼、目斗）；有寫離島名稱就不排除
+      const ISLANDS = ['姑婆', '員貝', '吉貝', '鳥嶼', '目斗'];
+      if (found && /白沙|北環/.test(query) && !ISLANDS.some(t => query.includes(t))) {
+        for (const k of Object.keys(found)) found[k] = found[k].filter(d => d.region !== '白沙鄉' || !ISLANDS.some(t => [d.village, d.address, d.name].join(' ').includes(t)));
+      }
       const groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
