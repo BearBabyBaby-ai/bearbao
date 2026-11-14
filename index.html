@@ -6604,7 +6604,8 @@ if (window.bearDesktop) {
     /* ── 美食、景點、廟宇、其他店家：首頁同一套複合式搜尋；TXT 照熊熊綜合系統「批次景點生圖 v13」的格式 ── */
     const shuffle = list => { const a = list.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
     const valid = v => PlaceSearch.checkValid(v);
-    const linkOf = d => validFullUrl(d.mapUrl) || validFullUrl(d.fullUrl) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.name} ${d.lat},${d.lng}`)}`;
+    // 地圖連結：有短網址用短網址，沒有才用完整網址
+    const linkOf = d => validFullUrl(PlaceSearch.getFoodField(d.raw || {}, '短網址')) || validFullUrl(d.mapUrl) || validFullUrl(d.fullUrl) || `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.name} ${d.lat},${d.lng}`)}`;
     async function places() {
       for (let i = 0; i < 75 && !mapDataLoaded; i++) await sleep(200);
       return mapDataLoaded ? allData : null;
@@ -6641,7 +6642,8 @@ if (window.bearDesktop) {
       const lines = [['店名', PlaceSearch.getFoodName(raw)], ['推薦菜色', F(raw, '推薦菜色／行程')], ['營業時間', F(raw, '營業時間')], ['電話', F(raw, '電話')], ['地址', F(raw, '地址')]]
         .filter(([, v]) => valid(v)).map(([k, v]) => `${k}：${String(v).trim()}`);
       const short = F(raw, '短網址');
-      if (publish && short) lines.push(`短網址：${short}`);
+      // 複製、發布用只放短網址，完整網址（google.com/maps…）一律不放
+      if (publish && short && !/google\.[a-z.]+\/maps|maps\.google\./i.test(short)) lines.push(`短網址：${short}`);
       return lines.join('\n');
     }
     function spotItem(raw, publish) {
@@ -6718,7 +6720,7 @@ if (window.bearDesktop) {
         const pick = shuffle(list).slice(0, 7);
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
         // 美食：照發布用 TXT 的格式顯示，點一下複製；不提供 TXT 下載
-        if (type === '美食') { pick.forEach(d => blocks.push({ type: 'copy', text: foodItem(d.raw, true) })); continue; }
+        if (type === '美食') { pick.forEach(d => blocks.push({ type: 'copy', text: foodItem(d.raw, true) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) })); continue; }
         pick.forEach(d => {
           blocks.push({ type: 'text', text: SHOW[type](d) });
           blocks.push({ type: 'link', text: '🔗 地圖連結', url: linkOf(d) });
