@@ -174,6 +174,26 @@
         d.append(...tableEl(b, title));
         continue;
       }
+      // 只打日期：那天有資料的項目，點一列就查那一種
+      if (b.type === 'pick') {
+        const t = document.createElement('table');
+        t.className = 'b-table b-pick';
+        const hr = document.createElement('tr');
+        (b.head || []).forEach(h => { const th = document.createElement('th'); th.textContent = h; hr.appendChild(th); });
+        t.appendChild(hr);
+        (b.rows || []).forEach((row, i) => {
+          const r = document.createElement('tr');
+          r.title = '點一下查看';
+          row.forEach((v, c) => { const cell = document.createElement(c === 0 ? 'th' : 'td'); cell.textContent = v; r.appendChild(cell); });
+          r.addEventListener('click', () => { const cmd = (b.cmds || [])[i]; if (cmd) { input.value = cmd; form.requestSubmit(); } });
+          t.appendChild(r);
+        });
+        const hint = document.createElement('div');
+        hint.className = 'b-hint';
+        hint.textContent = '👆 點要看的那一項';
+        d.append(t, hint);
+        continue;
+      }
       if (b.type === 'pub') {
         const el = document.createElement('div');
         el.className = 'b-pub';

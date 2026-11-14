@@ -2329,8 +2329,11 @@ const PlaceSearch = (() => {
     };
     for (const [sheetName, items] of Object.entries(datasets)) {
       for (const item of items) {
-        const values = Object.entries(item).filter(([key]) => !key.startsWith('_')).map(([, value]) => value);
-        if (Array.isArray(item._raw)) values.push(...item._raw);
+        // 一般字只找這些欄位：美食、其他店家（名稱、類別、推薦菜色、代表餐食）；景點（名稱、類別）；廟宇（名稱、主祀）
+        // 簡易說明、傳說、史蹟、地址這類長文字不搜（例如「冰」不會因為說明寫了仙人掌冰就找到跨海大橋）
+        const FIELDS = sheetName === '廟宇' ? /名稱|主祀/ : sheetName === '景點' ? /名稱|類別/ : /名稱|店名|類別|代表餐食|推薦菜色/;
+        const values = Object.entries(item).filter(([key]) => !key.startsWith('_') && FIELDS.test(key)).map(([, value]) => value);
+        values.push(getItemDisplayName(item, sheetName));
         const mainCategories = splitSearchValues(item['主類別']);
         const subCategories = sheetName === '美食清單' || sheetName === '其他店家' ? splitSearchValues(item['類別'])
           : sheetName === '景點' ? splitSearchValues(item['次類別']) : [];
@@ -2662,8 +2665,7 @@ const PlaceSearch = (() => {
     const deityGroup = sheetName === '廟宇' ? getSearchDeitySynonyms(text) : null;
     if (deityGroup && deityGroup.some(value => entry.deity.includes(normalizeSearchText(value))
       || entry.text.includes(normalizeSearchText(value)))) return true;
-    if (entry.name.includes(text) || entry.villageText.includes(text) || entry.address.includes(text)
-      || entry.text.includes(text)) return true;
+    if (entry.name.includes(text) || entry.villageText.includes(text) || entry.text.includes(text)) return true;
     return text === '海鮮餐廳' && ['海鮮', '海產'].some(value => entry.text.includes(value));
   }
 
@@ -2677,11 +2679,14 @@ const PlaceSearch = (() => {
       return entry.villages.includes(village) || entry.name.includes(village)
         || entry.villageText.includes(village) || entry.address.includes(village);
     })) return false;
+    // 類別：包含這個字的也算（海鮮 → 海鮮、海鮮餐廳）；美食、其他店家的名稱、推薦菜色、代表餐食有這個字也算
+    const inCats = (cats, token) => cats.some(c => c.includes(token));
+    const inFood = token => (sheetName === '美食清單' || sheetName === '其他店家') && entry.text.includes(normalizeSearchText(token));
     if (plan.mainCategories.length && (sheetName === '廟宇'
-      || !plan.mainCategories.some(token => entry.mainCategories.includes(token)))) return false;
+      || !plan.mainCategories.some(token => inCats(entry.mainCategories, token) || inFood(token)))) return false;
     if (plan.subCategories.length && (sheetName === '廟宇'
-      || !plan.subCategories.some(token => entry.subCategories.includes(token)
-        || entry.mainCategories.includes(token)))) return false;
+      || !plan.subCategories.some(token => inCats(entry.subCategories, token)
+        || inCats(entry.mainCategories, token) || inFood(token)))) return false;
     if (plan.deities.length && (sheetName !== '廟宇'
       || !plan.deities.some(token => {
         const synonyms = getSearchDeitySynonyms(token);
@@ -4621,6 +4626,18 @@ const Lantern = (() => {
   const LANTERN_STYLES = ['莊嚴', '攝影', '新海城', '紙雕風格', '喜慶花燈風', ...OCEAN_STYLES, ...GENERAL_STYLES];
   const REGION_ELEMENTS = { '馬公市': '虹橋、音符', '西嶼鄉': '柱狀玄武岩、古厝、燈塔', '湖西鄉': '沙灘、摩西分海、浮球造景、盪鞦韆', '白沙鄉': '盪鞦韆、香煙裊裊', '七美鄉': '雙心石滬、浮潛、燈塔', '望安鄉': '古厝、綠蠵龜、貓咪、沙灘' };
   const pickStyles = (pool, n) => pool.map(v => [Math.random(), v]).sort((a, b) => a[0] - b[0]).slice(0, n).map(x => x[1]).join('、');
+  /* 活動內容裡的政府單位活動（例如 2027超級龜龜）併到「參加政府單位活動」後面：文化局-2027超級龜龜；
+     判斷：同一個政府單位底下有兩間以上廟宇都寫了同一項，或寫了年份。扣掉後活動內容沒資料就不顯示 */
+  const splitItems = v => String(v || '').split(/[、,，;；\n]+/).map(s => s.trim()).filter(Boolean);
+  function govSplit(d) {
+    const L = d.lantern, gv = clean(L.gov || ''), items = splitItems(L.content);
+    if (!checkValid(gv) || !items.length) return { content: L.content, gov: L.gov };
+    const count = new Map();
+    for (const x of temples()) if (clean(x.lantern.gov || '') === gv) for (const it of new Set(splitItems(x.lantern.content))) count.set(it, (count.get(it) || 0) + 1);
+    const isGov = it => (count.get(it) || 0) >= 2 || /20\d{2}/.test(it);
+    const ev = items.filter(isGov), own = items.filter(it => !isGov(it));
+    return { content: own.join('、'), gov: ev.length ? `${gv}-${ev.join('、')}` : gv };
+  }
   function itemText(d) {
     const L = d.lantern;
     let t = '';
@@ -4631,8 +4648,9 @@ const Lantern = (() => {
     if (checkValid(L.feature)) t += `元宵特色：${L.feature}\n`;
     if (checkValid(L.dates)) t += `活動日期：${L.dates}\n`;
     if (checkValid(L.time)) t += `活動時間：${L.time}\n`;
-    if (checkValid(L.content)) t += `活動內容：${L.content}\n`;
-    if (checkValid(L.gov)) t += `參加政府單位活動：${L.gov}\n`;
+    const g = govSplit(d);
+    if (checkValid(g.content)) t += `活動內容：${g.content}\n`;
+    if (checkValid(g.gov)) t += `參加政府單位活動：${g.gov}\n`;
     if (checkValid(d.address)) t += `地址：${d.address}\n`;
     if (checkValid(d.phone)) t += `電話：${d.phone}\n`;
     if (checkValid(d.mapUrl)) t += `短網址：${d.mapUrl}\n`;
@@ -6861,16 +6879,52 @@ if (window.bearDesktop) {
     }
 
     /* ── 元宵活動：元宵資訊頁同一份資料與 TXT 格式 ── */
+    // 只打日期：分海、潮汐、元宵活動有資料的才列，用表格；點一列就查那一種
+    async function overview(key) {
+      const rows = [];
+      if (await ensureTide()) {
+        const info = tideDayInfo(key);
+        if (info.hasData) {
+          const of = type => info.points.filter(p => p.type === type).map(p => hm2(p.t)).filter(inDay).join('、') || '—';
+          rows.push(['奎壁山分海', `緩慢分海 ${of('sep')}\n緩慢合海 ${of('mer')}`, `${key} 分海`]);
+        }
+      }
+      try {
+        if (!forecastRows) forecastRows = await fetchForecastRows();
+        if (TIDE_PLACES.some(p => forecastDay(forecastRows, p, key))) rows.push(['潮汐', ['奎壁山', ...TIDE_PLACES].join('、'), `${key} 潮汐`]);
+      } catch (_) { /* 潮汐讀取失敗就不列 */ }
+      if (await places()) {
+        const groups = new Map();
+        for (const d of Lantern.temples()) {
+          const g = Lantern.dateRange(d.lantern.dates);
+          if (!g || g.start > key || key > g.end) continue;
+          const name = d.lantern.theme || d.lantern.content || '元宵活動';
+          groups.set(name, (groups.get(name) || 0) + 1);
+        }
+        let acts = [];
+        try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.start <= key && key <= it.end); } } catch (_) { /* 沒有活動資料 */ }
+        const lines = [...groups].map(([n, c]) => `${n}（參加廟宇 ${c} 間）`).concat(acts.map(it => plainText(it.name)));
+        if (lines.length) rows.push(['元宵活動', lines.join('\n'), `${key} 元宵`]);
+      }
+      const day = `${key}（${'日一二三四五六'[new Date(keyToUTC(key)).getUTCDay()]}）`;
+      if (!rows.length) return `${key}：尚無資訊`;
+      return { blocks: [
+        { type: 'title', text: `${day}有這些資料，點要看的那一項` },
+        { type: 'pick', head: ['項目', '內容'], rows: rows.map(r => r.slice(0, 2)), cmds: rows.map(r => r[2]) }
+      ] };
+    }
     async function lantern(r) {
       const all = await places();
       if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
       const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; };
       const inYear = text => !r.year || String(text || '').includes(r.year);
-      const list = Lantern.temples().filter(d => (!r.regions.length || r.regions.includes(d.region)) && inYear(d.lantern.dates))
+      // 指定日期（只打日期時點「元宵活動」）：只列那天的活動
+      const onDay = d => { if (!r.date) return true; const g = Lantern.dateRange(d.lantern.dates); return Boolean(g) && g.start <= r.date && r.date <= g.end; };
+      const list = Lantern.temples().filter(d => (!r.regions.length || r.regions.includes(d.region)) && inYear(d.lantern.dates) && onDay(d))
         .sort((a, b) => order(a.region) - order(b.region) || a.village.localeCompare(b.village, 'zh-Hant') || a.name.localeCompare(b.name, 'zh-Hant'));
       let acts = [];
-      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start)); } } catch (_) { /* 沒有活動資料 */ }
-      const area = (r.regions.length ? r.regions.map(x => x.slice(0, 2)).join('、') : '澎湖') + (r.year ? ` ${r.year}` : '');
+      try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start) && (!r.date || (it.start <= r.date && r.date <= it.end))); } } catch (_) { /* 沒有活動資料 */ }
+      const area = (r.regions.length ? r.regions.map(x => x.slice(0, 2)).join('、') : '澎湖') + (r.date ? ` ${r.date}` : r.year ? ` ${r.year}` : '');
       if (!list.length && !acts.length) return `${area} 目前沒有元宵活動資料`;
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
       const groups = new Map();
@@ -6956,9 +7010,12 @@ if (window.bearDesktop) {
         }
         // 元宵（可加年份、鄉市）：2027元宵、馬公 元宵
         if (/元宵|乞龜/.test(s)) {
-          const year = (s.match(/(20\d{2})/) || [])[1] || '';
-          return await lantern({ regions: regionsIn(s), year });
+          const date = d.given ? ahead(d) : '';
+          const year = date ? date.slice(0, 4) : (s.match(/(20\d{2})/) || [])[1] || '';
+          return await lantern({ regions: regionsIn(s), year, date });
         }
+        // 只打日期：列出那天有資料的項目，點一下看那一種
+        if (d.given && !d.rest) return await overview(ahead(d));
         // 記帳：最後是金額（例如 11/14 宵夜 111、午餐 120）
         const m = d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
         if (m && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return await ledger(d.key, m[1].trim(), Number(m[2]));
