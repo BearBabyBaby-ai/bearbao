@@ -6783,7 +6783,7 @@ if (window.bearDesktop) {
     function templeItem(raw) {
       let t = '';
       const r1 = valid(raw['區域(鄉市)']) ? raw['區域(鄉市)'] : '', r2 = valid(raw['區域(村里)']) ? raw['區域(村里)'] : '';
-      if (r1 || r2) t += `區域(鄉市)-區域(村里)：${r1}${r1 && r2 ? '-' : ''}${r2}\n`;
+      if (r1 || r2) t += `區域：${r1}${r1 && r2 ? '-' : ''}${r2}\n`;
       t += `廟宇名稱：${raw['廟宇名稱'] || '未提供名稱'}\n`;
       for (const k of ['主祀', '地址', '電話']) if (valid(raw[k])) t += `${k}：${raw[k]}\n`;
       if (valid(raw['Latitude'])) t += `緯度：${raw['Latitude']}\n`;
