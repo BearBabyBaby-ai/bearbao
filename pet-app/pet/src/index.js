@@ -278,7 +278,17 @@ ipcMain.on('click', e => {
 ipcMain.on('pet', e => bearOf(e.sender)?.onPet());
 
 // ---------- 主迴圈 ----------
-let last = Date.now();
+let last = Date.now(), lastP = null;
+// 熊寶回到主螢幕地面（上一個正常位置在範圍內就留在那個左右位置）
+function resetBear(bear) {
+  const a = screen.getPrimaryDisplay().workArea, h = handles.get(bear);
+  const gx = h && h.good && sanePos(h.good.fx, h.good.fy) ? h.good.fx : a.x + a.width / 2;
+  bear.fx = Math.min(Math.max(gx, a.x + 60), a.x + a.width - 60);
+  bear.fy = a.y + a.height;
+  bear.vx = 0; bear.vy = 0;
+  bear.surface = { type: 'floor' };
+  bear.idle(1);
+}
 function loop() {
   const now = Date.now();
   const dt = Math.min(0.1, (now - last) / 1000);
@@ -314,11 +324,24 @@ function loop() {
         bear.startFall(0);
       } else h.good = { fx: bear.fx, fy: bear.fy };
       const p = bear.windowPos();
+      lastP = p;
       const [x, y] = h.win.getPosition();
       if (x !== p.x || y !== p.y) h.win.setPosition(p.x, p.y);
+      // 防卡住四：畫面上是掉落的姿勢，但熊寶視窗 3 秒都沒移動 → 回到地面
+      const [nx, ny] = h.win.getPosition();
+      if (bear.cur && bear.cur.action === 'falling' && bear.mode !== 'drag') {
+        if (h.stillPos && h.stillPos.x === nx && h.stillPos.y === ny) {
+          if (now - h.stillPos.t > 3000) { log('熊寶掉落姿勢卡住 3 秒，已讓熊寶回到地面：' + JSON.stringify({ mode: bear.mode, fx: bear.fx, fy: bear.fy, p })); resetBear(bear); h.stillPos = null; }
+        } else h.stillPos = { x: nx, y: ny, t: now };
+      } else h.stillPos = null;
     } catch (e) {
-      log('熊寶動作失敗', e);
-      try { bear.startFall(0); } catch (_) { /* 忽略 */ }
+      // 任何一步出錯（例如搬不動熊寶視窗）→ 熊寶直接回到主螢幕地面重新開始，不再一直重試同一個錯的位置
+      const h = handles.get(bear);
+      if (!h || !h.errLogged) {
+        if (h) h.errLogged = true;
+        log('熊寶動作失敗，已讓熊寶回到地面：' + JSON.stringify({ mode: bear.mode, fx: String(bear.fx), fy: String(bear.fy), vx: String(bear.vx), vy: String(bear.vy), p: lastP, surface: bear.surface }), e);
+      }
+      try { resetBear(bear); } catch (_) { /* 忽略 */ }
     }
   }
   try { updateHits(cur); } catch (e) { log('判斷游標失敗', e); }
