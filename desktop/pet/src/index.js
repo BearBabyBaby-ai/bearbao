@@ -412,8 +412,8 @@ function setDesk(on, save = true) {
 
 // 對話框的下載（TXT、免稅卡 JPG）：另存新檔，預設放在「下載」資料夾
 ipcMain.handle('desk-save', async (_e, name, data) => {
-  const jpg = path.extname(name).toLowerCase() === '.jpg';
-  const filters = jpg ? [{ name: 'JPG 圖片', extensions: ['jpg'] }] : [{ name: '文字檔', extensions: ['txt'] }];
+  const ext = path.extname(name).toLowerCase();
+  const filters = ext === '.jpg' ? [{ name: 'JPG 圖片', extensions: ['jpg'] }] : ext === '.png' ? [{ name: 'PNG 圖片', extensions: ['png'] }] : [{ name: '文字檔', extensions: ['txt'] }];
   const opts = { defaultPath: path.join(app.getPath('downloads'), name), filters };
   const r = chatWin && !chatWin.isDestroyed() ? await dialog.showSaveDialog(chatWin, opts) : await dialog.showSaveDialog(opts);
   if (r.canceled || !r.filePath) return '';

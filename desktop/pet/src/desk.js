@@ -32,18 +32,129 @@
   }
   const txtData = content => '\uFEFF' + String(content).replace(/^\uFEFF/, '').replace(/\r?\n/g, '\r\n');
 
+  // ---------- 表格（分海、潮汐）：資料置中、依種類分底色；點表格存成圖片 ----------
+  const TINT = {
+    '緩慢分海': ['#e6efff', '#2563eb'], '緩慢合海': ['#fde8ea', '#e11d2e'],
+    '滿潮': ['#fdecec', '#c62828'], '乾潮': ['#e8f1fb', '#1565c0'],
+    '安全通行': ['#e7f6ec', '#1b7a3d'], '日出／日沒': ['#fff6dc', '#9a6700']
+  };
+  const HEAD_BG = '#f6e7cf', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#573d2a';
+  // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
+  function cellTint(head, row, c) {
+    if (c === 0) return [LABEL_BG, INK];
+    const byCol = TINT[head[c]];
+    if (byCol && head[0] === '地點') return byCol;
+    return TINT[row[0]] || ['#ffffff', INK];
+  }
+  function tableEl(b, title) {
+    const t = document.createElement('table');
+    t.className = 'b-table';
+    t.title = '點一下存成圖片';
+    const tr = (cells, isHead, row) => {
+      const r = document.createElement('tr');
+      cells.forEach((v, i) => {
+        const c = document.createElement(isHead || i === 0 ? 'th' : 'td');
+        c.textContent = v;
+        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i); c.style.background = bg; c.style.color = fg; }
+        r.appendChild(c);
+      });
+      return r;
+    };
+    if (Array.isArray(b.head)) t.appendChild(tr(b.head, true));
+    (b.rows || []).forEach(row => t.appendChild(tr(row, false, row)));
+    // 表格下方跨整列的資料（潮汐的安全通行、日出／日沒）
+    const span = Math.max((b.head || []).length - 1, 1);
+    (b.foot || []).forEach(([label, value]) => {
+      const r = document.createElement('tr');
+      const th = document.createElement('th'); th.textContent = label;
+      const td = document.createElement('td'); td.textContent = value; td.colSpan = span;
+      const [bg, fg] = TINT[label] || ['#ffffff', INK];
+      td.style.background = bg; td.style.color = fg;
+      r.append(th, td); t.appendChild(r);
+    });
+    t.addEventListener('click', () => saveTableImage(b, title, hint));
+    const hint = document.createElement('div');
+    hint.className = 'b-hint';
+    hint.textContent = '📷 點表格存成圖片';
+    return [t, hint];
+  }
+  // 把表格畫成圖片（2 倍解析度），標題在上方
+  function tableCanvas(b, title) {
+    const S = 2, FONT = '"Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif';
+    const head = b.head || [], rows = b.rows || [];
+    const all = [head, ...rows];
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    const fontOf = bold => `${bold ? 'bold ' : ''}${15 * S}px ${FONT}`;
+    const LH = 22 * S, PADX = 14 * S, PADY = 8 * S, M = 16 * S, TITLE = 26 * S;
+    const cols = head.length || Math.max(...rows.map(r => r.length));
+    const widths = Array.from({ length: cols }, (_, c) => Math.max(...all.map((r, ri) => {
+      ctx.font = fontOf(ri === 0 || c === 0);
+      return Math.max(...String(r[c] ?? '').split('\n').map(l => ctx.measureText(l).width));
+    })) + PADX * 2);
+    const foot = b.foot || [];
+    // 跨整列的資料：第一欄要放得下標題，其餘欄合起來要放得下內容
+    foot.forEach(([label, value]) => {
+      ctx.font = fontOf(true); widths[0] = Math.max(widths[0], ctx.measureText(label).width + PADX * 2);
+      ctx.font = fontOf(false);
+      const need = Math.max(...String(value).split('\n').map(l => ctx.measureText(l).width)) + PADX * 2, have = widths.slice(1).reduce((a, w) => a + w, 0);
+      if (need > have && cols > 1) widths[cols - 1] += need - have;
+    });
+    const heights = all.map(r => Math.max(...r.map(v => String(v ?? '').split('\n').length)) * LH + PADY * 2);
+    const footH = foot.map(([, v]) => String(v).split('\n').length * LH + PADY * 2);
+    const W = widths.reduce((a, b) => a + b, 0), H = heights.reduce((a, b) => a + b, 0) + footH.reduce((a, b) => a + b, 0);
+    cv.width = W + M * 2; cv.height = H + M * 2 + TITLE + 8 * S;
+    ctx.fillStyle = '#fffaf2'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = INK; ctx.font = `bold ${19 * S}px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    ctx.fillText(title, M, M + TITLE / 2);
+    let y = M + TITLE + 8 * S;
+    all.forEach((r, ri) => {
+      let x = M;
+      for (let c = 0; c < cols; c++) {
+        const [bg, fg] = ri === 0 ? [HEAD_BG, INK] : cellTint(head, r, c);
+        ctx.fillStyle = bg; ctx.fillRect(x, y, widths[c], heights[ri]);
+        ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, widths[c] - S, heights[ri] - S);
+        const lines = String(r[c] ?? '').split('\n');
+        ctx.fillStyle = fg; ctx.font = fontOf(ri === 0 || c === 0); ctx.textAlign = 'center';
+        lines.forEach((l, li) => ctx.fillText(l, x + widths[c] / 2, y + heights[ri] / 2 + (li - (lines.length - 1) / 2) * LH));
+        x += widths[c];
+      }
+      y += heights[ri];
+    });
+    foot.forEach(([label, value], fi) => {
+      const cells = [[label, widths[0], LABEL_BG, INK, true], [value, W - widths[0], ...(TINT[label] || ['#ffffff', INK]), false]];
+      let x = M;
+      for (const [text, w, bg, fg, bold] of cells) {
+        ctx.fillStyle = bg; ctx.fillRect(x, y, w, footH[fi]);
+        ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, footH[fi] - S);
+        const lines = String(text).split('\n');
+        ctx.fillStyle = fg; ctx.font = fontOf(bold); ctx.textAlign = 'center';
+        lines.forEach((l, li) => ctx.fillText(l, x + w / 2, y + footH[fi] / 2 + (li - (lines.length - 1) / 2) * LH));
+        x += w;
+      }
+      y += footH[fi];
+    });
+    return cv;
+  }
+  function saveTableImage(b, title, hint) {
+    const cv = tableCanvas(b, title);
+    cv.toBlob(async blob => {
+      if (!blob) return;
+      const name = `${title.replace(/\//g, '-').replace(/\s+/g, '')}.png`;
+      try {
+        const where = await window.desk.save(name, new Uint8Array(await blob.arrayBuffer()));
+        if (where && hint) { hint.textContent = '✅ 已存成圖片'; setTimeout(() => { hint.textContent = '📷 點表格存成圖片'; }, 3000); }
+      } catch (_) { if (hint) hint.textContent = '⚠️ 圖片儲存失敗'; }
+    }, 'image/png');
+  }
+
   // 熊寶系統的回覆：純文字，或是 { blocks, files }
   function show(reply) {
     if (typeof reply === 'string' || !reply || !Array.isArray(reply.blocks)) return add(String(reply || '熊寶系統沒有回覆，請再試一次'), 'bear');
     const d = bubble('bear rich');
     for (const b of reply.blocks) {
       if (b.type === 'table') {
-        const t = document.createElement('table');
-        t.className = 'b-table';
-        const tr = cells => { const r = document.createElement('tr'); cells.forEach(([tag, v]) => { const c = document.createElement(tag); c.textContent = v; r.appendChild(c); }); return r; };
-        if (Array.isArray(b.head)) t.appendChild(tr(b.head.map(v => ['th', v])));
-        (b.rows || []).forEach(row => t.appendChild(tr(row.map((v, i) => [i === 0 ? 'th' : 'td', v]))));
-        d.appendChild(t);
+        const title = (reply.blocks.find(x => x.type === 'title') || {}).text || '表格';
+        d.append(...tableEl(b, title));
         continue;
       }
       const el = document.createElement(b.type === 'link' ? 'a' : 'div');
