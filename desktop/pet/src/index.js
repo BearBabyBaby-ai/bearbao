@@ -268,11 +268,24 @@ function loop() {
   last = now;
   if (hidden) return;
   const cur = screen.getCursorScreenPoint();
+  const btn = win32.available() ? win32.mouseDown() : null;
   for (const bear of bears) {
     try {
+      const h0 = handles.get(bear);
+      // 防卡住一：滑鼠已經放開，熊寶卻還以為被抓著（放開的訊息沒收到）→ 直接放開
+      if (btn === false) {
+        if (bear.mode === 'drag' && now - (h0?.dragSince || now) > 300) bear.onDragEnd();
+        if (h0 && h0.pressed && bear.mode !== 'drag') h0.pressed = false;
+      }
+      if (h0) { if (bear.mode === 'drag') { if (!h0.dragSince) h0.dragSince = now; } else h0.dragSince = 0; }
       bear.tick(dt);
       const h = handles.get(bear);
       if (!h || h.win.isDestroyed()) continue;
+      // 防卡住二：掉落中超過 6 秒還沒落地 → 直接落到地面
+      if (bear.mode === 'fall') {
+        if (!h.fallSince) h.fallSince = now;
+        else if (now - h.fallSince > 6000) { h.fallSince = 0; bear.fy = bear.floorY(); bear.vy = 0; bear.vx = 0; bear.surface = { type: 'floor' }; bear.clampX(); bear.land(false); }
+      } else h.fallSince = 0;
       const p = bear.windowPos();
       const [x, y] = h.win.getPosition();
       if (x !== p.x || y !== p.y) h.win.setPosition(p.x, p.y);

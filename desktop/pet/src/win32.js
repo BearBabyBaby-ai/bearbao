@@ -37,6 +37,8 @@ function load() {
       MonitorFromWindow: user32.func('intptr_t __stdcall MonitorFromWindow(intptr_t hwnd, uint32_t flags)'),
       GetMonitorInfoW: user32.func('bool __stdcall GetMonitorInfoW(intptr_t mon, _Inout_ BB_MONITORINFO *info)'),
       SetWindowPos: user32.func('bool __stdcall SetWindowPos(intptr_t hwnd, intptr_t after, int x, int y, int cx, int cy, uint32_t flags)'),
+      GetAsyncKeyState: user32.func('int16_t __stdcall GetAsyncKeyState(int vk)'),
+      GetSystemMetrics: user32.func('int __stdcall GetSystemMetrics(int index)'),
       OpenProcess: kernel32.func('intptr_t __stdcall OpenProcess(uint32_t access, bool inherit, uint32_t pid)'),
       QueryFullProcessImageNameW: kernel32.func('bool __stdcall QueryFullProcessImageNameW(intptr_t proc, uint32_t flags, _Out_ uint8_t *buf, _Inout_ uint32_t *size)'),
       CloseHandle: kernel32.func('bool __stdcall CloseHandle(intptr_t h)'),
@@ -191,4 +193,14 @@ function nudgeWindow(hwnd, dx) {
   }
 }
 
-module.exports = { available: () => !!load(), listWindows, foreground, nudgeWindow };
+// 滑鼠主按鍵現在是不是按著（左右鍵對調時看右鍵）；讀不到時回傳 null
+function mouseDown() {
+  const a = load();
+  if (!a) return null;
+  try {
+    const vk = a.GetSystemMetrics(23) ? 0x02 : 0x01;
+    return (a.GetAsyncKeyState(vk) & 0x8000) !== 0;
+  } catch (_) { return null; }
+}
+
+module.exports = { available: () => !!load(), listWindows, foreground, nudgeWindow, mouseDown };
