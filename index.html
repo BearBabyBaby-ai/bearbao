@@ -6719,7 +6719,9 @@ if (window.bearDesktop) {
     }
     const lines = (...xs) => xs.filter(Boolean).join('\n');
     // 複製內容不放完整網址（google.com/maps…），只留短網址
-    const noFull = t => String(t).split('\n').filter(l => !/google\.[a-z.]+\/maps|maps\.google\./i.test(l)).join('\n');
+    const noFull = t => String(t).split('\n').filter(l => !/google\.[a-z.]+\/maps|maps\.google\./i.test(l) && !/^\s*(?:緯度|經度)\s*[：:]/.test(l)).join('\n');
+    // 對話框顯示不放短網址（一鍵複製才有）
+    const noUrl = t => String(t).split('\n').filter(l => !/^\s*短網址\s*[：:]/.test(l)).join('\n');
     const SHOW = {
       '美食': d => lines(d.name, valid(d.category) && `類別：${d.category}`, valid(d.hours) && `營業時間：${d.hours}`, valid(d.phone) && `電話：${d.phone}`),
       '景點': d => lines(d.name, valid(d.category) && `類別：${d.category}`),
@@ -6745,7 +6747,7 @@ if (window.bearDesktop) {
         const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => spotItem(d.raw, true), '廟宇': d => templeItem(d.raw) };
         if (PUB[type]) {
           const items = pick.map(d => noFull(PUB[type](d)));
-          pick.forEach((d, i) => blocks.push({ type: 'pub', text: items[i] }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          pick.forEach((d, i) => blocks.push({ type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
           copyAll.push(...items);
           continue;
         }
@@ -6806,7 +6808,7 @@ if (window.bearDesktop) {
       acts.forEach(it => blocks.push({ type: 'text', text: [`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`].filter(Boolean).join('\n') }));
       // 每間廟宇照發布用 TXT 的格式顯示，點一下複製（只放短網址）
       const items = list.map(d => noFull(Lantern.publishText(d)));
-      list.forEach((d, i) => blocks.push({ type: 'pub', text: items[i] }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+      list.forEach((d, i) => blocks.push({ type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
       // 一鍵複製：整個結果，照發布用 TXT 的格式
       return { blocks, copy: items.length ? `${blocks[0].text}\n\n` + items.map(t => t + SEP).join('') : '' };
     }
