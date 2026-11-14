@@ -60,11 +60,26 @@ function toDip(r) {
   try { return screen.screenToDipRect(null, rect); } catch (_) { return rect; }
 }
 
+// 所有螢幕合起來的範圍（外加 600 點）；熊寶位置、視窗座標超出就當成錯誤
+function screenSpan() {
+  const ds = screen.getAllDisplays().map(d => d.bounds);
+  return {
+    x1: Math.min(...ds.map(b => b.x)) - 600, y1: Math.min(...ds.map(b => b.y)) - 600,
+    x2: Math.max(...ds.map(b => b.x + b.width)) + 600, y2: Math.max(...ds.map(b => b.y + b.height)) + 600
+  };
+}
+function sanePos(x, y) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const r = screenSpan();
+  return x >= r.x1 && x <= r.x2 && y >= r.y1 && y <= r.y2;
+}
+
 function pollWindows() {
   if (!win32.available() || hidden) return;
   // 座標換算失敗（不是數字）的視窗不算，避免熊寶站上去後位置變成不是數字而卡住
   const list = win32.listWindows(ownPids()).map(w => ({ hwnd: w.hwnd, zoomed: w.zoomed, rect: toDip(w.rect) }))
-    .filter(w => [w.rect.x, w.rect.y, w.rect.width, w.rect.height].every(Number.isFinite));
+    .filter(w => [w.rect.x, w.rect.y, w.rect.width, w.rect.height].every(Number.isFinite)
+      && sanePos(w.rect.x, w.rect.y) && sanePos(w.rect.x + w.rect.width, w.rect.y + w.rect.height));
   windows = list;
   windowMap = new Map(list.map(w => [w.hwnd, w]));
 }
@@ -288,12 +303,13 @@ function loop() {
         if (!h.fallSince) h.fallSince = now;
         else if (now - h.fallSince > 6000) { h.fallSince = 0; bear.fy = bear.floorY(); bear.vy = 0; bear.vx = 0; bear.surface = { type: 'floor' }; bear.clampX(); bear.land(false); }
       } else h.fallSince = 0;
-      // 防卡住三：位置變成不是數字（log 裡的 conversion failure）→ 回到上一個正常位置，從那裡往下掉
-      if (!Number.isFinite(bear.fx) || !Number.isFinite(bear.fy)) {
+      // 防卡住三：位置變成不是數字或跑到所有螢幕範圍外很遠（log 裡的 conversion failure）→ 回到上一個正常位置，從那裡往下掉
+      if (!sanePos(bear.fx, bear.fy)) {
         if (!h.badLogged) { h.badLogged = true; log('熊寶位置異常，已復原：' + JSON.stringify({ mode: bear.mode, surface: bear.surface, fx: String(bear.fx), fy: String(bear.fy), vx: String(bear.vx), vy: String(bear.vy), m: Object.keys(bear.m || {}) })); }
         const a = screen.getPrimaryDisplay().workArea;
-        bear.fx = h.good ? h.good.fx : a.x + a.width / 2;
-        bear.fy = h.good ? h.good.fy : a.y + a.height;
+        const ok = h.good && sanePos(h.good.fx, h.good.fy);
+        bear.fx = ok ? h.good.fx : a.x + a.width / 2;
+        bear.fy = ok ? h.good.fy : a.y + a.height;
         bear.vx = 0; bear.vy = 0;
         bear.startFall(0);
       } else h.good = { fx: bear.fx, fy: bear.fy };
