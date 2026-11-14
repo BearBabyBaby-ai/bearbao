@@ -164,6 +164,15 @@ class Bear {
   }
 
   startFall(vx = 0) {
+    // 防卡住：同一個視窗上緣一直「站上去又掉下來」（畫面上就是卡在半空、掉落的姿勢不動）
+    // → 1.5 秒內同一個高度掉 5 次以上，這個視窗 60 秒內不站上去，直接往下掉
+    const now = Date.now(), prev = this.surface;
+    this.fallLog = (this.fallLog || []).filter(f => now - f.t < 1500);
+    this.fallLog.push({ t: now, y: Math.round(this.fy) });
+    if (prev && prev.type === 'window' && this.fallLog.length >= 5 && this.fallLog.every(f => Math.abs(f.y - this.fallLog[0].y) <= 3)) {
+      this.skipWin = { hwnd: prev.hwnd, until: now + 60000 };
+      this.fallLog = [];
+    }
     this.surface = null;
     this.vx = vx; this.vy = 0;
     this.setMode('fall', {});
@@ -439,7 +448,8 @@ class Bear {
     }
     const hard = this.m.thrown || this.vy > 650;
     // 落在視窗頂端
-    const w = this.world.landingWindow(this.fx, prevFy, this.fy, this.wa());
+    let w = this.world.landingWindow(this.fx, prevFy, this.fy, this.wa());
+    if (w && this.skipWin && w.hwnd === this.skipWin.hwnd && Date.now() < this.skipWin.until) w = null;
     if (w) {
       this.fy = w.rect.y;
       this.surface = { type: 'window', hwnd: w.hwnd, top: w.rect.y, left: w.rect.x };
