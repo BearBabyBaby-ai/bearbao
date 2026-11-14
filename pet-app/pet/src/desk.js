@@ -73,7 +73,9 @@
     '奎壁山': ['#e4f3e1', '#c9e6c3'], '馬公': ['#e2edfa', '#c3d8f2'], '西嶼': ['#f1e4f5', '#dfc6e8'],
     '白沙': ['#fdeedd', '#f6d6b2'], '七美': ['#dff3f2', '#b9e2df'], '池西岩瀑': ['#fff3c4', '#f5df8f']
   };
-  const PLACE_FG = { '滿潮': '#c62828', '乾潮': '#1565c0', '池西岩瀑': '#8a6400' };
+  const PLACE_FG = { '滿潮': '#c62828', '乾潮': '#1565c0', '池西岩瀑\n建議觀賞時間': '#8a6400' };
+  // 潮汐時間、潮高（例如 14:41　130cm）：時間靠左、潮高靠右對齊
+  const TIDE_RE = /^(\d{1,2}:\d{2})\u3000(\S+)$/;
   // 每一列屬於第幾個地點（從 0 起），沒有合併時為 -1
   function placeIndex(runs) { let k = -1; return runs.map(n => (n > 0 ? ++k : k)); }
   function tableEl(b, title) {
@@ -88,7 +90,18 @@
         if (i === 0 && merge === 0) return;
         const c = document.createElement(isHead || i === 0 ? 'th' : 'td');
         if (i === 0 && merge > 1) c.rowSpan = merge;
-        c.textContent = v;
+        const ls = String(v ?? '').split('\n');
+        if (!isHead && i > 0 && ls.some(l => TIDE_RE.test(l))) {
+          ls.forEach(l => {
+            const m = l.match(TIDE_RE), line = document.createElement('div');
+            if (m) {
+              const a = document.createElement('span'); a.className = 'tt'; a.textContent = m[1];
+              const z = document.createElement('span'); z.className = 'th'; z.textContent = m[2];
+              line.append(a, z);
+            } else line.textContent = l;
+            c.appendChild(line);
+          });
+        } else c.textContent = v;
         if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i); c.style.background = bg; c.style.color = fg; }
         r.appendChild(c);
       });
@@ -148,6 +161,12 @@
         if (need > have) widths[cols - 1] += need - have;
       }
     }
+    // 潮汐對齊用的固定寬度：最寬的時間＋間隔＋最寬的潮高
+    ctx.font = fontOf(false);
+    let tw = 0, hw = 0;
+    for (const r of plain) r.slice(1).forEach(v => lines(v).forEach(l => { const m = l.match(TIDE_RE); if (m) { tw = Math.max(tw, ctx.measureText(m[1]).width); hw = Math.max(hw, ctx.measureText(m[2]).width); } }));
+    const TIDE_W = tw ? tw + 14 * S + hw : 0;
+    if (TIDE_W) for (let c = 1; c < cols; c++) if (plain.some(r => lines(r[c]).some(l => TIDE_RE.test(l)))) widths[c] = Math.max(widths[c], TIDE_W + PADX * 2);
     const W = widths.reduce((a, w) => a + w, 0);
     const hOf = r => (r.group ? 1 : r.span ? Math.max(lines(r.span[0]).length, lines(r.span[1]).length) : Math.max(...r.map(v => lines(v).length))) * LH + PADY * 2;
     const headH = Math.max(...head.map(v => lines(v).length), 1) * LH + PADY * 2;
@@ -161,8 +180,15 @@
       ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
       ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, h - S);
       const ls = lines(text);
-      ctx.fillStyle = fg; ctx.font = fontOf(bold); ctx.textAlign = 'center';
-      ls.forEach((l, li) => ctx.fillText(l, x + w / 2, y + h / 2 + (li - (ls.length - 1) / 2) * LH));
+      ctx.fillStyle = fg; ctx.font = fontOf(bold);
+      ls.forEach((l, li) => {
+        const ty = y + h / 2 + (li - (ls.length - 1) / 2) * LH, m = bold ? null : l.match(TIDE_RE);
+        // 潮汐：時間靠左、潮高靠右，整欄對齊
+        if (m) {
+          ctx.textAlign = 'left'; ctx.fillText(m[1], x + w / 2 - TIDE_W / 2, ty);
+          ctx.textAlign = 'right'; ctx.fillText(m[2], x + w / 2 + TIDE_W / 2, ty);
+        } else { ctx.textAlign = 'center'; ctx.fillText(l, x + w / 2, ty); }
+      });
     };
     if (head.length) {
       let x = M;
