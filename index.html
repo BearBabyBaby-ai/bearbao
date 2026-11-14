@@ -2200,8 +2200,17 @@ const PlaceSearch = (() => {
     },
     {
       "name": "望安",
+      "aliases": ["望安鄉"],
       "sheets": ["美食清單", "景點", "廟宇", "其他店家"],
-      "regions": ["望安鄉"]
+      "regions": ["望安鄉"],
+      "excludeTerms": { "望安鄉": ["將軍", "東吉", "西吉", "東坪", "西坪", "東嶼坪", "西嶼坪", "花嶼"] }
+    },
+    {
+      "name": "白沙",
+      "aliases": ["白沙鄉"],
+      "sheets": ["美食清單", "景點", "廟宇", "其他店家"],
+      "regions": ["白沙鄉"],
+      "excludeTerms": { "白沙鄉": ["姑婆", "員貝", "吉貝", "鳥嶼", "目斗"] }
     },
     {
       "name": "吉貝",
@@ -2674,6 +2683,13 @@ const PlaceSearch = (() => {
     const entry = context.rows.get(item);
     if (!entry) return false;
     if (plan.regions.size && !plan.regions.has(entry.regionName)) return false;
+    // 白沙、望安只顯示本島（同北環島規則，排除白沙鄉所屬離島；望安只留望安本島）；有指定離島地名時照常
+    if (!plan.locations.length && plan.regions.has(entry.regionName)) {
+      const preset = QUICK_KEYWORDS.find(p => p.name === (entry.regionName === '白沙鄉' ? '白沙' : entry.regionName === '望安鄉' ? '望安' : ''));
+      const islands = preset ? ((preset.excludeTerms || {})[entry.regionName] || []) : [];
+      const where = [entry.villageText, entry.address, sheetName === '美食清單' ? '' : entry.name].join(' ');
+      if (islands.some(t => where.includes(normalizeSearchText(t)))) return false;
+    }
     if (plan.locations.length && !plan.locations.some(token => {
       const village = normalizeSearchVillage(token);
       return entry.villages.includes(village) || entry.name.includes(village)
