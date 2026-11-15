@@ -7083,43 +7083,44 @@ if (window.bearDesktop) {
       const route = dep ? `澎湖 → ${placeName(r.place)}` : `${placeName(r.place)} → 澎湖`;
       return { type: 'link', text: `${airlineName(r.airline)} ${flightCode(r.flight)} ${route} ${time} ${(String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]}`, url: `https://www.flightradar24.com/${encodeURIComponent(r.flight)}`, t: time };
     }
-    async function flights(code) {
+    // 熊寶工作中查航班：只列抵達澎湖的班次，用表格（和機場航班頁一樣的欄位）
+    const ARR_HEAD = ['班次', '來自', '機型', '表定起飛', '實際起飛', '表定到達', '預估／實際到達', '狀態'];
+    const arrRow = r => [r.flight, placeName(r.place), r.aircraft || '—', hhmm(r.scheduledStart) || '—', hhmm(r.actualStart) || '—', hhmm(r.scheduledEnd) || '—', hhmm(r.actualEnd) || '—', (String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]];
+    const arrSort = list => list.slice().sort((x, y) => hhmm(x.scheduledEnd).localeCompare(hhmm(y.scheduledEnd)));
+    const arrTable = (title, list) => ({ blocks: [{ type: 'title', text: title }, { type: 'table', head: ARR_HEAD, rows: arrSort(list).map(arrRow) }] });
+    async function flightData() {
       for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
-      const st = Flights.state;
-      if (!st.loaded) return '航班資料讀取失敗，請確認網路後再試一次';
-      const dep = st.departure.map(r => [r, true]), arr = st.arrival.map(r => [r, false]);
+      return Flights.state.loaded ? Flights.state : null;
+    }
+    async function flights(code) {
+      const st = await flightData();
+      if (!st) return '航班資料讀取失敗，請確認網路後再試一次';
       if (code) {
         const want = code.replace(/^(AE|B7|DA)/, m => ({ AE: 'MDA', B7: 'UIA', DA: 'DAC' })[m]);
-        const hit = [...dep, ...arr].filter(([r]) => r.flight === want);
-        if (!hit.length) return `今天沒有 ${code} 的班次`;
-        return { blocks: [{ type: 'title', text: `${code} 班次` }, ...hit.map(([r, d]) => flightLine(r, d))] };
+        const hit = st.arrival.filter(r => r.flight === want);
+        if (!hit.length) return `今天沒有 ${code} 抵達澎湖的班次`;
+        return arrTable(`${code} 抵達澎湖`, hit);
       }
-      const pick = list => list.filter(([r]) => !r.status.history).map(([r, d]) => flightLine(r, d)).sort((a, b) => a.t.localeCompare(b.t)).slice(0, 8);
-      const d = pick(dep), a = pick(arr);
-      if (!d.length && !a.length) return '目前沒有接下來的航班';
-      return { blocks: [{ type: 'title', text: '澎湖機場 接下來的航班' }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有接下來的出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有接下來的抵達班次' }])] };
+      const list = st.arrival.filter(r => !r.status.history);
+      if (!list.length) return '目前沒有接下來抵達澎湖的班次';
+      return arrTable('澎湖機場 接下來抵達的班次', list);
     }
-
-    // 只打時間：今天表定時間在前後 30 分鐘內的航班（出發、抵達）
+    // 只打時間：今天抵達澎湖的班次，表定起飛或表定到達在前後 30 分鐘內
     async function flightsAt(t) {
-      for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
-      const st = Flights.state;
-      if (!st.loaded) return '航班資料讀取失敗，請確認網路後再試一次';
+      const st = await flightData();
+      if (!st) return '航班資料讀取失敗，請確認網路後再試一次';
       const mins = x => { const m = hhmm(x).match(/(\d{2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
       const at = mins(t), near = x => { const v = mins(x); return v != null && Math.abs(v - at) <= 30; };
-      const d = st.departure.filter(r => near(r.scheduledStart)).map(r => flightLine(r, true)).sort((a, b) => a.t.localeCompare(b.t));
-      const a = st.arrival.filter(r => near(r.scheduledEnd)).map(r => flightLine(r, false)).sort((a, b) => a.t.localeCompare(b.t));
-      if (!d.length && !a.length) return `今天 ${t} 前後 30 分鐘沒有航班`;
-      return { blocks: [{ type: 'title', text: `今天 ${t} 前後 30 分鐘的航班` }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有抵達班次' }])] };
+      const list = st.arrival.filter(r => near(r.scheduledStart) || near(r.scheduledEnd));
+      if (!list.length) return `今天 ${t} 前後 30 分鐘沒有抵達澎湖的班次`;
+      return arrTable(`今天 ${t} 前後 30 分鐘抵達澎湖的班次`, list);
     }
-    // 只打班號數字：今天有這個班號（不分航空公司）就列出來；沒有回 null
+    // 只打班號數字：今天有這個班號（不分航空公司）抵達澎湖就列出來；沒有回 null
     async function flightByNumber(n) {
-      for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
-      const st = Flights.state;
-      if (!st.loaded) return null;
-      const hit = [...st.departure.map(r => [r, true]), ...st.arrival.map(r => [r, false])].filter(([r]) => new RegExp(`^(MDA|UIA|DAC)${n}$`).test(r.flight));
-      if (!hit.length) return null;
-      return { blocks: [{ type: 'title', text: `${n} 班次` }, ...hit.map(([r, dep]) => flightLine(r, dep))] };
+      const st = await flightData();
+      if (!st) return null;
+      const hit = st.arrival.filter(r => new RegExp(`^(MDA|UIA|DAC)${n}$`).test(r.flight));
+      return hit.length ? arrTable(`${n} 抵達澎湖`, hit) : null;
     }
 
     // 天氣：直接用一句話回答（今天天氣、明天七美天氣、會下雨嗎、風浪大嗎）
