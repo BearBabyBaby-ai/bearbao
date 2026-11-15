@@ -6913,17 +6913,11 @@ if (window.bearDesktop) {
       if (deityAsked && groups.length === 1 && groups[0][0] === '廟宇') {
         const list = byArea(groups[0][1]);
         const cell = v => valid(v) ? String(v) : '—';
-        // 同一區域放在一起：每個區域一列標題（整列），底下是那個區域的廟
-        const rows = [];
-        let last = null;
-        for (const d of list) {
-          const r = d.raw || {}, area = areaOf(d);
-          if (area !== last) { rows.push({ group: area }); last = area; }
-          rows.push([cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])]);
-        }
+        // 同一區域放在一起：左邊「區域」欄合併成一格，每個區域一種底色
+        const rows = list.map(d => { const r = d.raw || {}; return [areaOf(d), cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])]; });
         const title = query.replace(/消夜/g, '宵夜');
         const text = `${title}\n\n` + list.map(d => noFull(pubText(templeItem(d.raw))) + SEP).join('');
-        return { blocks: [{ type: 'title', text: `${title}（${list.length} 間）` }, { type: 'table', head: ['廟宇名稱', '主祀', '地址', '電話'], rows }, { type: 'copy', label: '📋 文字複製', text }] };
+        return { blocks: [{ type: 'title', text: `${title}（${list.length} 間）` }, { type: 'table', head: ['區域', '廟宇名稱', '主祀', '地址', '電話'], rows, merge: true }, { type: 'copy', label: '📋 文字複製', text }] };
       }
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;

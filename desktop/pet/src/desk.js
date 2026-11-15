@@ -69,7 +69,12 @@
     }
     return null;
   }
-  function cellTint(head, row, c) {
+  // 合併左欄的表格（例如查主祀：同一區域合併）：每一組一種底色，左欄較深
+  const AREA_BG = [['#e2edfa', '#c3d8f2'], ['#e4f3e1', '#c9e6c3'], ['#fdeedd', '#f6d6b2'], ['#f1e4f5', '#dfc6e8'],
+    ['#dff3f2', '#b9e2df'], ['#fff3c4', '#f5df8f'], ['#fde4e4', '#f5c4c4'], ['#ececec', '#d6d6d6']];
+  const isMerged = b => !!(b && b.merge) || ((b && b.head) || [])[1] === '潮別';
+  function cellTint(head, row, c, place = -1, b = null) {
+    if (b && b.merge) { const [bg, deep] = AREA_BG[Math.max(place, 0) % AREA_BG.length]; return c === 0 ? [deep, INK] : [bg, INK]; }
     // 日期區段潮汐（橫向）：地點、潮別兩欄是項目欄，底色依潮別（滿潮、乾潮、池西岩瀑建議觀賞）
     // 每個地點一種底色（地點、潮別欄較深）；滿潮、乾潮用字色區分
     if (head[1] === '潮別') {
@@ -86,7 +91,7 @@
   // 日期區段潮汐（有「潮別」欄）：連續同一個地點合併；回傳每列第一格要跨幾列（0 表示併到上一列）
   function mergeRuns(b) {
     const rows = b.rows || [], out = rows.map(() => 1);
-    if ((b.head || [])[1] !== '潮別') return out;
+    if (!isMerged(b)) return out;
     for (let i = 0; i < rows.length;) {
       let j = i + 1;
       while (j < rows.length && Array.isArray(rows[j]) && Array.isArray(rows[i]) && rows[j][0] === rows[i][0]) j++;
@@ -130,7 +135,7 @@
             c.appendChild(line);
           });
         } else c.textContent = v;
-        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i); c.style.background = bg; c.style.color = fg; }
+        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b); c.style.background = bg; c.style.color = fg; }
         r.appendChild(c);
       });
       return r;
@@ -146,7 +151,7 @@
       r.append(th, td); return r;
     };
     // 每一列：一般資料、日期分組列（整列）、跨整列的資料（池西岩瀑、尚無資訊）
-    const runs = mergeRuns(b), merged = (b.head || [])[1] === '潮別', places = merged ? placeIndex(runs) : runs.map(() => -1);
+    const runs = mergeRuns(b), merged = isMerged(b), places = merged ? placeIndex(runs) : runs.map(() => -1);
     (b.rows || []).forEach((row, ri) => {
       if (row && row.group) {
         const r = document.createElement('tr');
@@ -223,7 +228,7 @@
       head.forEach((v, c) => { cell(v, x, widths[c], headH, HEAD_BG, INK, true); x += widths[c]; });
       y += headH;
     }
-    const runs = mergeRuns(b), heights = body.map(hOf), merged = head[1] === '潮別', places = placeIndex(runs);
+    const runs = mergeRuns(b), heights = body.map(hOf), merged = isMerged(b), places = placeIndex(runs);
     for (const [ri, r] of body.entries()) {
       const h = heights[ri];
       if (r.group) cell(r.group, M, W, h, GROUP_BG, INK, true);
@@ -234,7 +239,7 @@
         let x = M;
         for (let c = 0; c < cols; c++) {
           const run = c === 0 && ri < runs.length ? runs[ri] : 1;
-          const tint = cellTint(head, r, c);
+          const tint = cellTint(head, r, c, places[ri], b);
           if (run > 0) cell(r[c], x, widths[c], run > 1 ? heights.slice(ri, ri + run).reduce((a, v) => a + v, 0) : h, ...tint, c === 0);
           x += widths[c];
         }
