@@ -6886,6 +6886,9 @@ if (window.bearDesktop) {
     };
     const SUBJECT_WORDS = /澎湖|澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|市區觀光|古蹟觀光|其他店家|美食清單|美食|景點|廟宇|店家|廟|推薦|有什麼|有哪些|哪裡有|哪裡|好吃的|好吃|好玩的|好玩|吃什麼|去哪裡|去哪|介紹|查詢|搜尋|請問|幫我找|幫我|(馬公|湖西|白沙|西嶼|望安|七美)(市|鄉)?/g;
     // 複合式搜尋：每一類隨機挑 7 筆；美食、景點、廟宇附兩份 TXT
+    // 區域：鄉市-村里（例如 馬公市-中央里）；同一區域放在一起（依鄉市順序、村里、名稱排序）
+    const areaOf = d => { const r = d.raw || {}, r1 = valid(r['區域(鄉市)']) ? r['區域(鄉市)'] : (d.region || ''), r2 = valid(r['區域(村里)']) ? r['區域(村里)'] : ''; return `${r1}${r1 && r2 ? '-' : ''}${r2}` || '其他'; };
+    const byArea = list => { const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; }; return list.slice().sort((a, b) => order(a.region) - order(b.region) || areaOf(a).localeCompare(areaOf(b), 'zh-Hant') || String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant')); };
     async function searchPlaces(query) {
       if (!(await places())) return '資料讀取失敗，請確認網路後再試一次';
       // 「主祀 媽祖」「主祀媽祖」：主祀、主神只是說明要查神明，搜尋時拿掉
@@ -6908,13 +6911,19 @@ if (window.bearDesktop) {
       // 查主祀（媽祖、哪吒、王爺、主祀 觀音…）：廟宇用表格呈現；點表格一鍵複製成圖片，點「文字複製」複製文字
       const deityAsked = /主祀|主神/.test(query) || PlaceSearch.explain(sq).some(t => t.kind === 'deities');
       if (deityAsked && groups.length === 1 && groups[0][0] === '廟宇') {
-        const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; };
-        const list = groups[0][1].slice().sort((a, b) => order(a.region) - order(b.region) || String(a.village || '').localeCompare(String(b.village || ''), 'zh-Hant') || String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant'));
+        const list = byArea(groups[0][1]);
         const cell = v => valid(v) ? String(v) : '—';
-        const rows = list.map(d => { const r = d.raw || {}, r1 = valid(r['區域(鄉市)']) ? r['區域(鄉市)'] : '', r2 = valid(r['區域(村里)']) ? r['區域(村里)'] : ''; return [`${r1}${r1 && r2 ? '-' : ''}${r2}` || '—', cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])]; });
+        // 同一區域放在一起：每個區域一列標題（整列），底下是那個區域的廟
+        const rows = [];
+        let last = null;
+        for (const d of list) {
+          const r = d.raw || {}, area = areaOf(d);
+          if (area !== last) { rows.push({ group: area }); last = area; }
+          rows.push([cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])]);
+        }
         const title = query.replace(/消夜/g, '宵夜');
         const text = `${title}\n\n` + list.map(d => noFull(pubText(templeItem(d.raw))) + SEP).join('');
-        return { blocks: [{ type: 'title', text: `${title}（${list.length} 間）` }, { type: 'table', head: ['區域', '廟宇名稱', '主祀', '地址', '電話'], rows }, { type: 'copy', label: '📋 文字複製', text }] };
+        return { blocks: [{ type: 'title', text: `${title}（${list.length} 間）` }, { type: 'table', head: ['廟宇名稱', '主祀', '地址', '電話'], rows }, { type: 'copy', label: '📋 文字複製', text }] };
       }
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
@@ -6926,12 +6935,15 @@ if (window.bearDesktop) {
       const OTHER_PUB = raw => lines(`名稱：${raw['名稱'] || raw['店名'] || '未提供名稱'}`, valid(raw['地址']) && `地址：${raw['地址']}`, valid(raw['電話']) && `電話：${raw['電話']}`, valid(raw['短網址']) && `短網址：${raw['短網址']}`);
       for (const [type, list] of groups) {
         // 景點、廟宇列完整的；只打地區時每一種都列完整的；其他隨機挑 7 筆
-        const pick = regionOnly || type === '景點' || type === '廟宇' ? list : shuffle(list).slice(0, 7);
+        const pick = type === '景點' ? byArea(list) : regionOnly || type === '廟宇' ? list : shuffle(list).slice(0, 7);
+        // 景點：同一區域放在一起，每個區域前面標區域
+        let lastArea = null;
+        const areaHead = (d, i) => { if (type !== '景點') return []; const a = areaOf(d); if (a === lastArea) return []; lastArea = a; return [{ type: 'head', text: `📍 ${a}` }]; };
         if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】` });
         if (regionOnly) {
           const PUB_ALL = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)), '其他店家': d => OTHER_PUB(d.raw) };
           const items = pick.map(d => noFull(PUB_ALL[type] ? PUB_ALL[type](d) : SHOW[type](d)));
-          pick.forEach((d, i) => blocks.push(type === '其他店家' ? { type: 'text', text: SHOW[type](d) } : { type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          pick.forEach((d, i) => blocks.push(...areaHead(d, i), type === '其他店家' ? { type: 'text', text: SHOW[type](d) } : { type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
           blocks.push({ type: 'copy', label: `📋 一鍵複製（${type}）`, text: `${blocks[0].text} ${type}\n\n` + items.map(t => t + SEP).join('') });
           continue;
         }
@@ -6939,7 +6951,7 @@ if (window.bearDesktop) {
         const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)) };
         if (PUB[type]) {
           const items = pick.map(d => noFull(PUB[type](d)));
-          pick.forEach((d, i) => blocks.push({ type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          pick.forEach((d, i) => blocks.push(...areaHead(d, i), { type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
           copyAll.push(...items);
           continue;
         }
