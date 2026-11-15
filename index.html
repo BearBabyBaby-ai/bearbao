@@ -7194,6 +7194,16 @@ if (window.bearDesktop) {
       if (!list.length) return `今天 ${t} 前後 30 分鐘沒有抵達澎湖的班次`;
       return arrTable(`今天 ${t} 前後 30 分鐘抵達澎湖的班次`, list, t);
     }
+    // 只打時間區段：今天抵達澎湖的班次，表定起飛或表定到達在這段時間內（跨午夜也可以，例如 23:00-01:00）
+    async function flightsBetween(t1, t2) {
+      const st = await flightData();
+      if (!st) return '航班資料讀取失敗，請確認網路後再試一次';
+      const mins = x => { const m = hhmm(x).match(/(\d{2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+      const a = mins(t1), z = mins(t2), inside = x => { const v = mins(x); return v != null && (a <= z ? v >= a && v <= z : v >= a || v <= z); };
+      const list = st.arrival.filter(r => inside(r.scheduledStart) || inside(r.scheduledEnd));
+      if (!list.length) return `今天 ${t1}–${t2} 沒有抵達澎湖的班次`;
+      return arrTable(`今天 ${t1}–${t2} 抵達澎湖的班次`, list);
+    }
     // 只打班號數字：今天有這個班號（不分航空公司）抵達澎湖就列出來；沒有回 null
     async function flightByNumber(n) {
       const st = await flightData();
@@ -7278,6 +7288,9 @@ if (window.bearDesktop) {
         const icao = compact.match(/(?:^|[^A-Z0-9])(MDA|UIA|DAC)(\d{2,4})(?![0-9])/) || compact.match(/^(MDA|UIA|DAC)(\d{2,4})$/);
         const code = icao ? [icao[0], { MDA: 'AE', UIA: 'B7', DAC: 'DA' }[icao[1]], icao[2]]
           : (compact.match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || compact.match(/^(AE|B7|DA)(\d{2,4})$/));
+        // 只打時間區段（17:10-18:30、17:10~18:30、17:10到18:30）：查這段時間的抵達班次
+        const tr2 = s.match(/^(\d{1,2})\s*[:：]\s*(\d{2})\s*(?:-|~|～|–|—|到|至)\s*(\d{1,2})\s*[:：]\s*(\d{2})$/);
+        if (tr2 && Number(tr2[1]) < 24 && Number(tr2[2]) < 60 && Number(tr2[3]) < 24 && Number(tr2[4]) < 60) return await flightsBetween(`${pad2(tr2[1])}:${tr2[2]}`, `${pad2(tr2[3])}:${tr2[4]}`);
         // 只打時間（13:30）：查那個時間前後 30 分鐘的航班
         const tm = s.match(/^(\d{1,2})\s*[:：]\s*(\d{2})$/);
         if (tm && Number(tm[1]) < 24 && Number(tm[2]) < 60) return await flightsAt(`${pad2(tm[1])}:${tm[2]}`);
