@@ -6888,11 +6888,13 @@ if (window.bearDesktop) {
     // 複合式搜尋：每一類隨機挑 7 筆；美食、景點、廟宇附兩份 TXT
     async function searchPlaces(query) {
       if (!(await places())) return '資料讀取失敗，請確認網路後再試一次';
-      const found = PlaceSearch.search(query);
+      // 「主祀 媽祖」「主祀媽祖」：主祀、主神只是說明要查神明，搜尋時拿掉
+      const sq = query.replace(/主祀|主神/g, ' ').replace(/\s+/g, ' ').trim() || query;
+      const found = PlaceSearch.search(sq);
       // 每個一般字詞都要對得到（例如「天后宮 100號」：沒有門牌 100 號的天后宮就是查不到，不能只列天后宮）
-      const must = PlaceSearch.explain(query).filter(t => t.kind === 'terms' || t.kind === 'literalTerms').map(t => PlaceSearch.normalizeSearchText(t.text));
+      const must = PlaceSearch.explain(sq).filter(t => t.kind === 'terms' || t.kind === 'literalTerms').map(t => PlaceSearch.normalizeSearchText(t.text));
       if (found && must.length > 1) {
-        const textOf = d => PlaceSearch.normalizeSearchText(Object.values(d.raw || {}).join(' ') + ' ' + [d.name, d.address, d.village, d.region].join(' '));
+        const textOf = d => PlaceSearch.normalizeSearchText(Object.entries(d.raw || {}).flat().join(' ') + ' ' + [d.name, d.address, d.village, d.region].join(' '));
         for (const k of Object.keys(found)) found[k] = found[k].filter(d => { const t = textOf(d); return must.every(w => t.includes(w)); });
       }
       // 美食不列水果、伴手禮（和熊熊綜合系統的搜尋一樣）
@@ -6903,6 +6905,17 @@ if (window.bearDesktop) {
         for (const k of Object.keys(found)) found[k] = found[k].filter(d => d.region !== '白沙鄉' || !ISLANDS.some(t => [d.village, d.address, d.name].join(' ').includes(t)));
       }
       const groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
+      // 查主祀（媽祖、哪吒、王爺、主祀 觀音…）：廟宇用表格呈現；點表格一鍵複製成圖片，點「文字複製」複製文字
+      const deityAsked = /主祀|主神/.test(query) || PlaceSearch.explain(sq).some(t => t.kind === 'deities');
+      if (deityAsked && groups.length === 1 && groups[0][0] === '廟宇') {
+        const order = x => { const i = regionOrder.indexOf(x); return i < 0 ? 99 : i; };
+        const list = groups[0][1].slice().sort((a, b) => order(a.region) - order(b.region) || String(a.village || '').localeCompare(String(b.village || ''), 'zh-Hant') || String(a.name || '').localeCompare(String(b.name || ''), 'zh-Hant'));
+        const cell = v => valid(v) ? String(v) : '—';
+        const rows = list.map(d => { const r = d.raw || {}, r1 = valid(r['區域(鄉市)']) ? r['區域(鄉市)'] : '', r2 = valid(r['區域(村里)']) ? r['區域(村里)'] : ''; return [`${r1}${r1 && r2 ? '-' : ''}${r2}` || '—', cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])]; });
+        const title = query.replace(/消夜/g, '宵夜');
+        const text = `${title}\n\n` + list.map(d => noFull(pubText(templeItem(d.raw))) + SEP).join('');
+        return { blocks: [{ type: 'title', text: `${title}（${list.length} 間）` }, { type: 'table', head: ['區域', '廟宇名稱', '主祀', '地址', '電話'], rows }, { type: 'copy', label: '📋 文字複製', text }] };
+      }
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
       const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
