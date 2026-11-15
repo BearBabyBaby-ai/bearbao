@@ -73,7 +73,9 @@
   const AREA_BG = [['#e2edfa', '#c3d8f2'], ['#e4f3e1', '#c9e6c3'], ['#fdeedd', '#f6d6b2'], ['#f1e4f5', '#dfc6e8'],
     ['#dff3f2', '#b9e2df'], ['#fff3c4', '#f5df8f'], ['#fde4e4', '#f5c4c4'], ['#ececec', '#d6d6d6']];
   const isMerged = b => !!(b && b.merge) || ((b && b.head) || [])[1] === '潮別';
-  function cellTint(head, row, c, place = -1, b = null) {
+  function cellTint(head, row, c, place = -1, b = null, ri = -1) {
+    // 熊寶系統指定每一格的底色、字色（例如航班：依航空公司分色、狀態字色）
+    if (b && Array.isArray(b.styles) && ri >= 0 && b.styles[ri] && b.styles[ri][c]) return b.styles[ri][c];
     if (b && b.merge) { const [bg, deep] = AREA_BG[Math.max(place, 0) % AREA_BG.length]; return c === 0 ? [deep, INK] : [bg, INK]; }
     // 日期區段潮汐（橫向）：地點、潮別兩欄是項目欄，底色依潮別（滿潮、乾潮、池西岩瀑建議觀賞）
     // 每個地點一種底色（地點、潮別欄較深）；滿潮、乾潮用字色區分
@@ -115,7 +117,7 @@
     const t = document.createElement('table');
     t.className = 'b-table';
     t.title = '點一下複製成圖片';
-    const tr = (cells, isHead, row, merge, place = -1) => {
+    const tr = (cells, isHead, row, merge, place = -1, ri = -1) => {
       const r = document.createElement('tr');
       if (merge > 0 && place > 0) r.className = 'sep';
       cells.forEach((v, i) => {
@@ -135,7 +137,7 @@
             c.appendChild(line);
           });
         } else c.textContent = v;
-        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b); c.style.background = bg; c.style.color = fg; }
+        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b, ri); c.style.background = bg; c.style.color = fg; }
         r.appendChild(c);
       });
       return r;
@@ -158,7 +160,7 @@
         const th = document.createElement('th'); th.textContent = row.group; th.colSpan = span + 1; th.className = 'grp';
         r.appendChild(th); t.appendChild(r);
       } else if (row && row.span) t.appendChild(spanRow(...row.span));
-      else t.appendChild(tr(row, false, row, runs[ri], places[ri]));
+      else t.appendChild(tr(row, false, row, runs[ri], places[ri], ri));
     });
     // 表格下方跨整列的資料
     (b.foot || []).forEach(([label, value]) => t.appendChild(spanRow(label, value)));
@@ -239,7 +241,7 @@
         let x = M;
         for (let c = 0; c < cols; c++) {
           const run = c === 0 && ri < runs.length ? runs[ri] : 1;
-          const tint = cellTint(head, r, c, places[ri], b);
+          const tint = cellTint(head, r, c, places[ri], b, ri);
           if (run > 0) cell(r[c], x, widths[c], run > 1 ? heights.slice(ri, ri + run).reduce((a, v) => a + v, 0) : h, ...tint, c === 0);
           x += widths[c];
         }
