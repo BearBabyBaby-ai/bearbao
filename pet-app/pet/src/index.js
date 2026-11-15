@@ -417,7 +417,8 @@ function checkAway() {
 // 對話框輸入的文字交給熊寶系統處理（查分海、記帳），把回覆顯示在對話框
 let desk = false, chatWin = null, askFn = null, chatMini = false;
 const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
-const CHAT = { w: 380, h: 480, mini: 48 };
+// 寬度：原本 380，使用者要求加 4 個國字寬（字 14px × 4 = 56）
+const CHAT = { w: 436, h: 480, mini: 48 };
 
 // 縮小時只留標題列：寬度同熊寶動畫，縮到最右下角、熊寶動畫正上方
 const BEAR_W = Math.round(clipsLib.SCALE_BASE * brainS);          // 熊寶動畫寬度

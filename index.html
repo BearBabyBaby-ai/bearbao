@@ -7067,11 +7067,11 @@ if (window.bearDesktop) {
         const j = H.time.findIndex(x => x.slice(0, 13) === h);
         if (j >= 0) now = `，現在 ${Math.round(H.temperature_2m[j])}°C`;
       }
-      // 一行一件事，順便提醒要帶什麼、要注意什麼（每行都要在對話框寬度內，不要折行）
+      // 一行一件事，順便提醒要帶什麼、要注意什麼
       const head = `${ic} ${when}${name}${tx}${now}`;
-      const rain = pop >= 60 ? `☔ 降雨機率 ${pop}%，出門記得帶傘喔！` : (pop >= 30 || /雨/.test(tx)) ? `🌂 降雨機率 ${pop}%，可能飄雨，記得帶傘` : `🌤️ 降雨機率 ${pop}%，應該不會下雨`;
+      const rain = pop >= 60 ? `☔ 降雨機率 ${pop}%，出門記得帶傘喔！` : (pop >= 30 || /雨/.test(tx)) ? `🌂 降雨機率 ${pop}%，可能會飄雨，帶把傘比較安心` : `🌤️ 降雨機率 ${pop}%，應該不會下雨`;
       const temp = `🌡️ ${lo === hi ? `${hi}°C` : `${lo}～${hi}°C`}，${hi >= 31 ? '很熱，記得防曬、多喝水' : lo <= 15 ? '很冷，外套要穿暖' : lo <= 20 ? '早晚偏涼，帶件外套' : '溫度舒服'}`;
-      const wind = `💨 ${dir}風 ${wb} 級、陣風 ${gb} 級，${wb >= 6 || gb >= 8 ? '騎車小心' : wb >= 4 ? '風有點大' : '風不大'}`;
+      const wind = `💨 ${dir}風 ${wb} 級（陣風 ${gb} 級），${wb >= 6 || gb >= 8 ? '風很大，騎車要小心' : wb >= 4 ? '風有點大' : '風不大'}`;
       const sea = `🌊 浪高 ${wave == null ? '—' : `${wave.toFixed(1)} 公尺`}，${rc === 'bad' ? '風浪大，不建議出海喔！' : rc === 'warn' ? '出海要注意風浪' : '海面平穩，適合出海'}`;
       const lines = /下雨|降雨/.test(s) ? [head, rain, temp, wind, sea] : /風浪|風大|浪大|颳風|刮風/.test(s) ? [head, wind, sea, rain, temp] : [head, temp, rain, wind, sea];
       return lines.join('\n');
