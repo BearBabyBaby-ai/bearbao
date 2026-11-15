@@ -6909,7 +6909,12 @@ if (window.bearDesktop) {
       }
       const groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
       // 查主祀（媽祖、哪吒、王爺、主祀 觀音…）：廟宇用表格呈現；點表格一鍵複製成圖片，點「文字複製」複製文字
-      const deityAsked = /主祀|主神/.test(query) || PlaceSearch.explain(sq).some(t => t.kind === 'deities');
+      // 也算查主祀：字詞對到的是廟宇的「主祀」（例如 王爺、白沙 王爺），不是廟名（天后宮）
+      const toks = PlaceSearch.explain(sq);
+      const words = toks.filter(t => t.kind === 'terms' || t.kind === 'literalTerms').map(t => PlaceSearch.normalizeSearchText(t.text));
+      const temples = groups.length === 1 && groups[0][0] === '廟宇' ? groups[0][1] : [];
+      const byDeity = words.length > 0 && temples.length > 0 && words.every(w => temples.some(d => PlaceSearch.normalizeSearchText((d.raw || {})['主祀'] || '').includes(w)));
+      const deityAsked = /主祀|主神/.test(query) || toks.some(t => t.kind === 'deities') || byDeity;
       if (deityAsked && groups.length === 1 && groups[0][0] === '廟宇') {
         const list = byArea(groups[0][1]);
         const cell = v => valid(v) ? String(v) : '—';
