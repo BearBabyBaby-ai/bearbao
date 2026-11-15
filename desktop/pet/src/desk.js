@@ -46,7 +46,7 @@
     '安全通行': ['#e7f6ec', '#1b7a3d'], '日出／日沒': ['#fff6dc', '#9a6700'],
     '池西岩瀑建議觀賞': ['#fff3c4', '#8a6400']
   };
-  const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#573d2a';
+  const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#000000';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
   // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）
