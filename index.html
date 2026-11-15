@@ -6451,8 +6451,24 @@ const Wx = (() => {
     if (!a) return null;
     const c = cache[name];
     if (c && Date.now() - c.t < 600000) return c;
-    const [x, y] = await Promise.allSettled([getJSON(FC(a)), getJSON(MA(a))]);
-    if (x.status !== 'fulfilled') return null;
+    // 讀不到就再試（每次最多等 8 秒，共 3 次）
+    const tryJSON = async url => {
+      let last;
+      for (let k = 0; k < 3; k++) {
+        const ac = new AbortController(), tm = setTimeout(() => ac.abort(), 8000);
+        try { const r = await fetch(url, { cache: 'no-store', signal: ac.signal }); if (!r.ok) throw new Error(`HTTP ${r.status}`); return await r.json(); }
+        catch (e) { last = e; await new Promise(z => setTimeout(z, 800)); }
+        finally { clearTimeout(tm); }
+      }
+      throw last;
+    };
+    const [x, y] = await Promise.allSettled([tryJSON(FC(a)), tryJSON(MA(a))]);
+    if (x.status !== 'fulfilled') {
+      // 網頁開啟時已讀到這個鄉市的天氣，就先用那一份
+      if (name === area && fc) return { t: 0, fc, ma };
+      const e = x.reason, m = String(e && e.message || '');
+      return { error: e && e.name === 'AbortError' ? '連線逾時' : /HTTP (\d+)/.test(m) ? `天氣網站回應 ${m.match(/HTTP (\d+)/)[1]}` : '連不上天氣網站' };
+    }
     return (cache[name] = { t: Date.now(), fc: x.value, ma: y.status === 'fulfilled' ? y.value : null });
   }
   return { load, render, renderHome, data, ICON, bft, dirOf, risk, waveTxt, areas: Object.keys(AREAS), get area() { return area; }, get loaded() { return Boolean(fc); } };
@@ -7037,7 +7053,7 @@ if (window.bearDesktop) {
       const t = todayKey(), when = !word ? `${Number(key.slice(5, 7))}/${Number(key.slice(8))} ` : key === t ? '今天' : key === addDays(t, 1) ? '明天' : key === addDays(t, 2) ? '後天' : `${Number(key.slice(5, 7))}/${Number(key.slice(8))}`;
       if (key < t) return '天氣只能查今天起 7 天內的預報';
       const w = await Wx.data(name);
-      if (!w) return '天氣資料讀取失敗，請確認網路後再試一次';
+      if (!w || w.error) return `天氣資料讀取失敗（${w && w.error ? w.error : '沒有資料'}），請確認網路後再試一次`;
       const D = w.fc.daily, i = D.time.indexOf(key.replace(/\//g, '-'));
       if (i < 0) return `${when}的天氣預報還沒出來（只能查今天起 7 天內）`;
       const tx = Wx.ICON(D.weather_code[i])[1], pop = D.precipitation_probability_max[i];
