@@ -2935,7 +2935,13 @@ const PlaceSearch = (() => {
     return d => SHEET_OF_TYPE[d.type] ? hit.has(d) : tokens.every(t => { const r = getSearchRegion(t); return r ? d.region === r.name : d.searchText.includes(t); });
   }
   const regionOf = token => getSearchRegion(token);
-  return { search, matcher, regionOf, getFoodField, getFoodName, checkValid, cleanTempleName, normalizeSearchText, isVisibleFoodItem };
+  // 查詢裡每個詞被判斷成哪一種（地區、類別、主祀、一般字詞…）
+  function explain(query) {
+    const c = data();
+    const text = prepare(query, c.ctx);
+    return text ? lexSearchQuery(text, c.ctx).map(t => ({ kind: t.kind, text: t.text })) : [];
+  }
+  return { search, explain, matcher, regionOf, getFoodField, getFoodName, checkValid, cleanTempleName, normalizeSearchText, isVisibleFoodItem };
 })();
 
 function applyFilter() {
@@ -6742,7 +6748,7 @@ if (window.bearDesktop) {
     }
 
 
-    const FOOD = /早餐|午餐|晚餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃/;
+    const FOOD = /早餐|午餐|晚餐|早午餐|消夜|宵夜|點心|飲料|咖啡|奶茶|紅茶|便當|麵|飯|吃|雞排|鹹酥雞|炸物|小吃|冰|甜點|豆花|冰淇淋|雞肉串|炸粿|糕|火鍋|燒烤|海鮮|滷味|餅|粥|湯|漢堡|披薩|酒/;
     const TRAFFIC = /計程車|車票|火車|高鐵|公車|客運|機票|船票|停車|悠遊卡|Icash/i;
     async function ledger(key, item, amount) {
       if (!Fin.ready()) return '財務管理還沒連線，請先到熊寶系統的「財務管理」完成連線';
@@ -6883,6 +6889,12 @@ if (window.bearDesktop) {
     async function searchPlaces(query) {
       if (!(await places())) return '資料讀取失敗，請確認網路後再試一次';
       const found = PlaceSearch.search(query);
+      // 每個一般字詞都要對得到（例如「天后宮 100號」：沒有門牌 100 號的天后宮就是查不到，不能只列天后宮）
+      const must = PlaceSearch.explain(query).filter(t => t.kind === 'terms' || t.kind === 'literalTerms').map(t => PlaceSearch.normalizeSearchText(t.text));
+      if (found && must.length > 1) {
+        const textOf = d => PlaceSearch.normalizeSearchText(Object.values(d.raw || {}).join(' ') + ' ' + [d.name, d.address, d.village, d.region].join(' '));
+        for (const k of Object.keys(found)) found[k] = found[k].filter(d => { const t = textOf(d); return must.every(w => t.includes(w)); });
+      }
       // 美食不列水果、伴手禮（和熊熊綜合系統的搜尋一樣）
       if (found && found['美食']) found['美食'] = found['美食'].filter(d => PlaceSearch.isVisibleFoodItem(d.raw));
       // 白沙、北環島：照熊熊綜合系統北環島的規則，排除白沙鄉所屬離島（姑婆、員貝、吉貝、鳥嶼、目斗）；有寫離島名稱就不排除
