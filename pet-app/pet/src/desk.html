@@ -5,9 +5,16 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob: https://drive.google.com https://*.googleusercontent.com; script-src 'self'; style-src 'unsafe-inline'">
 <title>熊寶工作中</title>
 <style>
+  /* 底色跟著熊寶系統右側小圖示的時間區段：清晨 5～7 點、白天 7～17 點、傍晚 17～19 點、晚上 19～5 點 */
+  body { --bg1: #eaf6fb; --bg2: #f3fbf2; }
+  body[data-tod="dawn"] { --bg1: #fff1e8; --bg2: #e8f0fb; }
+  body[data-tod="day"] { --bg1: #eaf6fb; --bg2: #f3fbf2; }
+  body[data-tod="dusk"] { --bg1: #ffe9dc; --bg2: #f7d9d3; }
+  body[data-tod="night"] { --bg1: #18213f; --bg2: #28305c; }
+  body[data-tod="night"] form { border-top-color: #3a4472; }
   html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
     font: 14px/1.45 "Microsoft JhengHei UI", "Microsoft JhengHei", system-ui, sans-serif; color: #573d2a; }
-  #card { position: absolute; inset: 4px; display: flex; flex-direction: column; background: #fffaf2;
+  #card { position: absolute; inset: 4px; display: flex; flex-direction: column; background: linear-gradient(180deg, var(--bg1), var(--bg2)); transition: background .8s;
     border: 2px solid #876c4b; border-radius: 16px; box-shadow: 0 4px 14px rgba(87, 61, 42, .25); overflow: hidden; }
   header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #f6e7cf; border-bottom: 1.5px solid #e2cba6; font-weight: bold; }
   header { cursor: pointer; user-select: none; }

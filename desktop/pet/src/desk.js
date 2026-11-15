@@ -4,6 +4,13 @@
   const form = document.getElementById('form');
   const input = document.getElementById('input');
   const send = document.getElementById('send');
+  // 底色跟著熊寶系統的時間區段（台灣時間）
+  function tod() {
+    const h = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Taipei', hour: '2-digit', hour12: false }).format(new Date())) % 24;
+    document.body.dataset.tod = h >= 5 && h < 7 ? 'dawn' : h >= 7 && h < 17 ? 'day' : h >= 17 && h < 19 ? 'dusk' : 'night';
+  }
+  tod();
+  setInterval(tod, 60000);
 
   function bubble(who) {
     const d = document.createElement('div');
