@@ -526,6 +526,8 @@ let onChange = null;
 // 由熊寶系統主程式呼叫：動作圖準備好（沒有就先下載）才讓熊寶出現
 function start(opts = {}) {
   onChange = opts.onChange || null;
+  // 每次啟動記一行版本與程式位置（確認執行的是哪一版、裝在哪裡）
+  log(`啟動：${app.getName()} ${app.getVersion()}（${process.execPath}）`);
   askFn = opts.ask || null;
   try { desk = !!JSON.parse(fs.readFileSync(deskFile(), 'utf8')).on; } catch (_) { desk = false; }
   protocol.handle('bearbao', serve);

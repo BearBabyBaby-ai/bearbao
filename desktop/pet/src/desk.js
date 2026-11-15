@@ -49,6 +49,26 @@
   const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#573d2a';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
+  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）
+  const RAIN_BG = ['#ffffff', '#eef6ff', '#ddecff', '#c8e0ff', '#b0d2ff', '#96c2fb', '#7aaff3', '#5e9be8', '#4585da', '#2f6fca'];
+  const TEMP_BG = [[-Infinity, '#c9d8ff'], [0, '#d9ecff'], [10, '#d6f3e2'], [20, '#fff0bd'], [30, '#ffd0a8'], [40, '#ffb0b0']];
+  function wxTint(label, v) {
+    if (label === '降雨機率') {
+      const n = parseInt(v, 10);
+      if (Number.isNaN(n)) return null;
+      const k = Math.max(0, Math.min(9, Math.floor(n / 10)));
+      return [RAIN_BG[k], k >= 7 ? '#ffffff' : INK];
+    }
+    if (label === '氣溫') {
+      const ns = String(v).match(/-?\d+/g);
+      if (!ns) return null;
+      const t = Math.max(...ns.map(Number));
+      let bg = TEMP_BG[0][1];
+      for (const [lo, color] of TEMP_BG) if (t >= lo) bg = color;
+      return [bg, INK];
+    }
+    return null;
+  }
   function cellTint(head, row, c) {
     // 日期區段潮汐（橫向）：地點、潮別兩欄是項目欄，底色依潮別（滿潮、乾潮、池西岩瀑建議觀賞）
     // 每個地點一種底色（地點、潮別欄較深）；滿潮、乾潮用字色區分
@@ -57,6 +77,7 @@
       if (c < 2) return [deep, INK];
       return [bg, (PLACE_FG[row[1]] || (TINT[row[0] + row[1]] || [])[1] || INK)];
     }
+    if (c > 0 && head[0] === '項目') { const w = wxTint(row[0], row[c]); if (w) return w; }
     if (c === 0) return [LABEL_BG, INK];
     const byCol = TINT[head[c]];
     if (byCol && head.includes('地點')) return byCol;
