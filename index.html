@@ -7077,6 +7077,27 @@ if (window.bearDesktop) {
       return lines.join('\n');
     }
 
+    // 天氣日期區段：和潮汐日期區段一樣，做成一張橫向表格（日期在上面一排）
+    async function weatherRange(s, r) {
+      const hit = WX_AREA.find(([w]) => s.includes(w));
+      const name = hit ? hit[1] : (Wx.areas.includes(Wx.area) ? Wx.area : '馬公市');
+      const w = await Wx.data(name);
+      if (!w || w.error) return `天氣資料讀取失敗（${w && w.error ? w.error : '沒有資料'}），請確認網路後再試一次`;
+      const D = w.fc.daily, idx = r.days.map(k => D.time.indexOf(k.replace(/\//g, '-')));
+      if (idx.every(i => i < 0)) return `${md(r.from)}–${md(r.to)} 天氣：尚無資訊（只能查今天起 7 天內）`;
+      const col = f => idx.map(i => i < 0 ? '尚無資訊' : f(i));
+      const wave = i => w.ma?.daily?.wave_height_max?.[i] ?? null;
+      const rows = [
+        ['天氣', ...col(i => Wx.ICON(D.weather_code[i]).join('\n'))],
+        ['氣溫', ...col(i => { const lo = Math.round(D.temperature_2m_min[i]), hi = Math.round(D.temperature_2m_max[i]); return lo === hi ? `${hi}°C` : `${lo}～${hi}°C`; })],
+        ['降雨機率', ...col(i => `${D.precipitation_probability_max[i] ?? '—'}%`)],
+        ['風力', ...col(i => `${Wx.dirOf(D.wind_direction_10m_dominant[i])}風 ${Wx.bft(D.wind_speed_10m_max[i])} 級\n陣風 ${Wx.bft(D.wind_gusts_10m_max[i])} 級`)],
+        ['浪高', ...col(i => wave(i) == null ? '—' : `${wave(i).toFixed(1)} 公尺\n${Wx.waveTxt(wave(i))}`)],
+        ['出海', ...col(i => { const c = Wx.risk(D.wind_speed_10m_max[i], D.wind_gusts_10m_max[i], wave(i))[0]; return c === 'bad' ? '不宜出海' : c === 'warn' ? '注意風浪' : '適合出海'; })]
+      ];
+      return { blocks: [{ type: 'title', text: `${name} ${md(r.from)}–${md(r.to)} 天氣` }, { type: 'table', head: ['項目', ...r.days.map(k => wk(k).replace('（', '\n（'))], rows }] };
+    }
+
     // 判斷要做什麼：不用照固定格式，關鍵字在句子任何位置都可以
     const QUERY_WORDS = /推薦|美食|景點|廟|店家|元宵|乞龜|分海|潮汐|航班|班機/;
     // 問句：拿掉問句的字再判斷（午餐吃啥 → 午餐；白沙有啥好玩 → 白沙 景點；明天會分海嗎 → 明天 分海）
@@ -7102,12 +7123,7 @@ if (window.bearDesktop) {
         if (WX_RE.test(s)) {
           const r = takeRange(s);
           if (r && r.bad) return '日期不正確，請再確認一次';
-          if (r) {
-            const all = await Promise.all(r.days.map(k => weather(s, k, false)));
-            const ok = all.filter(x => !/還沒出來|只能查/.test(x));
-            if (!ok.length) return all[all.length - 1];
-            return ok.join('\n\n') + (ok.length < all.length ? '\n\n其他日期的天氣預報還沒出來（只能查今天起 7 天內）' : '');
-          }
+          if (r) return await weatherRange(s, r);
           return await weather(s, d.key, !d.given || /今天|明天|後天|昨天/.test(s));
         }
         // 奎壁山分海、潮汐（日期已過沒寫年份就是明年）；「奎壁山」加日期也是查分海
