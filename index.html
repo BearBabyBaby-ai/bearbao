@@ -6937,14 +6937,30 @@ if (window.bearDesktop) {
       }
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
-      // 查景點（結果只有景點、而且不只一筆）：和查主祀一樣用表格，左邊「區域」同一區域合併、每區一色；點表格複製成圖片，「文字複製」複製文字
-      if (groups.length === 1 && groups[0][0] === '景點' && groups[0][1].length > 1) {
-        const list = byArea(groups[0][1]);
+      // 多筆結果（美食、景點、廟宇、其他店家，含只打地區）一律用表格：左邊「區域」同一區域合併、每區一色；
+      // 每一種一張表格（只打鄉市也是），點表格複製成圖片，「📋 文字複製」複製那一種的文字（發布用格式）。只有 1 筆才用資料框（有圖片就附圖片）
+      const total = groups.reduce((n, [, list]) => n + list.length, 0);
+      if (total > 1) {
         const cell = v => valid(v) ? String(v) : '—';
-        const rows = list.map(d => { const r = d.raw || {}; return [areaOf(d), cell(r['景點名稱']), cell(r['地址'])]; });
+        const OTHER_TXT = raw => lines(`名稱：${raw['名稱'] || raw['店名'] || '未提供名稱'}`, valid(raw['地址']) && `地址：${raw['地址']}`, valid(raw['電話']) && `電話：${raw['電話']}`, valid(raw['短網址']) && `短網址：${raw['短網址']}`);
+        const SPEC = {
+          '美食': { head: ['區域', '店名', '推薦菜色', '營業時間', '電話', '地址'], row: r => [cell(PlaceSearch.getFoodName(r)), cell(F(r, '推薦菜色／行程')), cell(F(r, '營業時間')), cell(F(r, '電話')), cell(F(r, '地址'))], txt: r => foodItem(r, true), unit: '家' },
+          '景點': { head: ['區域', '景點名稱', '地址'], row: r => [cell(r['景點名稱']), cell(r['地址'])], txt: r => pubText(spotItem(r)), unit: '個' },
+          '廟宇': { head: ['區域', '廟宇名稱', '主祀', '地址', '電話'], row: r => [cell(r['廟宇名稱']), cell(r['主祀']), cell(r['地址']), cell(r['電話'])], txt: r => pubText(templeItem(r)), unit: '間' },
+          '其他店家': { head: ['區域', '名稱', '地址', '電話'], row: r => [cell(r['名稱'] || r['店名']), cell(r['地址']), cell(r['電話'])], txt: r => OTHER_TXT(r), unit: '家' }
+        };
         const title = query.replace(/消夜/g, '宵夜');
-        const text = `${title}\n\n` + list.map(d => noFull(pubText(spotItem(d.raw))) + SEP).join('');
-        return { blocks: [{ type: 'title', text: `${title}（${list.length} 個）` }, { type: 'table', head: ['區域', '景點名稱', '地址'], rows, merge: true }, { type: 'copy', label: '📋 文字複製', text }] };
+        const blocks = [{ type: 'title', text: title }];
+        for (const [type, raw] of groups) {
+          // 美食隨機挑 7 家；景點、廟宇、其他店家全部列出
+          const sp = SPEC[type], list = byArea(type === '美食' && raw.length > 7 ? shuffle(raw).slice(0, 7) : raw);
+          const count = list.length < raw.length ? `隨機 ${list.length} ${sp.unit}（共 ${raw.length} ${sp.unit}）` : `${list.length} ${sp.unit}`;
+          if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】${count}` });
+          if (groups.length === 1) blocks[0].text = `${title}　${count}`;
+          blocks.push({ type: 'table', head: sp.head, rows: list.map(d => [areaOf(d), ...sp.row(d.raw || {})]), merge: true });
+          blocks.push({ type: 'copy', label: groups.length > 1 ? `📋 文字複製（${type}）` : '📋 文字複製', text: `${title}${groups.length > 1 ? ` ${type}` : ''}\n\n` + list.map(d => noFull(sp.txt(d.raw || {})) + SEP).join('') });
+        }
+        return { blocks };
       }
       const single = groups.reduce((n, [, list]) => n + list.length, 0) === 1;
       const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
