@@ -7149,17 +7149,17 @@ if (window.bearDesktop) {
     const ARR_HEAD = ['班次', '來自', '機型', '表定起飛', '實際起飛', '表定到達', '預估／實際到達', '狀態'];
     const arrRow = r => [r.flight, placeName(r.place), r.aircraft || '—', hhmm(r.scheduledStart) || '—', hhmm(r.actualStart) || '—', hhmm(r.scheduledEnd) || '—', hhmm(r.actualEnd) || '—', (String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]];
     const arrSort = list => list.slice().sort((x, y) => hhmm(x.scheduledEnd).localeCompare(hhmm(y.scheduledEnd)));
-    // 航班表格分色：班次欄依航空公司（立榮綠、華信藍、德安橘）深色底白字；同一家連續多班時整列一深一淺交替；狀態欄字色（已到灰、準時綠、延誤橘紅、取消紅、其他藍）
+    // 航班表格分色：班次欄依航空公司（立榮綠、華信藍、德安橘）深色底白字；同一家連續多班時整列一深一淺交替；狀態欄字色（已到灰、準時綠、延誤橘、取消紫、其他藍）；航班不用紅色
     const AIR = { UIA: ['#2e7d32', '#e4f2e2', '#cde6c9'], MDA: ['#1565c0', '#e3eefb', '#cbdcf3'], DAC: ['#c25e00', '#fdeedd', '#f7d9b9'] };
-    const STATUS_FG = s => /取消/.test(s) ? '#c62828' : /延誤/.test(s) ? '#d84315' : /已到|已飛/.test(s) ? '#6b6b6b' : /準時/.test(s) ? '#1b7a3d' : '#1565c0';
-    // 只打時間（17:10）：表定起飛或表定到達最接近查詢時間的當班班次整列醒目標示（黃底、班次欄紅底白字）
+    const STATUS_FG = s => /取消/.test(s) ? '#6a1b9a' : /延誤/.test(s) ? '#e67e00' : /已到|已飛/.test(s) ? '#6b6b6b' : /準時/.test(s) ? '#1b7a3d' : '#1565c0';
+    // 只打時間（17:10）：表定起飛或表定到達最接近查詢時間的當班班次整列醒目標示（黃底；班次欄照航空公司顏色，不用紅色）
     function arrStyles(rows, at = '') {
       const mins = x => { const m = String(x).match(/^(\d{2}):(\d{2})$/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
       const q = mins(at), diff = r => Math.min(...[r[3], r[5]].map(mins).filter(v => v != null).map(v => Math.abs(v - q)).concat([9999]));
       const best = q == null ? -1 : Math.min(...rows.map(diff));
       let last = '', alt = 0;
       return rows.map(r => {
-        if (q != null && best <= 30 && diff(r) === best) { last = ''; return r.map((v, c) => c === 0 ? ['#c62828', '#ffffff'] : c === r.length - 1 ? ['#ffe45c', STATUS_FG(v)] : ['#ffe45c', '#000000']); }
+        if (q != null && best <= 30 && diff(r) === best) { const [dp] = AIR[(String(r[0]).match(/^(UIA|MDA|DAC)/) || [])[1]] || ['#555555']; last = ''; return r.map((v, c) => c === 0 ? [dp, '#ffffff'] : c === r.length - 1 ? ['#ffe45c', STATUS_FG(v)] : ['#ffe45c', '#000000']); }
         const air = (String(r[0]).match(/^(UIA|MDA|DAC)/) || [])[1] || '', [deep, a, b] = AIR[air] || ['#555555', '#ffffff', '#f2f2f2'];
         alt = air === last ? 1 - alt : 0; last = air;
         const bg = alt ? b : a;
