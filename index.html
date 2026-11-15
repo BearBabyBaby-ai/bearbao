@@ -7143,7 +7143,6 @@ if (window.bearDesktop) {
     }
 
     // 判斷要做什麼：不用照固定格式，關鍵字在句子任何位置都可以
-    const QUERY_WORDS = /推薦|美食|景點|廟|店家|元宵|乞龜|分海|潮汐|航班|班機/;
     // 問句：拿掉問句的字再判斷（午餐吃啥 → 午餐；白沙有啥好玩 → 白沙 景點；明天會分海嗎 → 明天 分海）
     function plain(text) {
       return String(text || '')
@@ -7161,9 +7160,26 @@ if (window.bearDesktop) {
       try {
         // 航班：句子有航班、班機、飛機，或只打航班代號
         const code = s.toUpperCase().replace(/\s|-/g, '').match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
-        if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
         const d = takeDate(s);
         if (d.bad) return '日期不正確，請再確認一次';
+        // 記帳：句子最後是金額就是支出（就算有美食、景點、廟、宮、殿、元宵、分海、潮汐、航班…這些字）；沒有金額才當查詢
+        // 有日期要照「日期 品項 金額」：開頭是日期（11/14、2026/11/14、11月14日、今天、昨天…）；沒寫日期記成今天
+        // 不算記帳：只打日期或日期區段、天氣、只打航班代號（AE361）、元宵加年份（元宵 2027）、剛好是 7-11／小七、品項整個是數字
+        const STORE = /^(?:7\s*-\s*11|711|小七|7-?eleven|seven\s*-?\s*eleven)$/i;
+        const DATE_HEAD = /^(?:\d{4}\s*[\/\-.年]\s*)?\d{1,2}\s*[\/\-.月]\s*\d{1,2}\s*日?(?![\d\/])|^(?:今天|明天|後天|昨天)/;
+        const onlyDate = (d.given && !d.rest) || !s.replace(RANGE_RE, '').trim();
+        if (!onlyDate && !WX_RE.test(s)) {
+          const headed = d.given && DATE_HEAD.test(s);
+          const body = headed ? d.rest : (d.given ? '' : s);
+          const mm = body && !STORE.test(body.trim()) ? body.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/) : null;
+          if (mm) {
+            const item = mm[1].trim(), amt = Number(mm[2]);
+            const flightOnly = code && s.replace(/\s|-/g, '').length <= 7;
+            const year = /^(?:19|20)\d{2}$/.test(mm[2]) && /元宵|乞龜/.test(item);
+            if (item && !/-$/.test(item) && amt > 0 && !/^\d+$/.test(item) && !flightOnly && !year) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(headed ? d.key : todayKey(), item, amt);
+          }
+        }
+        if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
         if (WX_RE.test(s)) {
           const r = takeRange(s);
           if (r && r.bad) return '日期不正確，請再確認一次';
@@ -7197,16 +7213,6 @@ if (window.bearDesktop) {
         }
         // 只打日期：列出那天有資料的項目，點一下看那一種
         if (d.given && !d.rest) return await overview(ahead(d));
-        // 記帳：日期 品項 金額（例如 11/14 宵夜 111）
-        // 7-11、小七：查其他店家（不是記帳）；「11/14 7-11 午餐 500」這種才是記帳
-        const STORE = /^(?:7\s*-\s*11|711|小七|7-?eleven|seven\s*-?\s*eleven)$/i;
-        // 有日期的記帳要照「日期 品項 金額」的順序：句子開頭是日期（11/14、2026/11/14、11月14日、今天、昨天…），最後是金額
-        const DATE_HEAD = /^(?:\d{4}\s*[\/\-.年]\s*)?\d{1,2}\s*[\/\-.月]\s*\d{1,2}\s*日?(?![\d\/])|^(?:今天|明天|後天|昨天)/;
-        const m = (!d.given || !DATE_HEAD.test(s) || STORE.test(d.rest.trim())) ? null : d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
-        if (m && !/-$/.test(m[1].trim()) && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(d.key, m[1].trim(), Number(m[2]));
-        // 沒寫日期的「品項 金額」（例如 車資 99、摩艾 99、望安 CAFE 996）：有金額就記成今天的支出；沒有金額才當查詢
-        const m0 = (!d.given && !STORE.test(s.trim())) ? s.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/) : null;
-        if (m0 && !/-$/.test(m0[1].trim()) && Number(m0[2]) > 0 && !/^\d+$/.test(m0[1].trim()) && !QUERY_WORDS.test(m0[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(todayKey(), m0[1].trim(), Number(m0[2]));
         // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
         const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '').replace(/小七|(?<![\d-])711(?!\d)|7-?eleven|seven\s*-?\s*eleven/gi, '7-11');
         // 元宵活動名稱（例如 2027 超級龜龜）：直接查元宵，只列那個活動
