@@ -6910,7 +6910,14 @@ if (window.bearDesktop) {
       if (found && /白沙|北環/.test(query) && !ISLANDS.some(t => query.includes(t))) {
         for (const k of Object.keys(found)) found[k] = found[k].filter(d => d.region !== '白沙鄉' || !ISLANDS.some(t => [d.village, d.address, d.name].join(' ').includes(t)));
       }
-      const groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
+      let groups = found ? Object.entries(found).filter(([, list]) => list.length) : [];
+      // 只打一般字詞（沒有地區、村里、美食／景點／廟宇等指定）時，只列結果最多的那一種：
+      // 例如「燈塔」景點 6 筆、美食只有店名剛好有燈塔的 1 筆 → 只列景點
+      const kinds = PlaceSearch.explain(query.replace(/主祀|主神/g, ' ')).map(t => t.kind);
+      if (groups.length > 1 && kinds.length && kinds.every(k => k === 'terms' || k === 'literalTerms' || k === 'subCategories' || k === 'mainCategories')) {
+        const most = Math.max(...groups.map(([, list]) => list.length));
+        groups = groups.filter(([, list]) => list.length === most);
+      }
       // 查主祀（媽祖、哪吒、王爺、主祀 觀音…）：廟宇用表格呈現；點表格一鍵複製成圖片，點「文字複製」複製文字
       // 也算查主祀：字詞對到的是廟宇的「主祀」（例如 王爺、白沙 王爺），不是廟名（天后宮）
       const toks = PlaceSearch.explain(sq);
