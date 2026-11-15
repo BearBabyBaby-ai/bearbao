@@ -7100,6 +7100,28 @@ if (window.bearDesktop) {
       return { blocks: [{ type: 'title', text: '澎湖機場 接下來的航班' }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有接下來的出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有接下來的抵達班次' }])] };
     }
 
+    // 只打時間：今天表定時間在前後 30 分鐘內的航班（出發、抵達）
+    async function flightsAt(t) {
+      for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
+      const st = Flights.state;
+      if (!st.loaded) return '航班資料讀取失敗，請確認網路後再試一次';
+      const mins = x => { const m = hhmm(x).match(/(\d{2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+      const at = mins(t), near = x => { const v = mins(x); return v != null && Math.abs(v - at) <= 30; };
+      const d = st.departure.filter(r => near(r.scheduledStart)).map(r => flightLine(r, true)).sort((a, b) => a.t.localeCompare(b.t));
+      const a = st.arrival.filter(r => near(r.scheduledEnd)).map(r => flightLine(r, false)).sort((a, b) => a.t.localeCompare(b.t));
+      if (!d.length && !a.length) return `今天 ${t} 前後 30 分鐘沒有航班`;
+      return { blocks: [{ type: 'title', text: `今天 ${t} 前後 30 分鐘的航班` }, { type: 'head', text: '【出發】' }, ...(d.length ? d : [{ type: 'text', text: '沒有出發班次' }]), { type: 'head', text: '【抵達】' }, ...(a.length ? a : [{ type: 'text', text: '沒有抵達班次' }])] };
+    }
+    // 只打班號數字：今天有這個班號（不分航空公司）就列出來；沒有回 null
+    async function flightByNumber(n) {
+      for (let i = 0; i < 75 && !Flights.state.loaded && !Flights.state.error; i++) await sleep(200);
+      const st = Flights.state;
+      if (!st.loaded) return null;
+      const hit = [...st.departure.map(r => [r, true]), ...st.arrival.map(r => [r, false])].filter(([r]) => new RegExp(`^(MDA|UIA|DAC)${n}$`).test(r.flight));
+      if (!hit.length) return null;
+      return { blocks: [{ type: 'title', text: `${n} 班次` }, ...hit.map(([r, dep]) => flightLine(r, dep))] };
+    }
+
     // 天氣：直接用一句話回答（今天天氣、明天七美天氣、會下雨嗎、風浪大嗎）
     const WX_RE = /天氣|氣溫|溫度|幾度|下雨|降雨|風浪|風大|浪大|颳風|刮風/;
     const WX_AREA = [['澎南', '馬公市'], ['馬公', '馬公市'], ['湖西', '湖西鄉'], ['白沙', '白沙鄉'], ['西嶼', '西嶼鄉'], ['望安', '望安鄉'], ['七美', '七美鄉']];
@@ -7171,7 +7193,16 @@ if (window.bearDesktop) {
       if (!s) return help;
       try {
         // 航班：句子有航班、班機、飛機，或只打航班代號
-        const code = s.toUpperCase().replace(/\s|-/g, '').match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || s.toUpperCase().replace(/\s|-/g, '').match(/^(AE|B7|DA)(\d{2,4})$/);
+        // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
+        const compact = s.toUpperCase().replace(/\s|-/g, '');
+        const icao = compact.match(/(?:^|[^A-Z0-9])(MDA|UIA|DAC)(\d{2,4})(?![0-9])/) || compact.match(/^(MDA|UIA|DAC)(\d{2,4})$/);
+        const code = icao ? [icao[0], { MDA: 'AE', UIA: 'B7', DAC: 'DA' }[icao[1]], icao[2]]
+          : (compact.match(/(?:^|[^A-Z0-9])(AE|B7|DA)(\d{2,4})(?![0-9])/) || compact.match(/^(AE|B7|DA)(\d{2,4})$/));
+        // 只打時間（13:30）：查那個時間前後 30 分鐘的航班
+        const tm = s.match(/^(\d{1,2})\s*[:：]\s*(\d{2})$/);
+        if (tm && Number(tm[1]) < 24 && Number(tm[2]) < 60) return await flightsAt(`${pad2(tm[1])}:${tm[2]}`);
+        // 只打數字（787、8697）：今天有這個班號就查那個航班
+        if (/^\d{2,4}$/.test(s)) { const hit = await flightByNumber(s); if (hit) return hit; }
         const d = takeDate(s);
         if (d.bad) return '日期不正確，請再確認一次';
         // 記帳：句子最後是金額就是支出（就算有美食、景點、廟、宮、殿、元宵、分海、潮汐、航班…這些字）；沒有金額才當查詢
