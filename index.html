@@ -7188,7 +7188,7 @@ if (window.bearDesktop) {
             const item = mm[1].trim(), amt = Number(mm[2]);
             const flightOnly = code && s.replace(/\s|-/g, '').length <= 7;
             const year = /^(?:19|20)\d{2}$/.test(mm[2]) && /元宵|乞龜/.test(item);
-            if (item && !/-$/.test(item) && amt > 0 && !/^\d+$/.test(item) && !flightOnly && !year) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(headed ? d.key : todayKey(), item, amt);
+            if (item && !/[-:：]$/.test(item) && amt > 0 && !/^\d+$/.test(item) && !flightOnly && !year) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(headed ? d.key : todayKey(), item, amt);
           }
         }
         if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
