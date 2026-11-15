@@ -250,6 +250,35 @@
     }
     return cv;
   }
+  // 景點、廟宇資料框：文字＋圖片畫成一張圖片，複製到剪貼簿
+  function copyCard(text, img, hint) {
+    const S = 2, W = 420 * S, PAD = 16 * S, LH = 24 * S, FONT = `${15 * S}px "Microsoft JhengHei", "微軟正黑體", "PingFang TC", sans-serif`;
+    const cv = document.createElement('canvas'), ctx = cv.getContext('2d');
+    ctx.font = FONT;
+    // 每一行太長就自動換行
+    const lines = [];
+    for (const raw of String(text).split('\n')) {
+      let cur = '';
+      for (const ch of raw) { if (ctx.measureText(cur + ch).width > W - PAD * 2 && cur) { lines.push(cur); cur = ch; } else cur += ch; }
+      lines.push(cur);
+    }
+    const ok = img && img.isConnected && img.complete && img.naturalWidth && img.crossOrigin === 'anonymous';
+    const ih = ok ? Math.round((W - PAD * 2) * img.naturalHeight / img.naturalWidth) : 0;
+    cv.width = W; cv.height = PAD * 2 + lines.length * LH + (ok ? PAD + ih : 0);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.font = FONT; ctx.fillStyle = '#000000'; ctx.textBaseline = 'top';
+    lines.forEach((l, i) => ctx.fillText(l, PAD, PAD + i * LH + 2 * S));
+    if (ok) ctx.drawImage(img, PAD, PAD + lines.length * LH + PAD, W - PAD * 2, ih);
+    try {
+      cv.toBlob(async blob => {
+        try {
+          await window.desk.copyImage(new Uint8Array(await blob.arrayBuffer()));
+          hint.textContent = ok ? '✅ 已複製成圖片（資料＋圖片），可直接貼上' : '✅ 已複製成圖片（圖片還沒載入，只有資料）';
+        } catch (_) { hint.textContent = '⚠️ 圖片複製失敗'; }
+        setTimeout(() => { hint.textContent = '📷 點資料框複製成圖片（資料＋圖片）'; }, 3000);
+      }, 'image/png');
+    } catch (_) { hint.textContent = '⚠️ 圖片複製失敗'; }
+  }
   // 點表格：把表格畫成圖片直接複製到剪貼簿（不用另存）
   function saveTableImage(b, title, hint) {
     const cv = tableCanvas(b, title);
@@ -308,13 +337,22 @@
         d.appendChild(row);
         continue;
       }
-      // 景點圖片：縮圖，點一下開大圖；讀不到就不顯示
-      if (b.type === 'img') {
+      // 有圖片的景點、廟宇：資料＋圖片同一個框；點框把「資料＋圖片」複製成一張圖片
+      if (b.type === 'card') {
+        const box = document.createElement('div');
+        box.className = 'b-pub b-card';
+        box.title = '點一下複製成圖片（資料＋圖片）';
+        const tx = document.createElement('div'); tx.textContent = b.text;
         const img = document.createElement('img');
-        img.className = 'b-img'; img.src = b.url; img.alt = ''; img.title = '點一下看大圖';
-        img.addEventListener('error', () => img.remove());
-        img.addEventListener('click', () => window.open(b.full || b.url));
-        d.appendChild(img);
+        img.className = 'b-img'; img.alt = ''; img.crossOrigin = 'anonymous'; img.referrerPolicy = 'no-referrer';
+        img.addEventListener('error', () => { if (!img.dataset.retry && b.full) { img.dataset.retry = '1'; img.removeAttribute('crossorigin'); img.src = b.full; } else img.remove(); });
+        img.src = b.img;
+        box.append(tx, img);
+        const hint = document.createElement('div');
+        hint.className = 'b-hint';
+        hint.textContent = '📷 點資料框複製成圖片（資料＋圖片）';
+        box.addEventListener('click', () => copyCard(b.text, img, hint));
+        d.append(box, hint);
         continue;
       }
       if (b.type === 'pub') {

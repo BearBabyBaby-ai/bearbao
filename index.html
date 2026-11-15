@@ -6822,9 +6822,10 @@ if (window.bearDesktop) {
     }
     // 景點、廟宇每筆內容：照熊熊綜合系統「批次生圖指令」v13（buildItemText）
     const imgOf = raw => String(raw['圖資來源'] || raw['景點圖資'] || raw['廟宇圖資'] || '').trim();
-    // 景點、廟宇圖片：雲端硬碟的圖資來源轉成縮圖，在熊寶工作中的對話直接顯示（點圖片開大圖）
+    // 景點、廟宇圖片：雲端硬碟的圖資來源（在熊寶工作中的對話直接顯示）
     const driveId = u => (String(u).match(/drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/i) || String(u).match(/drive\.google\.com\/[^\s]*[?&]id=([a-zA-Z0-9_-]+)/i) || [])[1] || '';
-    const imgBlock = (type, d) => { if (type !== '景點' && type !== '廟宇') return []; const id = driveId(imgOf(d.raw || {})); return id ? [{ type: 'img', text: '', url: `https://drive.google.com/thumbnail?id=${id}&sz=w600`, full: `https://drive.google.com/thumbnail?id=${id}&sz=w1600` }] : []; };
+    // 有圖片的景點、廟宇：資料＋圖片放在同一個框（點框複製成一張圖片）；沒有圖片就是一般的資料框
+    const pubOrCard = (type, d, text) => { const id = (type === '景點' || type === '廟宇') ? driveId(imgOf(d.raw || {})) : ''; return id ? { type: 'card', text, img: `https://lh3.googleusercontent.com/d/${id}=w900`, full: `https://drive.google.com/thumbnail?id=${id}&sz=w1600` } : { type: 'pub', text }; };
     function spotItem(raw) {
       let t = '';
       if (valid(raw['區域(鄉市)'])) t += `區域(鄉市)：${raw['區域(鄉市)']}\n`;
@@ -6952,7 +6953,7 @@ if (window.bearDesktop) {
         if (regionOnly) {
           const PUB_ALL = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)), '其他店家': d => OTHER_PUB(d.raw) };
           const items = pick.map(d => noFull(PUB_ALL[type] ? PUB_ALL[type](d) : SHOW[type](d)));
-          pick.forEach((d, i) => blocks.push(...areaHead(d, i), type === '其他店家' ? { type: 'text', text: SHOW[type](d) } : { type: 'pub', text: noUrl(items[i]) }, ...imgBlock(type, d), { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          pick.forEach((d, i) => blocks.push(...areaHead(d, i), type === '其他店家' ? { type: 'text', text: SHOW[type](d) } : pubOrCard(type, d, noUrl(items[i])), { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
           blocks.push({ type: 'copy', label: `📋 一鍵複製（${type}）`, text: `${blocks[0].text} ${type}\n\n` + items.map(t => t + SEP).join('') });
           continue;
         }
@@ -6960,7 +6961,7 @@ if (window.bearDesktop) {
         const PUB = { '美食': d => foodItem(d.raw, true), '景點': d => pubText(spotItem(d.raw)), '廟宇': d => pubText(templeItem(d.raw)) };
         if (PUB[type]) {
           const items = pick.map(d => noFull(PUB[type](d)));
-          pick.forEach((d, i) => blocks.push(...areaHead(d, i), { type: 'pub', text: noUrl(items[i]) }, ...imgBlock(type, d), { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+          pick.forEach((d, i) => blocks.push(...areaHead(d, i), pubOrCard(type, d, noUrl(items[i])), { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
           copyAll.push(...items);
           continue;
         }
