@@ -6937,6 +6937,15 @@ if (window.bearDesktop) {
       }
       const areaWords = [...new Set((query.match(/澎南|南環島|南環|北環島|北環|東環島|東環|馬公市區|吉貝|(?:馬公|湖西|白沙|西嶼|望安|七美)(?:市|鄉)?/g) || []).map(w => w.replace(/(市|鄉)$/, '')))];
       if (!groups.length) return null;
+      // 查景點（結果只有景點、而且不只一筆）：和查主祀一樣用表格，左邊「區域」同一區域合併、每區一色；點表格複製成圖片，「文字複製」複製文字
+      if (groups.length === 1 && groups[0][0] === '景點' && groups[0][1].length > 1) {
+        const list = byArea(groups[0][1]);
+        const cell = v => valid(v) ? String(v) : '—';
+        const rows = list.map(d => { const r = d.raw || {}; return [areaOf(d), cell(r['景點名稱']), cell(r['地址'])]; });
+        const title = query.replace(/消夜/g, '宵夜');
+        const text = `${title}\n\n` + list.map(d => noFull(pubText(spotItem(d.raw))) + SEP).join('');
+        return { blocks: [{ type: 'title', text: `${title}（${list.length} 個）` }, { type: 'table', head: ['區域', '景點名稱', '地址'], rows, merge: true }, { type: 'copy', label: '📋 文字複製', text }] };
+      }
       const single = groups.reduce((n, [, list]) => n + list.length, 0) === 1;
       const topic = query.replace(/消夜/g, '宵夜').replace(SUBJECT_WORDS, ' ').replace(/\s+/g, '').trim();
       const blocks = [{ type: 'title', text: query.replace(/消夜/g, '宵夜') }], files = [], copyAll = [];
