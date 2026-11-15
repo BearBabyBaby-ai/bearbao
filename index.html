@@ -6954,9 +6954,10 @@ if (window.bearDesktop) {
         for (const [type, raw] of groups) {
           // 美食隨機挑 7 家；景點、廟宇、其他店家全部列出
           const sp = SPEC[type], list = byArea(type === '美食' && raw.length > 7 ? shuffle(raw).slice(0, 7) : raw);
-          const count = list.length < raw.length ? `隨機 ${list.length} ${sp.unit}（共 ${raw.length} ${sp.unit}）` : `${list.length} ${sp.unit}`;
-          if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】${count}` });
-          if (groups.length === 1) blocks[0].text = `${title}　${count}`;
+          // 美食不顯示筆數；其他顯示幾個、幾間、幾家
+          const count = type === '美食' ? '' : `${list.length} ${sp.unit}`;
+          if (groups.length > 1) blocks.push({ type: 'head', text: `【${type}】${count ? ` ${count}` : ''}` });
+          if (groups.length === 1 && count) blocks[0].text = `${title}　${count}`;
           blocks.push({ type: 'table', head: sp.head, rows: list.map(d => [areaOf(d), ...sp.row(d.raw || {})]), merge: true });
           blocks.push({ type: 'copy', label: groups.length > 1 ? `📋 文字複製（${type}）` : '📋 文字複製', text: `${title}${groups.length > 1 ? ` ${type}` : ''}\n\n` + list.map(d => noFull(sp.txt(d.raw || {})) + SEP).join('') });
         }
