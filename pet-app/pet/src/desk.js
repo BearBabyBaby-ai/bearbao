@@ -308,6 +308,15 @@
         d.appendChild(row);
         continue;
       }
+      // 景點圖片：縮圖，點一下開大圖；讀不到就不顯示
+      if (b.type === 'img') {
+        const img = document.createElement('img');
+        img.className = 'b-img'; img.src = b.url; img.alt = ''; img.title = '點一下看大圖';
+        img.addEventListener('error', () => img.remove());
+        img.addEventListener('click', () => window.open(b.full || b.url));
+        d.appendChild(img);
+        continue;
+      }
       if (b.type === 'pub') {
         const el = document.createElement('div');
         el.className = 'b-pub';
