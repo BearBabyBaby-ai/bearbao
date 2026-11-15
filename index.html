@@ -7200,10 +7200,23 @@ if (window.bearDesktop) {
         // 記帳：日期 品項 金額（例如 11/14 宵夜 111）
         // 7-11、小七：查其他店家（不是記帳）；「11/14 7-11 午餐 500」這種才是記帳
         const STORE = /^(?:7\s*-\s*11|711|小七|7-?eleven|seven\s*-?\s*eleven)$/i;
-        // 記帳要照「日期 品項 金額」的順序：句子開頭是日期（11/14、2026/11/14、11月14日、今天、昨天…），最後是金額
+        // 有日期的記帳要照「日期 品項 金額」的順序：句子開頭是日期（11/14、2026/11/14、11月14日、今天、昨天…），最後是金額
         const DATE_HEAD = /^(?:\d{4}\s*[\/\-.年]\s*)?\d{1,2}\s*[\/\-.月]\s*\d{1,2}\s*日?(?![\d\/])|^(?:今天|明天|後天|昨天)/;
         const m = (!d.given || !DATE_HEAD.test(s) || STORE.test(d.rest.trim())) ? null : d.rest.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/);
         if (m && !/-$/.test(m[1].trim()) && Number(m[2]) > 0 && !/^\d+$/.test(m[1].trim()) && !QUERY_WORDS.test(m[1])) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(d.key, m[1].trim(), Number(m[2]));
+        // 沒寫日期的「品項 金額」（例如 車資 99、午餐 120、尚青早餐 999）：一看就是花費的直接記成今天；
+        // 其他的品項查得到景點、廟宇、店家（例如 西嶼燈塔 3）就當搜尋，查不到才記成今天
+        const m0 = (!d.given && !STORE.test(s.trim())) ? s.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/) : null;
+        if (m0 && !/-$/.test(m0[1].trim()) && Number(m0[2]) > 0 && !/^\d+$/.test(m0[1].trim()) && !QUERY_WORDS.test(m0[1])) {
+          const item = m0[1].trim();
+          // 一看就是花費（吃的、交通、加油，或以前記過的品項）直接記帳
+          const spent = FOOD.test(item) || TRAFFIC.test(item) || /加油|車資|油錢|禮物|紅包|門票|伙食/.test(item)
+            || ((Fin.data && Fin.data.ledger) || []).some(l => String(l['項目'] || '').trim() === item);
+          if (spent) return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(todayKey(), item, Number(m0[2]));
+          const found = await searchPlaces(item.replace(/小七|(?<![\d-])711(?!\d)|7-?eleven|seven\s*-?\s*eleven/gi, '7-11'));
+          if (found) return found;
+          return QO ? '此工作環境只能查詢，記帳請到熊寶系統' : await ledger(todayKey(), item, Number(m0[2]));
+        }
         // 其他都用複合式搜尋（和首頁搜尋一樣）：美食、景點、廟宇、其他店家，找不到再找活動
         const q = s.replace(/^(?:搜尋|查詢|找)\s*/, '').replace(/小七|(?<![\d-])711(?!\d)|7-?eleven|seven\s*-?\s*eleven/gi, '7-11');
         // 元宵活動名稱（例如 2027 超級龜龜）：直接查元宵，只列那個活動
