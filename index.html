@@ -1765,7 +1765,7 @@ window.addEventListener('pageshow', e => {
 
 
 const MAP_DESK = /Electron/i.test(navigator.userAgent);   /* 電腦端（Windows 版） */
-const SPEED_T = MAP_DESK ? '測速執法' : '測速・科技執法';
+const SPEED_T = '測速執法';
 const isPortT = t => t === '港口・遊客中心' || t === '港口' || t === '遊客中心';
 const sheetConfigs = [
   { key: '美食清單', gid: HUB_GIDS.food, type: '美食', nameField: '名稱', glyph: '食', color: '#f97316' },
@@ -1807,7 +1807,7 @@ const LABEL_ZOOM = 16;
 let allData = [], dataByKey = new Map(), visibleData = [], activeType = '', activeSub = '', activeRegion = '';
 let markerMap = new Map(), renderedCount = 0, lastMobile = isMobile(), mapShownOnce = false, mapDataLoaded = false;
 
-const keyOf = d => MAP_DESK && d.type === SPEED_T ? `${d.type}|${d.category}|${d.name}|${d.lat}|${d.lng}` : `${d.type}|${d.name}|${d.lat}|${d.lng}`;
+const keyOf = d => d.type === SPEED_T ? `${d.type}|${d.category}|${d.name}|${d.lat}|${d.lng}` : `${d.type}|${d.name}|${d.lat}|${d.lng}`;
 const isClosed = d => /歇業|停業|結束營業/.test(d.hours || '');
 
 
@@ -1944,7 +1944,7 @@ function directionDeg(text) {
 }
 function pinIcon(d) {
   const color = typeColor[d.type] || '#64748b';
-  if (MAP_DESK && d.type === SPEED_T) {   /* 電腦端：測速圖釘加上方向箭頭與速限（同熊熊綜合系統） */
+  if (d.type === SPEED_T) {   /* 測速圖釘加上方向箭頭與速限（同熊熊綜合系統） */
     const deg = directionDeg(d.dir);
     const arrow = deg === null ? '' : `<span class="pin-dir" style="--dir:${deg}deg;color:${color}" title="${esc(d.dir)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5 20 10.5H14.5V22.5H9.5V10.5H4Z"/></svg></span>`;
     const limit = d.speed ? `<span class="pin-limit" title="速限 ${esc(d.speed)}">${esc(d.speed)}</span>` : '';
@@ -3028,7 +3028,7 @@ async function loadData() {
   mapDataLoaded = true;
   if (!sets.length) { resultCount.textContent = '資料讀取失敗'; regionCards.innerHTML = '<div class="empty">暫時無法讀取，請稍後重新整理</div>'; Home.renderPlaces(true); return; }
   allData = sets.flat();
-  if (MAP_DESK) {   /* 電腦端：同一座標有多支測速時，圖釘左右錯開 */
+  {   /* 同一座標有多支測速時，圖釘左右錯開 */
     const sameSpot = new Map();
     allData.filter(d => d.type === SPEED_T).forEach(d => { const k = `${d.lat},${d.lng}`; if (!sameSpot.has(k)) sameSpot.set(k, []); sameSpot.get(k).push(d); });
     sameSpot.forEach(list => list.forEach((d, i) => { d.pinShift = list.length > 1 ? Math.round((i - (list.length - 1) / 2) * 30) : 0; }));
