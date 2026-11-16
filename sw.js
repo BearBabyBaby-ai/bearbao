@@ -1,4 +1,4 @@
-const VERSION = 'bearbao-2026-11-16-v60';
+const VERSION = 'bearbao-2026-11-15-v59';
 const SHELL_CACHE = `bearbao-shell-${VERSION}`;
 const DATA_CACHE = 'bearbao-sheet-data';
 const LIB_CACHE = 'bearbao-libs';
