@@ -7182,21 +7182,23 @@ if (window.bearDesktop) {
       // 元宵資訊一律用表格呈現（不放DM圖）
       if (routes.length === 1) {
         const x = info[0];
-        // 完整站序：每一段一列段落標題；活動廟宇整列金色（同路線DM的金色站號）
+        // 只有一張表格：完整路線，每一段一列段落標題；活動廟宇整列金色（同路線DM的金色站號），並帶出元宵資訊
         const stopRows = [], stopStyles = [];
+        const STOP_HEAD = ['站號', '站點', '鄉市／村里', '主祀', '元宵日期', '元宵活動', '配合單位', '地址', '備註'];
         x.secs.forEach(sec => {
           stopRows.push({ group: sec.title }); stopStyles.push(null);
           sec.list.forEach(it => {
-            const act = Boolean(it.d && it.d.lantern);
+            const d = it.d, act = Boolean(d && d.lantern);
             const note = [act ? '活動廟宇' : '', it.n === 1 ? '起點' : it.n === x.total ? '終點' : ''].filter(Boolean).join('・');
-            stopRows.push([it.label, it.raw, note]);
-            stopStyles.push(act ? [['#c9a227', '#ffffff'], ['#fff3c4', '#000000'], ['#fff3c4', '#000000']] : null);
+            stopRows.push(act
+              ? [it.label, it.raw, [d.region, d.village].filter(Boolean).join('／'), d.deity || '', datesOf(d), d.lantern.content || d.lantern.theme || '', d.lantern.gov || '', d.address || '', note]
+              : [it.label, it.raw, '', '', '', '', '', '', note]);
+            stopStyles.push(act ? STOP_HEAD.map((_, c) => c === 0 ? ['#c9a227', '#ffffff'] : ['#fff3c4', '#000000']) : null);
           });
         });
-        blocks.push({ type: 'title', text: `${x.r.name}｜${x.r.theme}` },
-          { type: 'table', title: `${x.r.name}｜路線資訊`, head: ['路線', '主題', '元宵日期', '站數', '活動廟宇'], rows: [[x.r.name, x.r.theme, x.dates.join('、'), `${x.total} 站`, `${x.temples.length} 間`]], copyBtn: true },
-          { type: 'table', title: `${x.r.name}｜完整路線`, head: ['站號', '站點', '備註'], rows: stopRows, styles: stopStyles, foot: x.r.walk ? [['步行段', x.r.walk]] : [], copyBtn: true },
-          { type: 'table', title: `${x.r.name}｜元宵活動廟宇`, head: HEAD, rows: x.temples.map(row), copyBtn: true });
+        const title = `${x.r.name}｜${x.r.theme}（元宵節 ${x.dates.join('、')}・${x.total} 站・${x.temples.length} 間活動廟宇）`;
+        blocks.push({ type: 'title', text: title },
+          { type: 'table', title, head: STOP_HEAD, rows: stopRows, styles: stopStyles, foot: x.r.walk ? [['步行段', x.r.walk]] : [], copyBtn: true });
         return { blocks, files: [{ label: '發表用TXT', name: `${x.r.name}元宵推薦.txt`, content: pubText(x) }] };
       }
       // 五大路線：點一條路線，再出現該路線的資訊
