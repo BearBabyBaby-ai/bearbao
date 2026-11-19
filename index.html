@@ -7126,7 +7126,7 @@ if (window.bearDesktop) {
         const secs = r.secs.map(sec => {
           const list = [];
           sec.stops.forEach(st => {
-            list.push({ label: no(st.n), name: st.name + (st.n === 1 ? '（起點）' : st.n === total ? '（終點）' : ''), raw: st.name, d: st.tk ? T.get(st.tk) : null, n: st.n });
+            list.push({ label: no(st.n), name: st.name + (st.n === 1 ? '（起點）' : st.n === total ? '（終點）' : ''), raw: st.name, d: st.tk ? T.get(st.tk) : null, n: st.n, lat: st.lat, lng: st.lng, url: st.url || '' });
             set.extra.filter(x => x.route === r.key && x.after === st.name).forEach(x => list.push({ label: '廟', name: x.label || x.name, raw: x.label || x.name, d: byName(x.name), n: 0 }));
           });
           return { title: sec.title, list };
@@ -7141,12 +7141,42 @@ if (window.bearDesktop) {
       const HEAD = ['站號', '廟宇', '鄉市／村里', '主祀', '元宵日期', '元宵活動', '配合單位', '地址'];
       const stopText = x => x.secs.map(sec => sec.list.map(it => `${it.label} ${it.name}`).join(' → ')).join('\n\n') + (x.r.walk ? `\n\n步行段為 ${x.r.walk}。` : '');
       // 發表用 TXT：主標題 →「2027 超級龜龜｜路線名稱」→ 元宵日期 → 站數與活動廟宇數 → 活動廟宇 → 精選景點 → 完整路線
+      // 發表用 TXT：照「2027超級龜龜_路線_發布用.txt」的格式
+      const normName = v => String(v || '').replace(/[\s\-－（）()]/g, '').replace(/温/g, '溫').replace(/樑/g, '梁');
+      const spots = all.filter(d => d.type === '景點');
+      const geo = (la, ln) => `https://maps.google.com/?q=${la},${ln}`;
+      const linkOfStop = it => {
+        if (it.url) return it.url;
+        if (it.d) return it.d.mapUrl || geo(clean((it.d.raw || {}).Latitude), clean((it.d.raw || {}).Longitude));
+        const n = normName(it.raw), sp = spots.find(d => normName(d.name) === n) || spots.find(d => normName(d.name).includes(n) || n.includes(normName(d.name)));
+        if (sp && sp.mapUrl) return sp.mapUrl;
+        if (it.lat != null && it.lng != null) return geo(Number(it.lat).toFixed(7), Number(it.lng).toFixed(7));
+        return sp ? geo(clean((sp.raw || {}).Latitude), clean((sp.raw || {}).Longitude)) : '';
+      };
+      const dayText = span => { const m = String(span || '').match(/^(\d{4})\/(\d{2})\/(\d{2})(?:－(\d{2})\/(\d{2}))?$/); if (!m) return span || ''; const one = `${m[1]} 年 ${Number(m[2])} 月 ${Number(m[3])} 日`; return m[4] ? `${one}－${m[4] === m[2] ? '' : Number(m[4]) + ' 月 '}${Number(m[5])} 日` : one; };
       const pubText = x => {
-        const feat = x.secs.flatMap(sec => sec.list).filter(it => it.n && x.r.feat.includes(it.n));
-        return [x.r.theme, `2027 超級龜龜｜${x.r.name}`, `元宵日期：${x.dates.join('、')}`, `${x.total} 站・${x.temples.length} 間活動廟宇`, '',
-          '【活動廟宇】', ...x.temples.map(({ it, d }) => `${it.label} ${it.raw}（${[[d.region, d.village].filter(Boolean).join('／'), d.deity].filter(Boolean).join('・')}）`), '',
-          '【精選景點】', ...feat.map(it => `${it.label} ${it.raw}`), '',
-          '【完整路線】', stopText(x)].join('\n');
+        const all = x.secs.flatMap(sec => sec.list);
+        const feat = all.filter(it => it.n && x.r.feat.includes(it.n));
+        // 同一間廟宇出現兩次（起點＝終點）合併成 01/18
+        const act = x.temples.map(({ it, d }) => `${all.filter(o => o.d === d).map(o => o.label).join('/')} ${it.raw}`);
+        const out = [x.r.theme, `2027 超級龜龜｜${x.r.name}`, `元宵節｜${x.dates.map(dayText).join('、')}`, `${x.total} 站・${x.temples.length} 間活動廟宇`, '',
+          '【活動廟宇】', ...act, '', '【精選景點】', ...feat.map(it => `${it.label} ${it.raw}`), '', '【完整路線】'];
+        if (x.r.walk) {
+          const [a, b] = x.r.walk.split(/[–-]/).map(Number);
+          out.push(`步行段｜${all.filter(it => it.n >= a && it.n <= b).map(it => `${it.label} ${it.raw}`).join(' → ')}`, '');
+        }
+        x.secs.forEach((sec, si) => {
+          if (si) out.push('');
+          out.push(sec.title);
+          sec.list.forEach(it => {
+            const tags = [it.d && it.d.lantern ? '［活動廟宇］' : '', it.n === 1 ? '［起點］' : it.n === x.total ? '［終點］' : ''].filter(Boolean).join(' ');
+            out.push(`${it.label} ${it.raw}${tags ? ' ' + tags : ''}`);
+            const url = linkOfStop(it);
+            if (url) out.push(` ${url}`);
+            if (it.d && it.d.lantern && it.d.address) out.push(` 地址 ${it.d.address}`);
+          });
+        });
+        return out.join('\n');
       };
       const blocks = [];
       if (routes.length === 1) {
