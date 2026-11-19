@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('desk', {
   ask: text => ipcRenderer.invoke('desk-ask', text),
   save: (name, data) => ipcRenderer.invoke('desk-save', name, data),
   mini: on => ipcRenderer.send('desk-mini', on),
+  max: on => ipcRenderer.send('desk-max', on),
   copy: text => ipcRenderer.send('desk-copy', String(text)),
   copyImage: png => ipcRenderer.invoke('desk-copy-image', png),
   onFocus: fn => ipcRenderer.on('desk-focus', (_e, toggle) => fn(toggle))

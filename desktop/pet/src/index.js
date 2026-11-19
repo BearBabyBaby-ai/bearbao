@@ -415,7 +415,7 @@ function checkAway() {
 
 // ---------- 工作模式：熊寶固定在右下角，旁邊有小對話框 ----------
 // 對話框輸入的文字交給熊寶系統處理（查分海、記帳），把回覆顯示在對話框
-let desk = false, chatWin = null, askFn = null, chatMini = false;
+let desk = false, chatWin = null, askFn = null, chatMini = false, chatMax = false;
 const deskFile = () => path.join(app.getPath('userData'), 'pet-desk.json');
 // 寬度：原本 380，使用者要求加 4 個國字寬（字 14px × 4 = 56）
 const CHAT = { w: 436, h: 480, mini: 48 };
@@ -426,6 +426,8 @@ const BEAR_TOP = Math.round(clipsLib.ANCHOR.y * brainS);          // 腳底到�
 function chatBounds() {
   const a = screen.getPrimaryDisplay().workArea;
   if (chatMini) return { x: a.x + a.width - BEAR_W, y: Math.round(a.y + a.height - BEAR_TOP - CHAT.mini), width: BEAR_W, height: CHAT.mini };
+  // 放到最大：和瀏覽器一樣佔滿整個畫面（工作列以外）
+  if (chatMax) return { x: a.x, y: a.y, width: a.width, height: a.height };
   return { x: Math.round(a.x + a.width - 160 - CHAT.w), y: Math.round(a.y + a.height - CHAT.h - 6), width: CHAT.w, height: CHAT.h };
 }
 
@@ -444,7 +446,7 @@ function makeChat() {
   });
   chatWin.webContents.on('will-navigate', e => e.preventDefault());
   chatWin.loadURL('bearbao://app/src/desk.html');
-  chatWin.on('closed', () => { chatWin = null; chatMini = false; });
+  chatWin.on('closed', () => { chatWin = null; chatMini = false; chatMax = false; });
   return chatWin;
 }
 
@@ -490,6 +492,11 @@ ipcMain.handle('desk-save', async (_e, name, data) => {
 ipcMain.on('desk-copy', (_e, text) => clipboard.writeText(String(text || '')));
 ipcMain.handle('desk-copy-image', (_e, png) => { clipboard.writeImage(nativeImage.createFromBuffer(Buffer.from(png))); return true; });
 
+ipcMain.on('desk-max', (_e, on) => {
+  chatMax = !!on;
+  if (chatMax) chatMini = false;
+  if (chatWin && !chatWin.isDestroyed()) chatWin.setBounds(chatBounds());
+});
 ipcMain.on('desk-mini', (_e, on) => {
   chatMini = !!on;
   if (chatWin && !chatWin.isDestroyed()) chatWin.setBounds(chatBounds());

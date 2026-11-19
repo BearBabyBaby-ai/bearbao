@@ -673,17 +673,31 @@
     }
   });
 
-  // 右上角：縮小（只留標題列）、恢復（展開回原本大小）
+  // 右上角：－ 縮小（只留標題列）；□ 放到最大（和瀏覽器一樣佔滿畫面），放大後變 ❐ 回到原本大小
   const miniBtn = document.getElementById('mini'), restoreBtn = document.getElementById('restore');
+  let maxed = false;
+  function setMax(on) {
+    maxed = on;
+    document.body.classList.toggle('max', on);
+    restoreBtn.textContent = on ? '❐' : '□';
+    restoreBtn.title = on ? '還原' : '放到最大';
+    restoreBtn.setAttribute('aria-label', restoreBtn.title);
+    window.desk.max(on);
+  }
   function setMini(on) {
+    if (on && maxed) setMax(false);
     document.body.classList.toggle('mini', on);
     miniBtn.disabled = on;
-    restoreBtn.disabled = !on;
     window.desk.mini(on);
     if (!on) { scroll(); input.focus(); }
   }
   miniBtn.addEventListener('click', () => setMini(true));
-  restoreBtn.addEventListener('click', () => setMini(false));
+  restoreBtn.addEventListener('click', () => {
+    // 縮小中：先展開；再按一次才放到最大
+    if (document.body.classList.contains('mini')) { setMini(false); return; }
+    setMax(!maxed);
+    scroll(); input.focus();
+  });
   // 點標題列也能縮小／恢復（按鈕本身照舊）
   document.querySelector('header').addEventListener('click', e => {
     if (e.target.closest('button')) return;

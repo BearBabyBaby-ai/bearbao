@@ -7179,21 +7179,31 @@ if (window.bearDesktop) {
         return out.join('\n');
       };
       const blocks = [];
+      // 元宵資訊一律用表格呈現（不放DM圖）
       if (routes.length === 1) {
         const x = info[0];
+        // 完整站序：每一段一列段落標題；活動廟宇整列金色（同路線DM的金色站號）
+        const stopRows = [], stopStyles = [];
+        x.secs.forEach(sec => {
+          stopRows.push({ group: sec.title }); stopStyles.push(null);
+          sec.list.forEach(it => {
+            const act = Boolean(it.d && it.d.lantern);
+            const note = [act ? '活動廟宇' : '', it.n === 1 ? '起點' : it.n === x.total ? '終點' : ''].filter(Boolean).join('・');
+            stopRows.push([it.label, it.raw, note]);
+            stopStyles.push(act ? [['#c9a227', '#ffffff'], ['#fff3c4', '#000000'], ['#fff3c4', '#000000']] : null);
+          });
+        });
         blocks.push({ type: 'title', text: `${x.r.name}｜${x.r.theme}` },
-          { type: 'text', text: `元宵節 ${x.dates.join('、')}・${x.total} 站・${x.temples.length} 間活動廟宇` },
-          { type: 'dm', src: LANTERN_SITE + x.r.dm, alt: `${x.r.theme} 路線DM` },
-          { type: 'pub', text: stopText(x) },
+          { type: 'table', title: `${x.r.name}｜路線資訊`, head: ['路線', '主題', '元宵日期', '站數', '活動廟宇'], rows: [[x.r.name, x.r.theme, x.dates.join('、'), `${x.total} 站`, `${x.temples.length} 間`]], copyBtn: true },
+          { type: 'table', title: `${x.r.name}｜完整路線`, head: ['站號', '站點', '備註'], rows: stopRows, styles: stopStyles, foot: x.r.walk ? [['步行段', x.r.walk]] : [], copyBtn: true },
           { type: 'table', title: `${x.r.name}｜元宵活動廟宇`, head: HEAD, rows: x.temples.map(row), copyBtn: true });
         return { blocks, files: [{ label: '發表用TXT', name: `${x.r.name}元宵推薦.txt`, content: pubText(x) }] };
       }
-      blocks.push({ type: 'title', text: '澎湖元宵五大路線' },
-        { type: 'text', text: `元宵節 ${allDates.join('、')}・${info.length} 條路線・${info.reduce((a, x) => a + x.total, 0)} 站・${new Set(info.flatMap(x => x.temples.map(t => t.d))).size} 間活動廟宇` });
-      info.forEach(x => blocks.push({ type: 'dm', src: LANTERN_SITE + x.r.dm, alt: `${x.r.theme} 路線DM`, caption: `${x.r.name}｜${x.r.theme}` }));
-      blocks.push({ type: 'table', title: '澎湖元宵五大路線', head: ['路線', '主題', '站數', '活動廟宇', '元宵日期', '起點', '終點'],
-        rows: info.map(x => { const st = x.secs.flatMap(sec => sec.list).filter(it => it.n); return [x.r.name, x.r.theme, `${x.total} 站`, `${x.temples.length} 間`, x.dates.join('、'), st[0].raw, st[st.length - 1].raw]; }), copyBtn: true });
-      blocks.push({ type: 'table', title: '澎湖元宵五大路線｜元宵活動廟宇', head: HEAD, rows: info.flatMap(x => [{ group: x.r.name }, ...x.temples.map(row)]), copyBtn: true });
+      // 五大路線：點一條路線，再出現該路線的資訊
+      blocks.push({ type: 'title', text: '澎湖元宵五大路線（點路線看該路線資訊）' },
+        { type: 'pick', head: ['路線', '主題', '站數', '活動廟宇', '元宵日期', '起點', '終點'],
+          rows: info.map(x => { const st = x.secs.flatMap(sec => sec.list).filter(it => it.n); return [x.r.name, x.r.theme, `${x.total} 站`, `${x.temples.length} 間`, x.dates.join('、'), st[0].raw, st[st.length - 1].raw]; }),
+          cmds: info.map(x => `${x.r.name}元宵推薦`) });
       return { blocks, files: [{ label: '發表用TXT', name: '元宵路線推薦.txt', content: info.map(pubText).join(SEP) }] };
     }
 
@@ -7214,6 +7224,7 @@ if (window.bearDesktop) {
       try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.end >= todayKey() && inYear(it.start) && (r.from ? (it.start <= r.to && r.from <= it.end) : (!r.date || (it.start <= r.date && r.date <= it.end))) && (!r.name || r.name.every(w => plainText(it.name).includes(w)))); } } catch (_) { /* 沒有活動資料 */ }
       const area = (r.regions.length ? r.regions.map(x => x.slice(0, 2)).join('、') : '澎湖') + (r.from ? ` ${md(r.from)}–${md(r.to)}` : r.date ? ` ${r.date}` : r.year ? ` ${r.year}` : '');
       if (!list.length && !acts.length) return `${area} 目前沒有元宵活動資料`;
+      // 元宵資訊一律用表格呈現：活動總表（活動、日期、時間、參加廟宇）＋廟宇表格（左邊區域合併、每區一色）
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
       const groups = new Map();
       list.forEach(d => {
@@ -7221,21 +7232,19 @@ if (window.bearDesktop) {
         if (!groups.has(key)) groups.set(key, { name: L.theme || L.content || '元宵活動', dates: L.dates, time: L.time, list: [] });
         groups.get(key).list.push(d);
       });
+      const actRows = [];
       groups.forEach(g => {
         const byReg = new Map();
         g.list.forEach(d => byReg.set(d.region || '其他', (byReg.get(d.region || '其他') || 0) + 1));
-        blocks.push({ type: 'text', text: [
-          `・${g.name}`,
-          [g.dates && `日期：${g.dates}`, g.time && `時間：${g.time}`].filter(Boolean).join('　'),
-          `參加廟宇 ${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`,
-          `例如：${g.list.slice(0, 6).map(d => d.name).join('、')}${g.list.length > 6 ? '…' : ''}`
-        ].filter(Boolean).join('\n') });
+        actRows.push([g.name, g.dates || '—', g.time || '—', `${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`]);
       });
-      acts.forEach(it => blocks.push({ type: 'text', text: [`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`].filter(Boolean).join('\n') }));
-      // 每間廟宇照發布用 TXT 的格式顯示，點一下複製（只放短網址）
-      const items = list.map(d => noFull(Lantern.publishText(d)));
-      list.forEach((d, i) => blocks.push({ type: 'pub', text: noUrl(items[i]) }, { type: 'link', text: '🔗 地圖連結', url: linkOf(d) }));
+      acts.forEach(it => actRows.push([plainText(it.name), it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time || '—', it.place ? `地點：${it.place}` : '—']));
+      if (actRows.length) blocks.push({ type: 'table', title: `${area} 元宵活動`, head: ['活動', '日期', '時間', '參加廟宇'], rows: actRows, copyBtn: true });
+      const cell = v => valid(v) ? String(v) : '—';
+      if (list.length) blocks.push({ type: 'table', title: `${area} 元宵活動廟宇`, head: ['區域', '廟宇名稱', '主祀', '元宵日期', '元宵活動', '配合單位', '地址'], merge: true, copyBtn: true,
+        rows: list.map(d => [[d.region, d.village].filter(Boolean).join('-') || '—', cell(d.name), cell(d.deity), cell(d.lantern.dates), cell(d.lantern.content || d.lantern.theme), cell(d.lantern.gov), cell(d.address)]) });
       // 一鍵複製：整個結果，照發布用 TXT 的格式
+      const items = list.map(d => noFull(Lantern.publishText(d)));
       return { blocks, copy: items.length ? `${blocks[0].text}\n\n` + items.map(t => t + SEP).join('') : '' };
     }
 
