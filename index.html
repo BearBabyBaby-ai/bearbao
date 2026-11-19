@@ -4665,6 +4665,9 @@ const Lantern = (() => {
     const off = Boolean(day) && !itemOn(d, it, day), live = !off && itemLive(d, it);
     return { off, live, html: `${it.label ? `<b class="ln-it-when">${esc(it.label)}</b> ` : ''}${richText(it.name)}${off ? '<em class="ln-tag off">非本日</em>' : ''}${live ? '<em class="ln-tag live">進行中</em>' : ''}` };
   };
+  // 活動名稱：元宵主題；沒有主題就用活動內容細項名稱（不含日期時間）。比對用的鍵去掉空白、全半形差異
+  const actName = d => clean(d.lantern.theme) || items(d).map(it => it.name).filter(Boolean).join('、') || '元宵活動';
+  const actKey = name => String(name || '').normalize('NFKC').replace(/\s+/g, '').replace(/[－–—~～]/g, '-');
   const inRange = (d, key) => { const r = period(d); return Boolean(r) && r.start <= key && key <= r.end; };
   
   const shortRange = d => { const r = period(d); return r ? (r.start === r.end ? r.start.slice(5) : `${r.start.slice(5)}-${r.end.slice(5)}`) : clean(d.lantern.dates); };
@@ -4871,7 +4874,7 @@ Output the reconstructed image ONLY. No textual explanation required.
   $('evLanternMode').addEventListener('click', e => { const b = e.target.closest('[data-ln-export]'); if (b && !b.disabled) exportTxt(b.dataset.lnExport); });
   // 詳細資訊用：元宵資訊頁有選日期時，那天沒有的細項標「非本日」
   const filterDay = () => (mode === 'lantern' && dateSel.value) || '';
-  return { render, setMode, get mode() { return mode; }, temples, dateRange, period, periodText, items, itemOn, itemLive, itemHtml, contentLines, filterDay, buildTxt, publishText };
+  return { render, setMode, get mode() { return mode; }, temples, dateRange, period, periodText, actName, actKey, items, itemOn, itemLive, itemHtml, contentLines, filterDay, buildTxt, publishText };
 })();
 
 
@@ -7147,12 +7150,13 @@ if (window.bearDesktop) {
         for (const d of Lantern.temples()) {
           const g = Lantern.period(d);
           if (!g || g.start > key || key > g.end) continue;
-          const name = d.lantern.theme || d.lantern.content || '元宵活動';
-          groups.set(name, (groups.get(name) || 0) + 1);
+          const name = Lantern.actName(d), k = Lantern.actKey(name);
+          groups.set(k, { name, n: ((groups.get(k) || {}).n || 0) + 1 });
         }
         let acts = [];
         try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.start <= key && key <= it.end); } } catch (_) { /* 沒有活動資料 */ }
-        const lines = [...groups].map(([n, c]) => `${n}（參加廟宇 ${c} 間）`).concat(acts.map(it => plainText(it.name)));
+        acts.forEach(it => { const name = plainText(it.name), k = Lantern.actKey(name); if (!groups.has(k)) groups.set(k, { name, n: 0 }); });
+        const lines = [...groups.values()].map(g => g.n ? `${g.name}（參加廟宇 ${g.n} 間）` : g.name);
         if (lines.length) rows.push(['元宵活動', lines.join('\n'), `${key} 元宵`]);
       }
       const day = `${key}（${'日一二三四五六'[new Date(keyToUTC(key)).getUTCDay()]}）`;
@@ -7187,12 +7191,13 @@ if (window.bearDesktop) {
         for (const d of Lantern.temples()) {
           const g = Lantern.period(d);
           if (!g || g.start > r.to || r.from > g.end) continue;
-          const name = d.lantern.theme || d.lantern.content || '元宵活動';
-          groups.set(name, (groups.get(name) || 0) + 1);
+          const name = Lantern.actName(d), k = Lantern.actKey(name);
+          groups.set(k, { name, n: ((groups.get(k) || {}).n || 0) + 1 });
         }
         let acts = [];
         try { if (typeof Cal !== 'undefined') { if (Cal.load) await Cal.load(); acts = Cal.all().filter(it => it.cat === '元宵活動' && it.start <= r.to && r.from <= it.end); } } catch (_) { /* 沒有活動資料 */ }
-        const lines = [...groups].map(([n, c]) => `${n}（參加廟宇 ${c} 間）`).concat(acts.map(it => plainText(it.name)));
+        acts.forEach(it => { const name = plainText(it.name), k = Lantern.actKey(name); if (!groups.has(k)) groups.set(k, { name, n: 0 }); });
+        const lines = [...groups.values()].map(g => g.n ? `${g.name}（參加廟宇 ${g.n} 間）` : g.name);
         if (lines.length) rows.push(['元宵活動', lines.join('\n'), `${span} 元宵`]);
       }
       const dw = k => `${k}（${'日一二三四五六'[new Date(keyToUTC(k)).getUTCDay()]}）`, title = `${dw(r.from)}–${dw(r.to)}`;
@@ -7295,14 +7300,21 @@ if (window.bearDesktop) {
         // 只有一張表格：完整路線，每一段一列段落標題；活動廟宇整列金色（同路線DM的金色站號），並帶出元宵資訊
         const stopRows = [], stopStyles = [];
         const STOP_HEAD = ['站號', '站點', '鄉市／村里', '主祀', '元宵日期', '元宵活動', '配合單位', '地址', '備註'];
+        // 相同站點（例如起點＝終點的澎湖天后宮）合併成一列，站號寫「01/18」，備註寫「起點・終點」
+        const keyOfStop = it => it.d || it.raw;
+        const allStops = x.secs.flatMap(sec => sec.list), seen = new Set();
         x.secs.forEach(sec => {
+          const rows = sec.list.filter(it => { const k = keyOfStop(it); if (seen.has(k)) return false; seen.add(k); return true; });
+          if (!rows.length) return;
           stopRows.push({ group: sec.title }); stopStyles.push(null);
-          sec.list.forEach(it => {
-            const d = it.d, act = Boolean(d && d.lantern);
-            const note = [act ? '活動廟宇' : '', it.n === 1 ? '起點' : it.n === x.total ? '終點' : ''].filter(Boolean).join('・');
+          rows.forEach(it => {
+            const d = it.d, act = Boolean(d && d.lantern), same = allStops.filter(o => keyOfStop(o) === keyOfStop(it));
+            const ends = [same.some(o => o.n === 1) ? '起點' : '', same.some(o => o.n === x.total) ? '終點' : ''].filter(Boolean);
+            const note = [act ? '活動廟宇' : '', ...ends].filter(Boolean).join('・');
+            const label = same.map(o => o.label).join('/');
             stopRows.push(act
-              ? [it.label, it.raw, [d.region, d.village].filter(Boolean).join('／'), d.deity || '', datesOf(d), Lantern.contentLines(d) || d.lantern.theme || '', d.lantern.gov || '', d.address || '', note]
-              : [it.label, it.raw, '', '', '', '', '', '', note]);
+              ? [label, it.raw, [d.region, d.village].filter(Boolean).join('／'), d.deity || '', datesOf(d), Lantern.contentLines(d) || d.lantern.theme || '', d.lantern.gov || '', d.address || '', note]
+              : [label, it.raw, '', '', '', '', '', '', note]);
             stopStyles.push(act ? STOP_HEAD.map((_, c) => c === 0 ? ['#c9a227', '#ffffff'] : ['#fff3c4', '#000000']) : null);
           });
         });
@@ -7339,23 +7351,29 @@ if (window.bearDesktop) {
       // 元宵資訊一律用表格呈現：活動總表（活動、日期、時間、參加廟宇）＋廟宇表格（左邊區域合併、每區一色）
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
       // 同一個活動只列一列（不同廟宇日期不同時，日期寫成最早到最晚）；沒有時間就不放時間欄
+      // 相同活動名稱合併成一列（廟宇和活動列表裡同名的活動也合併）
       const groups = new Map();
+      const groupOf = name => { const k = Lantern.actKey(name); if (!groups.has(k)) groups.set(k, { name, spans: [], times: new Set(), list: [], places: new Set() }); return groups.get(k); };
       list.forEach(d => {
-        const L = d.lantern, name = L.theme || L.content || '元宵活動';
-        if (!groups.has(name)) groups.set(name, { name, spans: [], times: new Set(), list: [] });
-        const g = groups.get(name), r2 = Lantern.period(d);
+        const L = d.lantern, g = groupOf(Lantern.actName(d)), r2 = Lantern.period(d);
         if (r2) g.spans.push(r2); else if (L.dates) g.spans.push({ start: L.dates, end: L.dates });
-        if (L.time) g.times.add(L.time);
-        g.list.push(d);
+        if (valid(L.time)) g.times.add(L.time);
+        if (!g.list.includes(d)) g.list.push(d);
+      });
+      acts.forEach(it => {
+        const g = groupOf(plainText(it.name));
+        g.spans.push({ start: it.start, end: it.end });
+        if (valid(it.time)) g.times.add(it.time);
+        if (valid(it.place)) g.places.add(it.place);
       });
       const spanText = sp => { if (!sp.length) return '—'; const a = sp.map(x => x.start).sort()[0], z = sp.map(x => x.end).sort().pop(); return a === z ? a : `${a}－${z.slice(0, 4) === a.slice(0, 4) ? z.slice(5) : z}`; };
       const actRows = [];
       groups.forEach(g => {
         const byReg = new Map();
         g.list.forEach(d => byReg.set(d.region || '其他', (byReg.get(d.region || '其他') || 0) + 1));
-        actRows.push([g.name, spanText(g.spans), [...g.times].join('、'), `${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`]);
+        const who = [g.list.length ? `${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）` : '', g.places.size ? `地點：${[...g.places].join('、')}` : ''].filter(Boolean).join('\n');
+        actRows.push([g.name, spanText(g.spans), [...g.times].join('、'), who || '—']);
       });
-      acts.forEach(it => actRows.push([plainText(it.name), it.start === it.end ? it.start : `${it.start}－${it.end.slice(5)}`, it.time || '', it.place ? `地點：${it.place}` : '—']));
       const hasTime = actRows.some(r => r[2]);
       if (actRows.length) blocks.push({ type: 'table', title: `${area} 元宵活動`, head: hasTime ? ['活動', '日期', '時間', '參加廟宇'] : ['活動', '日期', '參加廟宇'], rows: actRows.map(r => hasTime ? r.map((v, i) => i === 2 && !v ? '—' : v) : [r[0], r[1], r[3]]), copyBtn: true });
       const cell = v => valid(v) ? String(v) : '—';
