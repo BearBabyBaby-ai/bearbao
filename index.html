@@ -7092,6 +7092,81 @@ if (window.bearDesktop) {
         { type: 'pick', head: ['項目', '內容'], rows: rows.map(x => x.slice(0, 2)), cmds: rows.map(x => x[2]) }
       ] };
     }
+    /* ── 2027澎湖元宵 路線推薦：路線站序與元宵APP（Lantern Festival）同一份 ── */
+    const LANTERN_SITE = 'https://bearbabybaby-ai.github.io/Lantern-Festival/';
+    const LANTERN_ROUTE_KEYS = [['north', /北環/], ['east', /湖西東環|東環|湖西/], ['south', /澎南南環|南環|澎南/], ['city', /馬公市區|市區/], ['suburb', /馬公郊區|郊區/]];
+    let lanternRouteData = null;
+    async function lanternRouteSet() {
+      if (lanternRouteData) return lanternRouteData;
+      const res = await fetch(LANTERN_SITE + 'data.js', { cache: 'no-store' });
+      if (!res.ok) throw new Error(res.status);
+      const js = await res.text();
+      const routes = JSON.parse(js.match(/const ROUTES = (\[[\s\S]*?\]);\n/)[1]);
+      const extra = JSON.parse((js.match(/const EXTRA_TEMPLES = (\[[\s\S]*?\]);/) || [, '[]'])[1]);
+      return (lanternRouteData = { routes, extra });
+    }
+    async function lanternRoutes(keys) {
+      let set;
+      try { set = await lanternRouteSet(); } catch (_) { return '元宵路線資料讀取失敗，請確認網路後再試一次'; }
+      const all = await places();
+      if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
+      // 同名廟宇（例如保安宮）用座標區分：鍵＝名稱＠座標
+      const tkOf = d => `${d.name}@${clean((d.raw || {}).Latitude)},${clean((d.raw || {}).Longitude)}`;
+      const T = new Map(all.filter(d => d.type === '廟宇').map(d => [tkOf(d), d]));
+      const byName = name => { const hit = all.filter(d => d.type === '廟宇' && d.name === name); return hit.find(d => d.lantern) || hit[0]; };
+      const ORDER = ['north', 'east', 'south', 'city', 'suburb'];
+      const routes = (keys.length ? keys : ORDER).map(k => set.routes.find(r => r.key === k)).filter(Boolean);
+      const no = n => String(n).padStart(2, '0');
+      // 元宵日期：所有活動廟宇日期合併成一段（例如 2027/02/20－02/22）
+      const spanOf = list => { const gs = list.map(d => d && d.lantern && Lantern.dateRange(d.lantern.dates)).filter(Boolean); if (!gs.length) return []; const a = gs.map(g => g.start).sort()[0], z = gs.map(g => g.end).sort().pop(); return [a === z ? a : `${a}－${z.slice(5)}`]; };
+      const datesOf = d => { const g = d && d.lantern && Lantern.dateRange(d.lantern.dates); return g ? (g.start === g.end ? g.start : `${g.start}－${g.end.slice(5)}`) : ''; };
+      // 每條路線：完整站序（新增廟宇不編號，標「廟」）、活動廟宇
+      const info = routes.map(r => {
+        const total = r.secs.reduce((a, sec) => a + sec.stops.length, 0);
+        const secs = r.secs.map(sec => {
+          const list = [];
+          sec.stops.forEach(st => {
+            list.push({ label: no(st.n), name: st.name + (st.n === 1 ? '（起點）' : st.n === total ? '（終點）' : ''), raw: st.name, d: st.tk ? T.get(st.tk) : null, n: st.n });
+            set.extra.filter(x => x.route === r.key && x.after === st.name).forEach(x => list.push({ label: '廟', name: x.label || x.name, raw: x.label || x.name, d: byName(x.name), n: 0 }));
+          });
+          return { title: sec.title, list };
+        });
+        const temples = [];
+        secs.forEach(sec => sec.list.forEach(it => { const d = it.d; if (d && d.lantern && !temples.some(x => x.d === d)) temples.push({ it, d }); }));
+        const dates = spanOf(temples.map(x => x.d));
+        return { r, total, secs, temples, dates };
+      });
+      const allDates = spanOf(info.flatMap(x => x.temples.map(t => t.d)));
+      const row = ({ it, d }) => [it.label, it.raw, [d.region, d.village].filter(Boolean).join('／'), d.deity || '', datesOf(d), d.lantern.content || '', d.lantern.gov || '', d.address || ''];
+      const HEAD = ['站號', '廟宇', '鄉市／村里', '主祀', '元宵日期', '元宵活動', '配合單位', '地址'];
+      const stopText = x => x.secs.map(sec => sec.list.map(it => `${it.label} ${it.name}`).join(' → ')).join('\n\n') + (x.r.walk ? `\n\n步行段為 ${x.r.walk}。` : '');
+      // 發表用 TXT：主標題 →「2027 超級龜龜｜路線名稱」→ 元宵日期 → 站數與活動廟宇數 → 活動廟宇 → 精選景點 → 完整路線
+      const pubText = x => {
+        const feat = x.secs.flatMap(sec => sec.list).filter(it => it.n && x.r.feat.includes(it.n));
+        return [x.r.theme, `2027 超級龜龜｜${x.r.name}`, `元宵日期：${x.dates.join('、')}`, `${x.total} 站・${x.temples.length} 間活動廟宇`, '',
+          '【活動廟宇】', ...x.temples.map(({ it, d }) => `${it.label} ${it.raw}（${[[d.region, d.village].filter(Boolean).join('／'), d.deity].filter(Boolean).join('・')}）`), '',
+          '【精選景點】', ...feat.map(it => `${it.label} ${it.raw}`), '',
+          '【完整路線】', stopText(x)].join('\n');
+      };
+      const blocks = [];
+      if (routes.length === 1) {
+        const x = info[0];
+        blocks.push({ type: 'title', text: `${x.r.name}｜${x.r.theme}` },
+          { type: 'text', text: `元宵節 ${x.dates.join('、')}・${x.total} 站・${x.temples.length} 間活動廟宇` },
+          { type: 'dm', src: LANTERN_SITE + x.r.dm, alt: `${x.r.theme} 路線DM` },
+          { type: 'pub', text: stopText(x) },
+          { type: 'table', title: `${x.r.name}｜元宵活動廟宇`, head: HEAD, rows: x.temples.map(row), copyBtn: true });
+        return { blocks, files: [{ label: '發表用TXT', name: `${x.r.name}元宵推薦.txt`, content: pubText(x) }] };
+      }
+      blocks.push({ type: 'title', text: '澎湖元宵五大路線' },
+        { type: 'text', text: `元宵節 ${allDates.join('、')}・${info.length} 條路線・${info.reduce((a, x) => a + x.total, 0)} 站・${new Set(info.flatMap(x => x.temples.map(t => t.d))).size} 間活動廟宇` });
+      info.forEach(x => blocks.push({ type: 'dm', src: LANTERN_SITE + x.r.dm, alt: `${x.r.theme} 路線DM`, caption: `${x.r.name}｜${x.r.theme}` }));
+      blocks.push({ type: 'table', title: '澎湖元宵五大路線', head: ['路線', '主題', '站數', '活動廟宇', '元宵日期', '起點', '終點'],
+        rows: info.map(x => { const st = x.secs.flatMap(sec => sec.list).filter(it => it.n); return [x.r.name, x.r.theme, `${x.total} 站`, `${x.temples.length} 間`, x.dates.join('、'), st[0].raw, st[st.length - 1].raw]; }), copyBtn: true });
+      blocks.push({ type: 'table', title: '澎湖元宵五大路線｜元宵活動廟宇', head: HEAD, rows: info.flatMap(x => [{ group: x.r.name }, ...x.temples.map(row)]), copyBtn: true });
+      return { blocks, files: [{ label: '發表用TXT', name: '元宵路線推薦.txt', content: info.map(pubText).join(SEP) }] };
+    }
+
     async function lantern(r) {
       const all = await places();
       if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
@@ -7331,6 +7406,11 @@ if (window.bearDesktop) {
           const only = ['奎壁山', ...TIDE_PLACES].filter(p => s.includes(p));
           if (isSplit) return r ? await tideRange(r) : await tide(ahead(d));
           return r ? await tidesRange(r, only) : await tides(ahead(d), only);
+        }
+        // 元宵路線推薦（2027澎湖元宵）：「元宵路線推薦」五條全部；「北環島元宵推薦」只回該路線
+        if (/元宵/.test(s) && /推薦/.test(s)) {
+          const keys = LANTERN_ROUTE_KEYS.filter(([, re]) => re.test(s)).map(([k]) => k);
+          if (keys.length || /路線/.test(s)) return await lanternRoutes(keys);
         }
         // 元宵（可加年份、鄉市）：2027元宵、馬公 元宵
         if (/元宵|乞龜/.test(s)) {

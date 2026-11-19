@@ -299,8 +299,32 @@
     const d = bubble('bear rich');
     for (const b of reply.blocks) {
       if (b.type === 'table') {
-        const title = (reply.blocks.find(x => x.type === 'title') || {}).text || '表格';
-        d.append(...tableEl(b, title));
+        const title = b.title || (reply.blocks.find(x => x.type === 'title') || {}).text || '表格';
+        const [t, hint] = tableEl(b, title);
+        d.append(t, hint);
+        // 元宵路線推薦：表格下方「複製表格成圖資」
+        if (b.copyBtn) {
+          const row = document.createElement('div');
+          row.className = 'files';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = '複製表格成圖資';
+          btn.addEventListener('click', () => saveTableImage(b, title, hint));
+          row.appendChild(btn);
+          d.appendChild(row);
+        }
+        continue;
+      }
+      // 路線 DM：點一下用瀏覽器開大圖
+      if (b.type === 'dm') {
+        const fig = document.createElement('figure');
+        fig.className = 'b-dm';
+        const img = document.createElement('img');
+        img.alt = b.alt || ''; img.referrerPolicy = 'no-referrer'; img.src = b.src;
+        img.addEventListener('click', () => window.open(b.src));
+        fig.appendChild(img);
+        if (b.caption) { const c = document.createElement('figcaption'); c.textContent = b.caption; fig.appendChild(c); }
+        d.appendChild(fig);
         continue;
       }
       // 只打日期：那天有資料的項目，點一列就查那一種
