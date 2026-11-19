@@ -7785,14 +7785,21 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').then(reg => {
+      // 正在輸入資料時先不重新載入，離開輸入框或切到背景再載入
+      const typing = () => document.visibilityState === 'visible' && document.activeElement && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName);
+      const reloadNow = () => { if (!typing()) { location.reload(); return; } const later = () => { if (!typing()) location.reload(); }; document.addEventListener('focusout', () => setTimeout(later, 300)); document.addEventListener('visibilitychange', later); };
       reg.addEventListener('updatefound', () => {
         const worker = reg.installing;
         if (!worker) return;
         worker.addEventListener('statechange', () => {
-          
-          if (worker.state === 'activated' && navigator.serviceWorker.controller) location.reload();
+          if (worker.state === 'activated' && navigator.serviceWorker.controller) reloadNow();
         });
       });
+      // 長時間開著的視窗（電腦版、桌寵背後的熊寶系統）也要拿到新版：每 5 分鐘、回到畫面時檢查一次
+      const check = () => reg.update().catch(() => {});
+      setInterval(check, 5 * 60 * 1000);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+      window.addEventListener('focus', check);
     }).catch(() => {});
   });
 }
