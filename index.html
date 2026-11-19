@@ -7407,10 +7407,11 @@ if (window.bearDesktop) {
           if (isSplit) return r ? await tideRange(r) : await tide(ahead(d));
           return r ? await tidesRange(r, only) : await tides(ahead(d), only);
         }
-        // 元宵路線推薦（2027澎湖元宵）：「元宵路線推薦」五條全部；「北環島元宵推薦」只回該路線
-        if (/元宵/.test(s) && /推薦/.test(s)) {
+        // 元宵路線推薦（2027澎湖元宵）：「元宵路線推薦」「元宵路線」「元宵推薦」五條全部；
+        // 「北環島元宵推薦」「北環島元宵」「湖西 元宵推薦」只回該路線
+        if (/元宵/.test(s) && (/推薦|路線/.test(s) || /北環|東環|南環|馬公市區|馬公郊區/.test(s))) {
           const keys = LANTERN_ROUTE_KEYS.filter(([, re]) => re.test(s)).map(([k]) => k);
-          if (keys.length || /路線/.test(s)) return await lanternRoutes(keys);
+          return await lanternRoutes(keys);
         }
         // 元宵（可加年份、鄉市）：2027元宵、馬公 元宵
         if (/元宵|乞龜/.test(s)) {
