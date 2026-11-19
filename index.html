@@ -7226,20 +7226,26 @@ if (window.bearDesktop) {
       if (!list.length && !acts.length) return `${area} 目前沒有元宵活動資料`;
       // 元宵資訊一律用表格呈現：活動總表（活動、日期、時間、參加廟宇）＋廟宇表格（左邊區域合併、每區一色）
       const blocks = [{ type: 'title', text: `${area} 元宵活動` }];
+      // 同一個活動只列一列（不同廟宇日期不同時，日期寫成最早到最晚）；沒有時間就不放時間欄
       const groups = new Map();
       list.forEach(d => {
-        const L = d.lantern, key = [L.theme || L.content || '元宵活動', L.dates].join('｜');
-        if (!groups.has(key)) groups.set(key, { name: L.theme || L.content || '元宵活動', dates: L.dates, time: L.time, list: [] });
-        groups.get(key).list.push(d);
+        const L = d.lantern, name = L.theme || L.content || '元宵活動';
+        if (!groups.has(name)) groups.set(name, { name, spans: [], times: new Set(), list: [] });
+        const g = groups.get(name), r2 = Lantern.dateRange(L.dates);
+        if (r2) g.spans.push(r2); else if (L.dates) g.spans.push({ start: L.dates, end: L.dates });
+        if (L.time) g.times.add(L.time);
+        g.list.push(d);
       });
+      const spanText = sp => { if (!sp.length) return '—'; const a = sp.map(x => x.start).sort()[0], z = sp.map(x => x.end).sort().pop(); return a === z ? a : `${a}－${z.slice(0, 4) === a.slice(0, 4) ? z.slice(5) : z}`; };
       const actRows = [];
       groups.forEach(g => {
         const byReg = new Map();
         g.list.forEach(d => byReg.set(d.region || '其他', (byReg.get(d.region || '其他') || 0) + 1));
-        actRows.push([g.name, g.dates || '—', g.time || '—', `${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`]);
+        actRows.push([g.name, spanText(g.spans), [...g.times].join('、'), `${g.list.length} 間（${[...byReg].map(([k, n]) => `${k} ${n}`).join('、')}）`]);
       });
-      acts.forEach(it => actRows.push([plainText(it.name), it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time || '—', it.place ? `地點：${it.place}` : '—']));
-      if (actRows.length) blocks.push({ type: 'table', title: `${area} 元宵活動`, head: ['活動', '日期', '時間', '參加廟宇'], rows: actRows, copyBtn: true });
+      acts.forEach(it => actRows.push([plainText(it.name), it.start === it.end ? it.start : `${it.start}－${it.end.slice(5)}`, it.time || '', it.place ? `地點：${it.place}` : '—']));
+      const hasTime = actRows.some(r => r[2]);
+      if (actRows.length) blocks.push({ type: 'table', title: `${area} 元宵活動`, head: hasTime ? ['活動', '日期', '時間', '參加廟宇'] : ['活動', '日期', '參加廟宇'], rows: actRows.map(r => hasTime ? r.map((v, i) => i === 2 && !v ? '—' : v) : [r[0], r[1], r[3]]), copyBtn: true });
       const cell = v => valid(v) ? String(v) : '—';
       if (list.length) blocks.push({ type: 'table', title: `${area} 元宵活動廟宇`, head: ['區域', '廟宇名稱', '主祀', '元宵日期', '元宵活動', '配合單位', '地址'], merge: true, copyBtn: true,
         rows: list.map(d => [[d.region, d.village].filter(Boolean).join('-') || '—', cell(d.name), cell(d.deity), cell(d.lantern.dates), cell(d.lantern.content || d.lantern.theme), cell(d.lantern.gov), cell(d.address)]) });
