@@ -7673,6 +7673,42 @@ if (window.bearDesktop) {
         const STORE = /^(?:7\s*-\s*11|711|小七|7-?eleven|seven\s*-?\s*eleven)$/i;
         const DATE_HEAD = /^(?:\d{4}\s*[\/\-.年]\s*)?\d{1,2}\s*[\/\-.月]\s*\d{1,2}\s*日?(?![\d\/])|^(?:今天|明天|後天|昨天)/;
         const onlyDate = (d.given && !d.rest) || !s.replace(RANGE_RE, '').trim();
+        // 一次打很多筆（換行，或金額後面接著下一筆：11/20 小太陽 早餐65 11/20 油雞便當 午餐110）：每筆各記一筆
+        // 每筆都要是「日期 品項 金額」或「品項 金額」；沒寫日期的跟上一筆同一天，第一筆沒寫就是今天；有一筆不符合就照原本一整句判斷
+        if (!onlyDate && !WX_RE.test(s)) {
+          const segs = [];
+          String(text || '').split(/[\r\n]+/).forEach(line => {
+            let cur = [];
+            plain(line.replace(/\s+/g, ' ').trim()).split(' ').filter(Boolean).forEach(tok => {
+              cur.push(tok);
+              // 金額結尾（65、早餐65、$65、65元）就結束這一筆；日期（11/20）、時間（17:10）、7-11 不算
+              if (/(?:^|[^\d\/\-.:：])\$?\d+(?:\.\d+)?元?$/.test(tok)) { segs.push(cur.join(' ')); cur = []; }
+            });
+            if (cur.length) segs.push(cur.join(' '));
+          });
+          if (segs.length >= 2) {
+            let last = todayKey();
+            const items = segs.map(seg => {
+              const sd = takeDate(seg);
+              if (sd.bad) return null;
+              const headed = sd.given && DATE_HEAD.test(seg);
+              if (sd.given && !headed) return null;
+              const body = headed ? sd.rest : seg;
+              const m2 = body && !STORE.test(body.trim()) ? body.match(/^(.+?)\s*\$?\s*(\d+(?:\.\d+)?)\s*元?$/) : null;
+              if (!m2) return null;
+              const item = m2[1].trim(), amt = Number(m2[2]);
+              if (!item || /[-:：]$/.test(item) || !(amt > 0) || /^\d+$/.test(item) || (/^(?:19|20)\d{2}$/.test(m2[2]) && /元宵|乞龜/.test(item))) return null;
+              if (headed) last = sd.key;
+              return { key: last, item, amt };
+            });
+            if (items.every(Boolean)) {
+              if (QO) return '此工作環境只能查詢，記帳請到熊寶系統';
+              const out = [];
+              for (const it of items) out.push(await ledger(it.key, it.item, it.amt));
+              return out.join('\n');
+            }
+          }
+        }
         if (!onlyDate && !WX_RE.test(s)) {
           const headed = d.given && DATE_HEAD.test(s);
           const body = headed ? d.rest : (d.given ? '' : s);
