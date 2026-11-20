@@ -1474,7 +1474,6 @@
               data-src="https://adsb.lol/?lat=23.57&amp;lon=119.63&amp;zoom=7"
               loading="lazy" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" hidden></iframe>
             <div class="map-legend">
-              <span>地圖資料：ADSB.lol</span>
               <span>可直接點選航機查看即時動態</span>
             </div>
           </section>
@@ -6680,7 +6679,7 @@ const Wx = (() => {
         <span class="wx-badge ${rc}">${rt}</span></div>`;
     }).join('');
     box.innerHTML = `${picker()}${nowHtml()}<div class="tide-label">${area}・未來 24 小時（每 3 小時）</div><div class="wx-hours">${hours.join('')}</div><div class="tide-label">未來 7 天</div><div class="wx-days">${days}</div>
-      <p class="wx-src">資料：中央氣象署鄉鎮天氣預報與澎湖海面預報（氣象署沒有提供的部分以 Open-Meteo 補充），僅供參考；出海請以港務單位公告為準。<button type="button" class="ev-link-btn" id="wxReload">🔄 重新整理</button></p>`;
+      <p class="wx-src">僅供參考，出海請以港務單位公告為準。<button type="button" class="ev-link-btn" id="wxReload">🔄 重新整理</button></p>`;
   }
   function renderHome() {
     const box = $('homeWx');
