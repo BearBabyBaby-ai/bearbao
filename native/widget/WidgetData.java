@@ -229,7 +229,7 @@ final class WidgetData {
         return AREAS.containsKey(app) ? app : "馬公市";
     }
 
-    /* ---------- 今日風浪（直接向公開氣象資料取得，每小時最多一次） ---------- */
+    /* ---------- 今日風浪（中央氣象署，不足部分用 Open-Meteo；每小時最多一次） ---------- */
     static final class Weather {
         String icon, sky, temp, wind, wave, riskText;
         int rain = -1, riskLevel;
@@ -249,7 +249,7 @@ final class WidgetData {
         try {
             JSONObject o = new JSONObject(raw);
             if (!area(context).equals(o.optString("area")) || !dateKey(today()).equals(o.optString("date"))) return null;
-            return parse(o.getJSONObject("fc"), o.optJSONObject("ma"));
+            return parse(o);
         } catch (Exception e) {
             return null;
         }
@@ -261,7 +261,7 @@ final class WidgetData {
         try {
             JSONObject o = new JSONObject(raw);
             return !area(context).equals(o.optString("area")) || !dateKey(today()).equals(o.optString("date"))
-                || System.currentTimeMillis() - o.optLong("at") > 3600000L;
+                || !o.has("wk") || System.currentTimeMillis() - o.optLong("at") > 3600000L;
         } catch (Exception e) {
             return true;
         }
@@ -283,62 +283,183 @@ final class WidgetData {
         }
     }
 
+    /* 中央氣象署開放資料（與熊寶系統相同）；氣象署沒有的部分用 Open-Meteo 補，氣象署讀不到時整份改用 Open-Meteo */
+    private static final String CWA_KEY = "CWA-23D5D307-392A-48CF-BD7B-DFE501ADCD7A";
+    private static final String CWA_SEA = "https://opendata.cwa.gov.tw/fileapi/v1/opendataapi/F-A0012-001?Authorization=" + CWA_KEY + "&downloadType=WEB&format=JSON";
+
+    private static String enc(String v) throws Exception {
+        return java.net.URLEncoder.encode(v, "UTF-8").replace("+", "%20");
+    }
+
+    private static String cwaWeek(String name) throws Exception {
+        return "https://opendata.cwa.gov.tw/api/v1/rest/datastore/F-D0047-047?Authorization=" + CWA_KEY + "&format=JSON&LocationName=" + enc(name)
+            + "&ElementName=" + enc("天氣現象,最高溫度,最低溫度,12小時降雨機率,風向,風速");
+    }
+
     /** 在背景執行緒呼叫 */
     static void fetchWeather(Context context) {
         String name = area(context);
         double[] a = AREAS.get(name);
+        JSONObject o = new JSONObject();
         try {
-            String fc = get(String.format(Locale.ROOT, "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=Asia%%2FTaipei&wind_speed_unit=ms&forecast_days=1"
-                + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant", a[0], a[1]));
-            String ma = null;
-            try {
-                ma = get(String.format(Locale.ROOT, "https://marine-api.open-meteo.com/v1/marine?latitude=%.2f&longitude=%.2f&timezone=Asia%%2FTaipei&forecast_days=1&daily=wave_height_max", a[2], a[3]));
-            } catch (Exception ignored) {
-            }
-            JSONObject o = new JSONObject();
             o.put("area", name);
             o.put("date", dateKey(today()));
             o.put("at", System.currentTimeMillis());
-            o.put("fc", new JSONObject(fc));
-            if (ma != null) o.put("ma", new JSONObject(ma));
+            try {
+                o.put("wk", new JSONObject(get(cwaWeek(name))));
+            } catch (Exception ignored) {
+            }
+            try {
+                // 海面預報只留「澎湖海面」
+                JSONObject sea = new JSONObject(get(CWA_SEA));
+                JSONObject locs = sea.getJSONObject("cwaopendata").getJSONObject("Dataset").getJSONObject("Locations");
+                JSONArray arr = locs.optJSONArray("Location");
+                if (arr != null) for (int i = 0; i < arr.length(); i++) {
+                    JSONObject l = arr.getJSONObject(i);
+                    if (l.optString("LocationName").contains("澎湖")) { o.put("sea", l); break; }
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                o.put("fc", new JSONObject(get(String.format(Locale.ROOT, "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&timezone=Asia%%2FTaipei&wind_speed_unit=ms&forecast_days=1"
+                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant", a[0], a[1]))));
+            } catch (Exception ignored) {
+            }
+            try {
+                o.put("ma", new JSONObject(get(String.format(Locale.ROOT, "https://marine-api.open-meteo.com/v1/marine?latitude=%.2f&longitude=%.2f&timezone=Asia%%2FTaipei&forecast_days=1&daily=wave_height_max", a[2], a[3]))));
+            } catch (Exception ignored) {
+            }
+            if (!o.has("wk") && !o.has("fc")) return;
             prefs(context).edit().putString("xb.wxCache", o.toString()).apply();
         } catch (Exception ignored) {
         }
     }
 
     private static double first(JSONObject daily, String key) {
-        JSONArray a = daily.optJSONArray(key);
+        JSONArray a = daily == null ? null : daily.optJSONArray(key);
         return a == null || a.isNull(0) ? Double.NaN : a.optDouble(0);
     }
 
-    private static Weather parse(JSONObject fc, JSONObject ma) {
-        JSONObject d = fc.optJSONObject("daily");
-        if (d == null) return null;
+    private static final Pattern NUM = Pattern.compile("\\d+(\\.\\d+)?");
+
+    private static double maxNum(String s) {
+        Matcher m = NUM.matcher(s == null ? "" : s);
+        double v = Double.NaN;
+        while (m.find()) { double x = Double.parseDouble(m.group()); if (Double.isNaN(v) || x > v) v = x; }
+        return v;
+    }
+
+    private static String emoji(String t) {
+        if (t.contains("雷")) return "⛈️";
+        if (t.contains("雪")) return "🌨️";
+        if (t.contains("霧")) return "🌫️";
+        if (t.contains("雨")) return t.contains("晴") || t.contains("短暫") || t.contains("局部") ? "🌦️" : "🌧️";
+        if (t.equals("晴") || t.equals("晴天")) return "☀️";
+        if (t.startsWith("晴")) return "🌤️";
+        if (t.contains("晴")) return "⛅";
+        if (t.contains("陰")) return "☁️";
+        return t.contains("雲") ? "⛅" : "🌤️";
+    }
+
+    private static String omSky(int code) {
+        return code == 0 ? "晴" : code <= 2 ? "晴時多雲" : code == 3 ? "陰" : code <= 48 ? "有霧" : code <= 57 ? "毛毛雨" : code <= 67 ? "雨" : code <= 77 ? "雪" : code <= 82 ? "陣雨" : "雷雨";
+    }
+
+    private static String val(JSONObject t, String k) {
+        JSONArray v = t.optJSONArray("ElementValue");
+        if (v != null && v.length() > 0) return v.optJSONObject(0).optString(k, "");
+        JSONObject one = t.optJSONObject("ElementValue");
+        return one == null ? "" : one.optString(k, "");
+    }
+
+    private static String bftTxt(String v) {
+        double n = maxNum(v);
+        if (Double.isNaN(n)) return "—";
+        return (v.contains(">") || v.contains("≥")) ? (int) n + "級以上" : (int) n + "級";
+    }
+
+    private static Weather parse(JSONObject o) {
+        String today = dateKey(today()).replace('/', '-');
         Weather w = new Weather();
-        int code = (int) first(d, "weather_code");
-        String[] sky = code == 0 ? new String[]{"☀️", "晴"} : code <= 2 ? new String[]{"🌤️", "晴時多雲"} : code == 3 ? new String[]{"☁️", "陰"}
-            : code <= 48 ? new String[]{"🌫️", "有霧"} : code <= 57 ? new String[]{"🌦️", "毛毛雨"} : code <= 67 ? new String[]{"🌧️", "雨"}
-            : code <= 77 ? new String[]{"🌨️", "雪"} : code <= 82 ? new String[]{"🌦️", "陣雨"} : new String[]{"⛈️", "雷雨"};
-        w.icon = sky[0];
-        w.sky = sky[1];
-        w.temp = Math.round(first(d, "temperature_2m_min")) + "～" + Math.round(first(d, "temperature_2m_max")) + "°C";
-        double rain = first(d, "precipitation_probability_max");
-        w.rain = Double.isNaN(rain) ? -1 : (int) Math.round(rain);
-        double ws = first(d, "wind_speed_10m_max"), gs = first(d, "wind_gusts_10m_max"), dir = first(d, "wind_direction_10m_dominant");
-        String dn = DIRS[(int) Math.round((((dir % 360) + 360) % 360) / 45.0) % 8];
-        int wb = bft(ws), gb = bft(gs);
-        w.wind = dn + "風" + wb + "級・陣風" + gb + "級";
-        JSONObject md = ma == null ? null : ma.optJSONObject("daily");
-        double wave = md == null ? Double.NaN : first(md, "wave_height_max");
-        if (Double.isNaN(wave)) {
-            w.wave = "浪高 —";
-        } else {
-            String t = wave < 0.5 ? "平穩" : wave < 1.25 ? "小浪" : wave < 2.5 ? "中浪" : wave < 4 ? "大浪" : "巨浪";
-            w.wave = String.format(Locale.ROOT, "浪高 %.1f m（%s）", wave, t);
+        boolean cwa = false;
+        // 氣象署一週預報：今天白天（只剩晚上就用晚上）的天氣現象、風向、風力；氣溫取今天各段最低～最高
+        JSONObject wk = o.optJSONObject("wk");
+        try {
+            JSONArray locs = wk.getJSONObject("records").getJSONArray("Locations").getJSONObject(0).getJSONArray("Location");
+            JSONArray els = locs.getJSONObject(0).getJSONArray("WeatherElement");
+            Map<String, JSONArray> E = new LinkedHashMap<>();
+            for (int i = 0; i < els.length(); i++) E.put(els.getJSONObject(i).getString("ElementName"), els.getJSONObject(i).getJSONArray("Time"));
+            JSONArray sky = E.get("天氣現象");
+            int main = -1;
+            double hi = Double.NaN, lo = Double.NaN, pop = Double.NaN;
+            for (int i = 0; i < sky.length(); i++) {
+                String st = sky.getJSONObject(i).getString("StartTime");
+                if (!st.startsWith(today)) continue;
+                int hr = Integer.parseInt(st.substring(11, 13));
+                if (main < 0) main = i;
+                else if (hr < 18 && Integer.parseInt(sky.getJSONObject(main).getString("StartTime").substring(11, 13)) >= 18) main = i;
+                double h = maxNum(val(E.get("最高溫度").getJSONObject(i), "MaxTemperature")), l = maxNum(val(E.get("最低溫度").getJSONObject(i), "MinTemperature"));
+                double p = maxNum(val(E.get("12小時降雨機率").getJSONObject(i), "ProbabilityOfPrecipitation"));
+                if (!Double.isNaN(h) && (Double.isNaN(hi) || h > hi)) hi = h;
+                if (!Double.isNaN(l) && (Double.isNaN(lo) || l < lo)) lo = l;
+                if (!Double.isNaN(p) && (Double.isNaN(pop) || p > pop)) pop = p;
+            }
+            if (main >= 0) {
+                String t = val(sky.getJSONObject(main), "Weather");
+                w.icon = emoji(t);
+                w.sky = t;
+                w.temp = (int) lo + "～" + (int) hi + "°C";
+                w.rain = Double.isNaN(pop) ? -1 : (int) pop;
+                w.wind = val(E.get("風向").getJSONObject(main), "WindDirection") + bftTxt(val(E.get("風速").getJSONObject(main), "BeaufortScale"));
+                cwa = true;
+            }
+        } catch (Exception ignored) {
         }
-        double wv = Double.isNaN(wave) ? 0 : wave;
-        if (wb >= 6 || gb >= 8 || wv >= 2.5) { w.riskLevel = 2; w.riskText = "⛔ 風浪大・不宜出海"; }
-        else if (wb >= 5 || gb >= 7 || wv >= 1.25) { w.riskLevel = 1; w.riskText = "⚠️ 注意風浪"; }
+        JSONObject fd = o.optJSONObject("fc") == null ? null : o.optJSONObject("fc").optJSONObject("daily");
+        if (!cwa) {
+            if (fd == null) return null;
+            int code = (int) first(fd, "weather_code");
+            w.sky = omSky(code);
+            w.icon = emoji(w.sky);
+            w.temp = Math.round(first(fd, "temperature_2m_min")) + "～" + Math.round(first(fd, "temperature_2m_max")) + "°C";
+            double dir = first(fd, "wind_direction_10m_dominant");
+            w.wind = DIRS[(int) Math.round((((dir % 360) + 360) % 360) / 45.0) % 8] + "風" + bft(first(fd, "wind_speed_10m_max")) + "級";
+        }
+        if (w.rain < 0 && fd != null) { double r = first(fd, "precipitation_probability_max"); if (!Double.isNaN(r)) w.rain = (int) Math.round(r); }
+        // 浪高、陣風：氣象署澎湖海面今天；沒有就用 Open-Meteo
+        String waveTxt = null, waveType = "";
+        double wave = Double.NaN, gust = Double.NaN;
+        JSONObject sea = o.optJSONObject("sea");
+        if (sea != null) {
+            JSONArray els = sea.optJSONArray("WeatherElement");
+            for (int i = 0; els != null && i < els.length(); i++) {
+                JSONObject e = els.optJSONObject(i);
+                JSONArray ts = e.optJSONArray("Time");
+                for (int j = 0; ts != null && j < ts.length(); j++) {
+                    JSONObject t = ts.optJSONObject(j);
+                    if (!t.optString("StartTime").startsWith(today)) continue;
+                    String n = e.optString("ElementName");
+                    if (n.equals("浪高描述")) { waveTxt = val(t, "WaveHeightDescription"); wave = maxNum(waveTxt); }
+                    else if (n.equals("浪型描述")) waveType = val(t, "WaveTypeDescription");
+                    else if (n.equals("蒲福風級描述")) { Matcher m = Pattern.compile("陣風(\\d+)級").matcher(val(t, "BeaufortScaleDescription")); while (m.find()) gust = Double.isNaN(gust) ? Double.parseDouble(m.group(1)) : Math.max(gust, Double.parseDouble(m.group(1))); }
+                }
+            }
+        }
+        if (Double.isNaN(gust) && fd != null) { double g = first(fd, "wind_gusts_10m_max"); if (!Double.isNaN(g)) gust = bft(g); }
+        if (!Double.isNaN(gust)) w.wind += "・陣風" + (int) gust + "級";
+        if (waveTxt == null) {
+            JSONObject md = o.optJSONObject("ma") == null ? null : o.optJSONObject("ma").optJSONObject("daily");
+            wave = first(md, "wave_height_max");
+            if (!Double.isNaN(wave)) {
+                waveTxt = String.format(Locale.ROOT, "%.1f公尺", wave);
+                waveType = wave < 0.5 ? "平穩" : wave < 1.25 ? "小浪" : wave < 2.5 ? "中浪" : wave < 4 ? "大浪" : "巨浪";
+            }
+        }
+        w.wave = waveTxt == null ? "浪高 尚無資訊" : "浪高 " + waveTxt + (waveType.isEmpty() ? "" : "（" + waveType + "）");
+        // 出海建議依浪高判斷
+        if (Double.isNaN(wave)) { w.riskLevel = 1; w.riskText = "出海建議：尚無資訊"; }
+        else if (wave >= 2.5) { w.riskLevel = 2; w.riskText = "⛔ 風浪大・不宜出海"; }
+        else if (wave >= 1.25) { w.riskLevel = 1; w.riskText = "⚠️ 注意風浪"; }
         else { w.riskLevel = 0; w.riskText = "✅ 適合出海"; }
         return w;
     }

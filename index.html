@@ -6476,9 +6476,31 @@ const Wx = (() => {
   //   天氣、氣溫、降雨機率、風向、風力：澎湖縣鄉鎮天氣預報－未來一週（每 12 小時）
   //   現在、未來 24 小時（每 3 小時）：澎湖縣鄉鎮天氣預報－未來 2 天
   //   浪高、陣風：海面天氣預報「澎湖海面」
+  // 氣象署沒有的部分用 Open-Meteo 補（同一天同一項只用一個來源）：
+  //   第 6～7 天浪高、沒給數字的降雨機率、每 3 小時各鄉市外海的浪高與陣風；氣象署讀不到時整份改用 Open-Meteo
   const KEY = 'CWA-23D5D307-392A-48CF-BD7B-DFE501ADCD7A';
   const API = 'https://opendata.cwa.gov.tw/api/v1/rest/datastore/';
-  const AREAS = ['馬公市', '湖西鄉', '白沙鄉', '西嶼鄉', '望安鄉', '七美鄉'];
+  const GEO = {
+    '馬公市': { lat: 23.5667, lng: 119.5833, sea: [23.55, 119.54] },
+    '湖西鄉': { lat: 23.5833, lng: 119.6600, sea: [23.60, 119.72] },
+    '白沙鄉': { lat: 23.6660, lng: 119.5860, sea: [23.72, 119.60] },
+    '西嶼鄉': { lat: 23.6020, lng: 119.5078, sea: [23.60, 119.45] },
+    '望安鄉': { lat: 23.3697, lng: 119.5039, sea: [23.37, 119.46] },
+    '七美鄉': { lat: 23.2017, lng: 119.4290, sea: [23.20, 119.39] }
+  };
+  const AREAS = Object.keys(GEO);
+  const OM_FC = a => `https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lng}&timezone=Asia%2FTaipei&wind_speed_unit=ms&forecast_days=7`
+    + '&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant';
+  const OM_MA = a => `https://marine-api.open-meteo.com/v1/marine?latitude=${a.sea[0]}&longitude=${a.sea[1]}&timezone=Asia%2FTaipei&forecast_days=7&hourly=wave_height&daily=wave_height_max`;
+  const LIM = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
+  const msBft = ms => { const i = LIM.findIndex(x => ms < x); return i < 0 ? 12 : i; };
+  const DIRS = ['北', '東北', '東', '東南', '南', '西南', '西', '西北'];
+  const degDir = d => `${DIRS[Math.round((((Number(d) || 0) % 360) + 360) % 360 / 45) % 8]}風`;
+  const omSky = c => c === 0 ? '晴' : c <= 2 ? '晴時多雲' : c === 3 ? '陰' : c <= 48 ? '有霧' : c <= 57 ? '毛毛雨' : c <= 67 ? '雨' : c <= 77 ? '雪' : c <= 82 ? '陣雨' : '雷雨';
+  const waveClass = h => h < 0.5 ? '平穩' : h < 1.25 ? '小浪' : h < 2.5 ? '中浪' : h < 4 ? '大浪' : '巨浪';
+  const omWave = h => h == null || isNaN(h) ? null : { txt: `${Number(h).toFixed(1)}公尺`, max: Number(h), type: waveClass(Number(h)) };
+  const omKey = t => String(t).slice(0, 10).replace(/-/g, '/');
   let area = AREAS.includes(lsGet('xb.wxArea')) ? lsGet('xb.wxArea') : '馬公市';
   const url = (id, name, els) => `${API}${id}?Authorization=${KEY}&format=JSON&LocationName=${encodeURIComponent(name)}&ElementName=${encodeURIComponent(els.join(','))}`;
   const WEEK_URL = name => url('F-D0047-047', name, ['天氣現象', '最高溫度', '最低溫度', '12小時降雨機率', '風向', '風速']);
@@ -6571,13 +6593,50 @@ const Wx = (() => {
     try { const v = seaDays(await tryJSON(SEA_URL, times)); seaCache = { t: Date.now(), v }; return v; }
     catch (_) { return seaCache ? seaCache.v : new Map(); }
   }
+  // Open-Meteo：補氣象署沒有的部分
+  function omFill(days, hours, OF, OM) {
+    const fD = OF && OF.daily, mD = OM && OM.daily, fH = OF && OF.hourly, mH = OM && OM.hourly;
+    days.forEach(d => {
+      const i = fD ? fD.time.findIndex(t => omKey(t) === d.key) : -1, j = mD ? mD.time.findIndex(t => omKey(t) === d.key) : -1;
+      if (d.pop == null && i >= 0 && fD.precipitation_probability_max[i] != null) d.pop = fD.precipitation_probability_max[i];
+      if (!d.wave && j >= 0) d.wave = omWave(mD.wave_height_max[j]);
+      if (d.gust == null && i >= 0 && fD.wind_gusts_10m_max[i] != null) d.gust = msBft(fD.wind_gusts_10m_max[i]);
+    });
+    // 每 3 小時：浪高、陣風用該鄉市外海的每小時數值
+    hours.forEach(h => {
+      const t = h.iso.slice(0, 13) + ':00';
+      const j = mH ? mH.time.indexOf(t) : -1, i = fH ? fH.time.indexOf(t) : -1;
+      if (j >= 0 && mH.wave_height[j] != null) h.wave = omWave(mH.wave_height[j]);
+      if (i >= 0 && fH.wind_gusts_10m[i] != null) h.gust = msBft(fH.wind_gusts_10m[i]);
+    });
+  }
+  // 氣象署讀不到時，整份改用 Open-Meteo
+  function omDays(OF, OM) {
+    const D = OF.daily, M = OM && OM.daily, days = new Map();
+    D.time.forEach((t, i) => {
+      const k = omKey(t), j = M ? M.time.indexOf(t) : -1;
+      days.set(k, { key: k, wx: omSky(D.weather_code[i]), hi: Math.round(D.temperature_2m_max[i]), lo: Math.round(D.temperature_2m_min[i]), pop: D.precipitation_probability_max[i] ?? null, dir: degDir(D.wind_direction_10m_dominant[i]), bft: String(msBft(D.wind_speed_10m_max[i])), gust: msBft(D.wind_gusts_10m_max[i]), wave: j >= 0 ? omWave(M.wave_height_max[j]) : null });
+    });
+    return days;
+  }
+  function omHours(OF) {
+    const H = OF.hourly, out = [];
+    for (let i = 0; i < H.time.length; i += 3) {
+      const iso = H.time[i].slice(0, 16), end = H.time[i + 3] ? H.time[i + 3].slice(0, 16) : '9999';
+      out.push({ iso, end, key: omKey(iso), time: iso.slice(11, 16), wx: omSky(H.weather_code[i]), temp: Math.round(H.temperature_2m[i]), dir: degDir(H.wind_direction_10m[i]), bft: String(msBft(H.wind_speed_10m[i])), pop: H.precipitation_probability[i] ?? null, gust: null, wave: null });
+    }
+    return out;
+  }
   async function fetchArea(name, times) {
-    const [w, h, sea] = await Promise.allSettled([tryJSON(WEEK_URL(name), times), tryJSON(HOUR_URL(name), times), seaData(times)]);
-    if (w.status !== 'fulfilled') throw w.reason;
-    const S = sea.status === 'fulfilled' ? sea.value : new Map();
-    const days = weekDays(w.value, S);
-    let hours = [];
+    const g = GEO[name];
+    const [w, h, sea, of, om] = await Promise.allSettled([tryJSON(WEEK_URL(name), times), tryJSON(HOUR_URL(name), times), seaData(times), tryJSON(OM_FC(g), times), tryJSON(OM_MA(g), times)]);
+    const S = sea.status === 'fulfilled' ? sea.value : new Map(), OF = of.status === 'fulfilled' ? of.value : null, OM = om.status === 'fulfilled' ? om.value : null;
+    let days = null, hours = [];
+    try { if (w.status === 'fulfilled') days = weekDays(w.value, S); } catch (_) { days = null; }
+    if (!days) { if (!OF) throw (w.reason || new Error('沒有資料')); days = omDays(OF, OM); }
     try { if (h.status === 'fulfilled') hours = hourList(h.value, S); } catch (_) { hours = []; }
+    if (!hours.length && OF) hours = omHours(OF);
+    omFill(days, hours, OF, OM);
     return { name, days, hours, sea: S };
   }
   // 現在：涵蓋現在的 3 小時那一格；氣溫用現在這個小時
@@ -6587,7 +6646,6 @@ const Wx = (() => {
     const i = Math.max(0, list.findIndex(x => x.iso <= iso && iso < x.end));
     return { i, ...list[i] };
   }
-  const waveOfToday = d => { const s = d.sea.get(todayKey()); return s && s.wave ? s.wave : null; };
   let req = 0;
   function load(force = false) {
     if (loading && !force) return loading;
@@ -6603,8 +6661,8 @@ const Wx = (() => {
   const picker = () => `<div class="tide-toolbar"><label for="wxArea">區域（鄉市）</label><select id="wxArea">${AREAS.map(k => `<option${k === area ? ' selected' : ''}>${k}</option>`).join('')}</select></div>`;
   function nowHtml() {
     const n = nowOf(cur), today = cur.days.get(todayKey()) || [...cur.days.values()][0];
-    const base = n || today, wave = waveOfToday(cur), [rc, rt] = risk(wave), [ic, tx] = ICON(base.wx);
-    const temp = n ? n.temp : today.hi, gust = (cur.sea.get(todayKey()) || {}).gust;
+    const base = n || today, wave = today ? today.wave : null, [rc, rt] = risk(wave), [ic, tx] = ICON(base.wx);
+    const temp = n ? n.temp : today.hi, gust = today ? today.gust : null;
     return `<div class="wx-now"><span class="ic">${ic}</span><b>現在 ${temp ?? '—'}°C・${esc(tx)}<span class="wx-badge ${rc}">${rt}</span></b>
       <p>💨 ${esc(dirOf(base.dir))} ${bftTxt(base.bft)}${gust != null ? `・陣風 ${gust} 級` : ''}　🌊 浪高 ${esc(waveShow(wave, 'm'))}　☔ 降雨 ${popTxt(base.pop)}</p></div>`;
   }
@@ -6622,7 +6680,7 @@ const Wx = (() => {
         <span class="wx-badge ${rc}">${rt}</span></div>`;
     }).join('');
     box.innerHTML = `${picker()}${nowHtml()}<div class="tide-label">${area}・未來 24 小時（每 3 小時）</div><div class="wx-hours">${hours.join('')}</div><div class="tide-label">未來 7 天</div><div class="wx-days">${days}</div>
-      <p class="wx-src">資料：中央氣象署鄉鎮天氣預報與澎湖海面預報，僅供參考；出海請以港務單位公告為準。<button type="button" class="ev-link-btn" id="wxReload">🔄 重新整理</button></p>`;
+      <p class="wx-src">資料：中央氣象署鄉鎮天氣預報與澎湖海面預報（氣象署沒有提供的部分以 Open-Meteo 補充），僅供參考；出海請以港務單位公告為準。<button type="button" class="ev-link-btn" id="wxReload">🔄 重新整理</button></p>`;
   }
   function renderHome() {
     const box = $('homeWx');
