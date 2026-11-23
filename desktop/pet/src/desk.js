@@ -49,35 +49,26 @@
   const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#000000';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
-  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）、體感溫度冷熱分色
-  const RAIN_BG = ['#ffffff', '#eef6ff', '#ddecff', '#c8e0ff', '#b0d2ff', '#96c2fb', '#7aaff3', '#5e9be8', '#4585da', '#2f6fca'];
-  // 每 5 度一色：0 度以下、0～5、5～10、10～15、15～20 越冷紫藍越深；20～25 淡黃；25 以上橘紅越熱越深
-  const FEEL_BG = [[-Infinity, '#6d4fd8'], [0, '#8166e6'], [5, '#9a84f0'], [10, '#b8a6f8'], [15, '#d3c8fc'], [20, '#fdf3c4'], [25, '#fdc98f'], [30, '#fb9f5f'], [35, '#f47a7a']];
-  const TEMP_BG = [[-Infinity, '#c9d8ff'], [0, '#d9ecff'], [10, '#d6f3e2'], [20, '#fff0bd'], [30, '#ffd0a8'], [40, '#ffb0b0']];
+  // 天氣日期區段：
+  //   降雨機率 0～100% 每 10% 一色（100% 另一色），越高藍色越深，0～9% 也有淡藍
+  //   氣溫、體感溫度同一套：-5～45 度每 5 度一色（-5 以下、45 以上各一色），看最低和最高的平均
+  //     越冷紫藍越深、20～25 淡黃、越熱橘紅越深；和降雨機率的藍色分開
+  const RAIN_BG = ['#eef6ff', '#dcecff', '#cae2ff', '#b6d6ff', '#a0c8fd', '#89b9f9', '#71a7f1', '#5a94e6', '#4381d8', '#2e6cc8', '#1d55a8'];
+  const TEMP_BG = [[-Infinity, '#3f259e'], [-5, '#5a3fc4'], [0, '#7458da'], [5, '#9078e8'], [10, '#ad9cf5'], [15, '#cfc4fb'], [20, '#fdf3c4'], [25, '#fdd89a'], [30, '#fcb871'], [35, '#f8924f'], [40, '#ec5a48'], [45, '#c21f1f']];
   function wxTint(label, v) {
     if (label === '降雨機率') {
       const n = parseInt(v, 10);
       if (Number.isNaN(n)) return null;
-      const k = Math.max(0, Math.min(9, Math.floor(n / 10)));
+      const k = Math.max(0, Math.min(10, Math.floor(n / 10)));
       return [RAIN_BG[k], k >= 7 ? '#ffffff' : INK];
     }
-    // 體感溫度：一眼看出冷或熱（看最低和最高的平均）
-    //   偏冷用紫藍（越冷越深），舒適用淡黃，偏熱用橘紅（越熱越深）；和降雨機率的藍色分開
-    if (label === '體感溫度') {
+    if (label === '氣溫' || label === '體感溫度') {
       const ns = String(v).match(/-?\d+/g);
       if (!ns) return null;
-      const t = ns.map(Number).reduce((a, b) => a + b, 0) / ns.length;
-      let bg = FEEL_BG[0][1];
-      for (const [lo, color] of FEEL_BG) if (t >= lo) bg = color;
-      return [bg, t < 0 ? '#ffffff' : INK];
-    }
-    if (label === '氣溫') {
-      const ns = String(v).match(/-?\d+/g);
-      if (!ns) return null;
-      const t = Math.max(...ns.map(Number));
+      const t = ns.map(Number).reduce((x, y) => x + y, 0) / ns.length;
       let bg = TEMP_BG[0][1];
       for (const [lo, color] of TEMP_BG) if (t >= lo) bg = color;
-      return [bg, INK];
+      return [bg, t < 5 || t >= 40 ? '#ffffff' : INK];
     }
     return null;
   }
