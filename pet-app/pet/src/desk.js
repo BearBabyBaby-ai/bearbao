@@ -52,12 +52,12 @@
   // 天氣日期區段：
   //   降雨機率 0～100% 每 10% 一色（100% 另一色），越高藍色越深，0～9% 也有淡藍
   //   氣溫、體感溫度同一套：-5～45 度每 5 度一色（-5 以下、45 以上各一色）
-  //     格子左半依最低溫、右半依最高溫上色（只有一個溫度就整格一色）
+  //     格子由左（最低溫的顏色）漸變到右（最高溫的顏色）；只有一個溫度就整格一色
   //     越冷紫藍越深、20～25 淡黃、越熱橘紅越深；和降雨機率的藍色分開
   const RAIN_BG = ['#eef6ff', '#dcecff', '#cae2ff', '#b6d6ff', '#a0c8fd', '#89b9f9', '#71a7f1', '#5a94e6', '#4381d8', '#2e6cc8', '#1d55a8'];
   const TEMP_BG = [[-Infinity, '#3f259e'], [-5, '#5a3fc4'], [0, '#7458da'], [5, '#9078e8'], [10, '#ad9cf5'], [15, '#cfc4fb'], [20, '#fdf3c4'], [25, '#fdd89a'], [30, '#fcb871'], [35, '#f8924f'], [40, '#ec5a48'], [45, '#c21f1f']];
-  // 「顏色A|顏色B」＝左半A、右半B
-  const cssBg = bg => String(bg).includes('|') ? `linear-gradient(90deg, ${bg.split('|')[0]} 50%, ${bg.split('|')[1]} 50%)` : bg;
+  // 「顏色A|顏色B」＝由左A漸變到右B
+  const cssBg = bg => String(bg).includes('|') ? `linear-gradient(90deg, ${bg.split('|')[0]}, ${bg.split('|')[1]})` : bg;
   function wxTint(label, v) {
     if (label === '降雨機率') {
       const n = parseInt(v, 10);
@@ -220,7 +220,7 @@
     ctx.fillText(title, M, M + TITLE / 2);
     let y = M + TITLE + 8 * S;
     const cell = (text, x, w, h, bg, fg, bold) => {
-      if (String(bg).includes('|')) { const [l, r] = bg.split('|'); ctx.fillStyle = l; ctx.fillRect(x, y, w / 2, h); ctx.fillStyle = r; ctx.fillRect(x + w / 2, y, w - w / 2, h); }
+      if (String(bg).includes('|')) { const [l, r] = bg.split('|'), g = ctx.createLinearGradient(x, 0, x + w, 0); g.addColorStop(0, l); g.addColorStop(1, r); ctx.fillStyle = g; ctx.fillRect(x, y, w, h); }
       else { ctx.fillStyle = bg; ctx.fillRect(x, y, w, h); }
       ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, h - S);
       const ls = lines(text);
