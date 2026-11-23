@@ -6489,8 +6489,8 @@ const Wx = (() => {
   };
   const AREAS = Object.keys(GEO);
   const OM_FC = a => `https://api.open-meteo.com/v1/forecast?latitude=${a.lat}&longitude=${a.lng}&timezone=Asia%2FTaipei&wind_speed_unit=ms&forecast_days=7`
-    + '&hourly=temperature_2m,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m'
-    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant';
+    + '&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,wind_speed_10m,wind_gusts_10m,wind_direction_10m'
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,precipitation_probability_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant';
   const OM_MA = a => `https://marine-api.open-meteo.com/v1/marine?latitude=${a.sea[0]}&longitude=${a.sea[1]}&timezone=Asia%2FTaipei&forecast_days=7&hourly=wave_height&daily=wave_height_max`;
   const LIM = [0.3, 1.6, 3.4, 5.5, 8.0, 10.8, 13.9, 17.2, 20.8, 24.5, 28.5, 32.7];
   const msBft = ms => { const i = LIM.findIndex(x => ms < x); return i < 0 ? 12 : i; };
@@ -6502,8 +6502,8 @@ const Wx = (() => {
   const omKey = t => String(t).slice(0, 10).replace(/-/g, '/');
   let area = AREAS.includes(lsGet('xb.wxArea')) ? lsGet('xb.wxArea') : '馬公市';
   const url = (id, name, els) => `${API}${id}?Authorization=${KEY}&format=JSON&LocationName=${encodeURIComponent(name)}&ElementName=${encodeURIComponent(els.join(','))}`;
-  const WEEK_URL = name => url('F-D0047-047', name, ['天氣現象', '最高溫度', '最低溫度', '12小時降雨機率', '風向', '風速']);
-  const HOUR_URL = name => url('F-D0047-045', name, ['天氣現象', '溫度', '3小時降雨機率', '風向', '風速']);
+  const WEEK_URL = name => url('F-D0047-047', name, ['天氣現象', '最高溫度', '最低溫度', '最高體感溫度', '最低體感溫度', '12小時降雨機率', '風向', '風速']);
+  const HOUR_URL = name => url('F-D0047-045', name, ['天氣現象', '溫度', '體感溫度', '3小時降雨機率', '風向', '風速']);
   const SEA_URL = `https://opendata.cwa.gov.tw/fileapi/v1/opendataapi/F-A0012-001?Authorization=${KEY}&downloadType=WEB&format=JSON`;
   let cur = null, loading = null, error = '';
   // 圖示只依氣象署的天氣現象文字挑，文字照氣象署原文
@@ -6515,6 +6515,8 @@ const Wx = (() => {
   const bft = v => num(v) ?? 0;
   const bftShort = v => { const n = num(v); return n == null ? '—' : /[>≥]/.test(String(v)) ? `≥${n} 級` : `${n} 級`; };
   const popTxt = v => v == null ? '—' : `${v}%`;
+  // 體感溫度：區間（最低～最高）
+  const feelTxt = d => d && d.alo != null && d.ahi != null ? (d.alo === d.ahi ? `${d.ahi}°C` : `${d.alo}～${d.ahi}°C`) : '';
   const dirOf = v => String(v || '—');
   // 浪高：氣象署「2至3公尺」→ 上限 3 公尺；出海建議依浪高判斷
   const waveMax = txt => { const n = String(txt || '').match(/\d+(\.\d+)?/g); return n ? Math.max(...n.map(Number)) : null; };
@@ -6555,24 +6557,26 @@ const Wx = (() => {
       days.get(k).parts.push({
         night, wx: val(t, 'Weather'),
         hi: num(val(E['最高溫度'] && E['最高溫度'][i], 'MaxTemperature')), lo: num(val(E['最低溫度'] && E['最低溫度'][i], 'MinTemperature')),
+        ahi: num(val(E['最高體感溫度'] && E['最高體感溫度'][i], 'MaxApparentTemperature')), alo: num(val(E['最低體感溫度'] && E['最低體感溫度'][i], 'MinApparentTemperature')),
         pop: num(val(E['12小時降雨機率'] && E['12小時降雨機率'][i], 'ProbabilityOfPrecipitation')),
         dir: val(E['風向'] && E['風向'][i], 'WindDirection'), bft: val(E['風速'] && E['風速'][i], 'BeaufortScale')
       });
     });
     days.forEach(d => {
       const main = d.parts.find(p => !p.night) || d.parts[0], his = d.parts.map(p => p.hi).filter(v => v != null), los = d.parts.map(p => p.lo).filter(v => v != null), pops = d.parts.map(p => p.pop).filter(v => v != null);
-      const s = sea.get(d.key) || {};
+      const s = sea.get(d.key) || {}, ahis = d.parts.map(p => p.ahi).filter(v => v != null), alos = d.parts.map(p => p.alo).filter(v => v != null);
+      Object.assign(d, { ahi: ahis.length ? Math.max(...ahis) : null, alo: alos.length ? Math.min(...alos) : null });
       Object.assign(d, { wx: main.wx, hi: his.length ? Math.max(...his) : null, lo: los.length ? Math.min(...los) : null, pop: pops.length ? Math.max(...pops) : null, dir: main.dir, bft: main.bft, gust: s.gust ?? null, wave: s.wave || null });
     });
     return days;
   }
   // 未來 2 天：每 3 小時一格；溫度每小時
   function hourList(j, sea) {
-    const E = elems(j), temp = E['溫度'] || [], wind = E['風速'] || [], dirs = E['風向'] || [], pops = E['3小時降雨機率'] || [];
+    const E = elems(j), temp = E['溫度'] || [], feel = E['體感溫度'] || [], wind = E['風速'] || [], dirs = E['風向'] || [], pops = E['3小時降雨機率'] || [];
     const at = (arr, iso) => { let hit = null; arr.forEach(t => { if ((t.DataTime || t.StartTime) <= iso) hit = t; }); return hit || arr[0]; };
     return (E['天氣現象'] || []).map(t => {
       const iso = t.StartTime.slice(0, 16), k = keyOf(iso), s = sea.get(k) || {}, p = pops.find(x => x.StartTime === t.StartTime);
-      return { iso, end: t.EndTime.slice(0, 16), key: k, time: iso.slice(11, 16), wx: val(t, 'Weather'), temp: num(val(at(temp, iso), 'Temperature')), dir: val(at(dirs, iso), 'WindDirection'), bft: val(at(wind, iso), 'BeaufortScale'), pop: p ? num(val(p, 'ProbabilityOfPrecipitation')) : null, gust: s.gust ?? null, wave: s.wave || null };
+      return { iso, end: t.EndTime.slice(0, 16), key: k, time: iso.slice(11, 16), wx: val(t, 'Weather'), temp: num(val(at(temp, iso), 'Temperature')), feel: feel.length ? num(val(at(feel, iso), 'ApparentTemperature')) : null, dir: val(at(dirs, iso), 'WindDirection'), bft: val(at(wind, iso), 'BeaufortScale'), pop: p ? num(val(p, 'ProbabilityOfPrecipitation')) : null, gust: s.gust ?? null, wave: s.wave || null };
     });
   }
   // 讀不到就再試（每次最多等 8 秒，共 3 次）
@@ -6598,6 +6602,7 @@ const Wx = (() => {
     days.forEach(d => {
       const i = fD ? fD.time.findIndex(t => omKey(t) === d.key) : -1, j = mD ? mD.time.findIndex(t => omKey(t) === d.key) : -1;
       if (d.pop == null && i >= 0 && fD.precipitation_probability_max[i] != null) d.pop = fD.precipitation_probability_max[i];
+      if (d.ahi == null && i >= 0 && fD.apparent_temperature_max && fD.apparent_temperature_max[i] != null) { d.ahi = Math.round(fD.apparent_temperature_max[i]); d.alo = Math.round(fD.apparent_temperature_min[i]); }
       if (!d.wave && j >= 0) d.wave = omWave(mD.wave_height_max[j]);
       if (d.gust == null && i >= 0 && fD.wind_gusts_10m_max[i] != null) d.gust = msBft(fD.wind_gusts_10m_max[i]);
     });
@@ -6607,6 +6612,7 @@ const Wx = (() => {
       const j = mH ? mH.time.indexOf(t) : -1, i = fH ? fH.time.indexOf(t) : -1;
       if (j >= 0 && mH.wave_height[j] != null) h.wave = omWave(mH.wave_height[j]);
       if (i >= 0 && fH.wind_gusts_10m[i] != null) h.gust = msBft(fH.wind_gusts_10m[i]);
+      if (h.feel == null && i >= 0 && fH.apparent_temperature && fH.apparent_temperature[i] != null) h.feel = Math.round(fH.apparent_temperature[i]);
     });
   }
   // 氣象署讀不到時，整份改用 Open-Meteo
@@ -6662,7 +6668,7 @@ const Wx = (() => {
     const n = nowOf(cur), today = cur.days.get(todayKey()) || [...cur.days.values()][0];
     const base = n || today, wave = today ? today.wave : null, [rc, rt] = risk(wave), [ic, tx] = ICON(base.wx);
     const temp = n ? n.temp : today.hi, gust = today ? today.gust : null;
-    return `<div class="wx-now"><span class="ic">${ic}</span><b>現在 ${temp ?? '—'}°C・${esc(tx)}<span class="wx-badge ${rc}">${rt}</span></b>
+    return `<div class="wx-now"><span class="ic">${ic}</span><b>現在 ${temp ?? '—'}°C${n && n.feel != null ? `（體感 ${n.feel}°C）` : ''}・${esc(tx)}<span class="wx-badge ${rc}">${rt}</span></b>
       <p>💨 ${esc(dirOf(base.dir))} ${bftTxt(base.bft)}${gust != null ? `・陣風 ${gust} 級` : ''}　🌊 浪高 ${esc(waveShow(wave, 'm'))}　☔ 降雨 ${popTxt(base.pop)}</p></div>`;
   }
   function render() {
@@ -6675,7 +6681,7 @@ const Wx = (() => {
     const days = keys.map((k, i) => {
       const d = cur.days.get(k), [ic, tx] = ICON(d.wx), [rc, rt] = risk(d.wave);
       return `<div class="wx-day"><span class="d"><b>${k === t ? '今天' : k === addDays(t, 1) ? '明天' : `${Number(k.slice(5, 7))}/${Number(k.slice(8))}`}</b><small>星期${WEEK[weekdayOf(k)]}</small></span><span class="ic">${ic}</span>
-        <span class="m">${esc(tx)}・${d.lo ?? '—'}～${d.hi ?? '—'}°C・☔ ${popTxt(d.pop)}<br>💨 ${esc(dirOf(d.dir))} ${bftTxt(d.bft)}${d.gust != null ? `・陣風 ${d.gust} 級` : ''}　🌊 浪高 ${esc(waveShow(d.wave))}</span>
+        <span class="m">${esc(tx)}・${d.lo ?? '—'}～${d.hi ?? '—'}°C・☔ ${popTxt(d.pop)}${feelTxt(d) ? `・體感 ${feelTxt(d)}` : ''}<br>💨 ${esc(dirOf(d.dir))} ${bftTxt(d.bft)}${d.gust != null ? `・陣風 ${d.gust} 級` : ''}　🌊 浪高 ${esc(waveShow(d.wave))}</span>
         <span class="wx-badge ${rc}">${rt}</span></div>`;
     }).join('');
     box.innerHTML = `${picker()}${nowHtml()}<div class="tide-label">${area}・未來 24 小時（每 3 小時）</div><div class="wx-hours">${hours.join('')}</div><div class="tide-label">未來 7 天</div><div class="wx-days">${days}</div>
@@ -6704,7 +6710,7 @@ const Wx = (() => {
       return { error: e && e.name === 'AbortError' ? '連線逾時' : /HTTP (\d+)/.test(m) ? `天氣網站回應 ${m.match(/HTTP (\d+)/)[1]}` : '連不上天氣網站' };
     }
   }
-  return { load, render, renderHome, data, nowOf, ICON, bft, bftTxt, dirOf, risk, waveTxt, waveShow, areas: AREAS, get area() { return area; }, get loaded() { return Boolean(cur); } };
+  return { load, render, renderHome, data, nowOf, feelTxt, ICON, bft, bftTxt, dirOf, risk, waveTxt, waveShow, areas: AREAS, get area() { return area; }, get loaded() { return Boolean(cur); } };
 })();
 Wx.load();
 
@@ -7604,14 +7610,15 @@ if (window.bearDesktop) {
       const rc = Wx.risk(d.wave)[0];
       const lo = d.lo, hi = d.hi, wb = Wx.bft(d.bft);
       let now = '';
-      if (key === t) { const n = Wx.nowOf(w); if (n && n.temp != null) now = `，現在 ${n.temp}°C`; }
+      if (key === t) { const n = Wx.nowOf(w); if (n && n.temp != null) now = `，現在 ${n.temp}°C${n.feel != null ? `（體感 ${n.feel}°C）` : ''}`; }
       // 一行一件事，順便提醒要帶什麼、要注意什麼
       const head = `${ic} ${when}${name}${tx}${now}`;
       const rain = pop == null ? '☔ 降雨機率 —' : pop >= 60 ? `☔ 降雨機率 ${pop}%，出門記得帶傘喔！` : (pop >= 30 || /雨/.test(tx)) ? `🌂 降雨機率 ${pop}%，可能會飄雨，帶把傘比較安心` : `🌤️ 降雨機率 ${pop}%，應該不會下雨`;
       const temp = lo == null || hi == null ? '🌡️ 氣溫 —' : `🌡️ ${lo === hi ? `${hi}°C` : `${lo}～${hi}°C`}，${hi >= 31 ? '很熱，記得防曬、多喝水' : lo <= 15 ? '很冷，外套要穿暖' : lo <= 20 ? '早晚偏涼，帶件外套' : '溫度舒服'}`;
       const wind = `💨 ${Wx.dirOf(d.dir)} ${Wx.bftTxt(d.bft)}${d.gust != null ? `（陣風 ${d.gust} 級）` : ''}，${wb >= 6 || (d.gust ?? 0) >= 8 ? '風很大，騎車要小心' : wb >= 4 ? '風有點大' : '風不大'}`;
       const sea = d.wave ? `🌊 浪高 ${Wx.waveShow(d.wave)}，${rc === 'bad' ? '風浪大，不建議出海喔！' : rc === 'warn' ? '出海要注意風浪' : '海面平穩，適合出海'}` : '🌊 浪高：尚無資訊';
-      const lines = /下雨|降雨/.test(s) ? [head, rain, temp, wind, sea] : /風浪|風大|浪大|颳風|刮風/.test(s) ? [head, wind, sea, rain, temp] : [head, temp, rain, wind, sea];
+      const feel = `🥵 體感溫度 ${Wx.feelTxt(d) || '—'}`;
+      const lines = /下雨|降雨/.test(s) ? [head, rain, temp, feel, wind, sea] : /風浪|風大|浪大|颳風|刮風/.test(s) ? [head, feel, wind, sea, rain, temp] : [head, temp, rain, feel, wind, sea];
       return lines.join('\n');
     }
 
@@ -7628,6 +7635,7 @@ if (window.bearDesktop) {
         ['天氣', ...col(d => Wx.ICON(d.wx).join('\n'))],
         ['氣溫', ...col(d => d.lo == null || d.hi == null ? '—' : d.lo === d.hi ? `${d.hi}°C` : `${d.lo}～${d.hi}°C`)],
         ['降雨機率', ...col(d => d.pop == null ? '—' : `${d.pop}%`)],
+        ['體感溫度', ...col(d => Wx.feelTxt(d) || '—')],
         ['風力', ...col(d => `${Wx.dirOf(d.dir)} ${Wx.bftTxt(d.bft)}${d.gust != null ? `\n陣風 ${d.gust} 級` : ''}`)],
         ['浪高', ...col(d => d.wave ? `${d.wave.txt}\n${Wx.waveTxt(d.wave)}` : '尚無資訊')],
         ['出海', ...col(d => { const c = Wx.risk(d.wave)[0]; return c === 'na' ? '尚無資訊' : c === 'bad' ? '不宜出海' : c === 'warn' ? '注意風浪' : '適合出海'; })]

@@ -49,7 +49,7 @@
   const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#000000';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
-  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）
+  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫與體感溫度每 10 度一種底色（看當天最高溫）
   const RAIN_BG = ['#ffffff', '#eef6ff', '#ddecff', '#c8e0ff', '#b0d2ff', '#96c2fb', '#7aaff3', '#5e9be8', '#4585da', '#2f6fca'];
   const TEMP_BG = [[-Infinity, '#c9d8ff'], [0, '#d9ecff'], [10, '#d6f3e2'], [20, '#fff0bd'], [30, '#ffd0a8'], [40, '#ffb0b0']];
   function wxTint(label, v) {
@@ -59,7 +59,8 @@
       const k = Math.max(0, Math.min(9, Math.floor(n / 10)));
       return [RAIN_BG[k], k >= 7 ? '#ffffff' : INK];
     }
-    if (label === '氣溫') {
+    // 體感溫度和氣溫一樣：每 10 度一種底色（看最高）
+    if (label === '氣溫' || label === '體感溫度') {
       const ns = String(v).match(/-?\d+/g);
       if (!ns) return null;
       const t = Math.max(...ns.map(Number));
