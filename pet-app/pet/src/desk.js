@@ -51,10 +51,13 @@
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
   // 天氣日期區段：
   //   降雨機率 0～100% 每 10% 一色（100% 另一色），越高藍色越深，0～9% 也有淡藍
-  //   氣溫、體感溫度同一套：-5～45 度每 5 度一色（-5 以下、45 以上各一色），看最低和最高的平均
+  //   氣溫、體感溫度同一套：-5～45 度每 5 度一色（-5 以下、45 以上各一色）
+  //     格子左半依最低溫、右半依最高溫上色（只有一個溫度就整格一色）
   //     越冷紫藍越深、20～25 淡黃、越熱橘紅越深；和降雨機率的藍色分開
   const RAIN_BG = ['#eef6ff', '#dcecff', '#cae2ff', '#b6d6ff', '#a0c8fd', '#89b9f9', '#71a7f1', '#5a94e6', '#4381d8', '#2e6cc8', '#1d55a8'];
   const TEMP_BG = [[-Infinity, '#3f259e'], [-5, '#5a3fc4'], [0, '#7458da'], [5, '#9078e8'], [10, '#ad9cf5'], [15, '#cfc4fb'], [20, '#fdf3c4'], [25, '#fdd89a'], [30, '#fcb871'], [35, '#f8924f'], [40, '#ec5a48'], [45, '#c21f1f']];
+  // 「顏色A|顏色B」＝左半A、右半B
+  const cssBg = bg => String(bg).includes('|') ? `linear-gradient(90deg, ${bg.split('|')[0]} 50%, ${bg.split('|')[1]} 50%)` : bg;
   function wxTint(label, v) {
     if (label === '降雨機率') {
       const n = parseInt(v, 10);
@@ -65,10 +68,12 @@
     if (label === '氣溫' || label === '體感溫度') {
       const ns = String(v).match(/-?\d+/g);
       if (!ns) return null;
-      const t = ns.map(Number).reduce((x, y) => x + y, 0) / ns.length;
-      let bg = TEMP_BG[0][1];
-      for (const [lo, color] of TEMP_BG) if (t >= lo) bg = color;
-      return [bg, t < 5 || t >= 40 ? '#ffffff' : INK];
+      const colorOf = t => { let bg = TEMP_BG[0][1]; for (const [lo, color] of TEMP_BG) if (t >= lo) bg = color; return bg; };
+      const dark = t => t < 5 || t >= 40;
+      const lo = Math.min(...ns.map(Number)), hi = Math.max(...ns.map(Number));
+      const a = colorOf(lo), z = colorOf(hi);
+      // 兩邊都是深色才用白字
+      return [a === z ? a : `${a}|${z}`, dark(lo) && dark(hi) ? '#ffffff' : INK];
     }
     return null;
   }
@@ -140,7 +145,7 @@
             c.appendChild(line);
           });
         } else c.textContent = v;
-        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b, ri); c.style.background = bg; c.style.color = fg; }
+        if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b, ri); c.style.background = cssBg(bg); c.style.color = fg; }
         r.appendChild(c);
       });
       return r;
@@ -215,7 +220,8 @@
     ctx.fillText(title, M, M + TITLE / 2);
     let y = M + TITLE + 8 * S;
     const cell = (text, x, w, h, bg, fg, bold) => {
-      ctx.fillStyle = bg; ctx.fillRect(x, y, w, h);
+      if (String(bg).includes('|')) { const [l, r] = bg.split('|'); ctx.fillStyle = l; ctx.fillRect(x, y, w / 2, h); ctx.fillStyle = r; ctx.fillRect(x + w / 2, y, w - w / 2, h); }
+      else { ctx.fillStyle = bg; ctx.fillRect(x, y, w, h); }
       ctx.strokeStyle = LINE; ctx.lineWidth = S; ctx.strokeRect(x + S / 2, y + S / 2, w - S, h - S);
       const ls = lines(text);
       ctx.fillStyle = fg; ctx.font = fontOf(bold);
