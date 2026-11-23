@@ -49,8 +49,9 @@
   const HEAD_BG = '#f6e7cf', GROUP_BG = '#efdcbc', LABEL_BG = '#fbf3e4', LINE = '#e2cba6', INK = '#000000';
   // 每一格的底色與字色：潮汐表依欄（滿潮、乾潮），分海表依列（項目名稱）
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
-  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫與體感溫度每 10 度一種底色（看當天最高溫）
+  // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）、體感溫度冷熱分色
   const RAIN_BG = ['#ffffff', '#eef6ff', '#ddecff', '#c8e0ff', '#b0d2ff', '#96c2fb', '#7aaff3', '#5e9be8', '#4585da', '#2f6fca'];
+  const FEEL_BG = [[-Infinity, '#9d86f0'], [10, '#b8a6f8'], [15, '#d3c8fc'], [20, '#fdf3c4'], [25, '#fdc98f'], [30, '#fb9f5f'], [35, '#f47a7a']];
   const TEMP_BG = [[-Infinity, '#c9d8ff'], [0, '#d9ecff'], [10, '#d6f3e2'], [20, '#fff0bd'], [30, '#ffd0a8'], [40, '#ffb0b0']];
   function wxTint(label, v) {
     if (label === '降雨機率') {
@@ -59,8 +60,17 @@
       const k = Math.max(0, Math.min(9, Math.floor(n / 10)));
       return [RAIN_BG[k], k >= 7 ? '#ffffff' : INK];
     }
-    // 體感溫度和氣溫一樣：每 10 度一種底色（看最高）
-    if (label === '氣溫' || label === '體感溫度') {
+    // 體感溫度：一眼看出冷或熱（看最低和最高的平均）
+    //   偏冷用紫藍（越冷越深），舒適用淡黃，偏熱用橘紅（越熱越深）；和降雨機率的藍色分開
+    if (label === '體感溫度') {
+      const ns = String(v).match(/-?\d+/g);
+      if (!ns) return null;
+      const t = ns.map(Number).reduce((a, b) => a + b, 0) / ns.length;
+      let bg = FEEL_BG[0][1];
+      for (const [lo, color] of FEEL_BG) if (t >= lo) bg = color;
+      return [bg, INK];
+    }
+    if (label === '氣溫') {
       const ns = String(v).match(/-?\d+/g);
       if (!ns) return null;
       const t = Math.max(...ns.map(Number));
