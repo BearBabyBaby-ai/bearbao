@@ -51,7 +51,8 @@
   const tintOf = label => TINT[String(label).replace(/^\d{2}\/\d{2}\s*/, '')];
   // 天氣日期區段：降雨機率每 10% 一種底色（越高越深）、氣溫每 10 度一種底色（看當天最高溫）、體感溫度冷熱分色
   const RAIN_BG = ['#ffffff', '#eef6ff', '#ddecff', '#c8e0ff', '#b0d2ff', '#96c2fb', '#7aaff3', '#5e9be8', '#4585da', '#2f6fca'];
-  const FEEL_BG = [[-Infinity, '#9d86f0'], [10, '#b8a6f8'], [15, '#d3c8fc'], [20, '#fdf3c4'], [25, '#fdc98f'], [30, '#fb9f5f'], [35, '#f47a7a']];
+  // 每 5 度一色：0 度以下、0～5、5～10、10～15、15～20 越冷紫藍越深；20～25 淡黃；25 以上橘紅越熱越深
+  const FEEL_BG = [[-Infinity, '#6d4fd8'], [0, '#8166e6'], [5, '#9a84f0'], [10, '#b8a6f8'], [15, '#d3c8fc'], [20, '#fdf3c4'], [25, '#fdc98f'], [30, '#fb9f5f'], [35, '#f47a7a']];
   const TEMP_BG = [[-Infinity, '#c9d8ff'], [0, '#d9ecff'], [10, '#d6f3e2'], [20, '#fff0bd'], [30, '#ffd0a8'], [40, '#ffb0b0']];
   function wxTint(label, v) {
     if (label === '降雨機率') {
@@ -68,7 +69,7 @@
       const t = ns.map(Number).reduce((a, b) => a + b, 0) / ns.length;
       let bg = FEEL_BG[0][1];
       for (const [lo, color] of FEEL_BG) if (t >= lo) bg = color;
-      return [bg, INK];
+      return [bg, t < 0 ? '#ffffff' : INK];
     }
     if (label === '氣溫') {
       const ns = String(v).match(/-?\d+/g);
