@@ -3833,7 +3833,9 @@ const Flights = (() => {
     if (lower.includes('cancel') || lower.includes('取消')) return { text: '取消航班 Cancelled', className: 'Cancelled', history: isOlderThan(scheduledEnd) };
     if (lower.includes('delay') || lower.includes('延誤')) return { text: '延誤 Delayed', className: 'Delayed', history: isOlderThan(end) };
     if (lower.includes('on time') || lower.includes('準時') || !raw) {
-      const startDiff = minutesFromNow(actualStart || scheduledStart);
+      // 還沒有實際起飛時間＝還沒起飛（不看表定時間猜「航行中」）
+      if (!normalize(actualStart)) return { text: '待起飛 Waiting', className: 'Waiting', history: false };
+      const startDiff = minutesFromNow(actualStart);
       const endDiff = minutesFromNow(end);
       if (startDiff !== null && endDiff !== null) {
         if (startDiff > 0 && endDiff > 30) return { text: '待起飛 Waiting', className: 'Waiting', history: false };
@@ -3859,7 +3861,7 @@ const Flights = (() => {
     return validDataRows(rows, 11).map(r => {
       const flight = trackingFlightNo(r[0], r[1]);
       // 抵達航班：航空公司、班次、來自、機型、表定起飛、異動後起飛、實際起飛、表定到達、異動後預計抵達、預估/實際到達、備註
-      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), expectedStart: padHM(r[5]), actualStart: padHM(r[6]), scheduledEnd: padHM(r[7]), expectedEnd: padHM(r[8]), actualEnd: padHM(r[9]), hex: '', status: arrivalStatus(r[10], r[4], r[6], r[7], r[9]) };
+      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), expectedStart: padHM(r[5]), actualStart: padHM(r[6]), scheduledEnd: padHM(r[7]), expectedEnd: padHM(r[8]), actualEnd: padHM(r[9]), hex: '', status: arrivalStatus(r[10], r[4], r[6], r[7], r[9] || r[8]) };
     });
   }
   function mapDeparture(rows) {
