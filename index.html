@@ -418,6 +418,13 @@
     @media (max-width:700px){
       #view-flight .seat-result table{table-layout:fixed;font-size:.82em}
       #view-flight .seat-result th,#view-flight .seat-result td{padding:6px 2px;font-size:13px;letter-spacing:0;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+      /* 手機：出發日期 ～ 回程日期排在同一列，不再掉到下一行 */
+      #view-flight .seat-row:first-of-type{flex-wrap:nowrap;gap:5px}
+      #view-flight .seat-step{min-width:32px;width:32px;height:40px;padding:0;flex:0 0 32px}
+      #view-flight .seat-row:first-of-type .seat-date{flex:1 1 0;min-width:0}
+      #view-flight .seat-row:first-of-type .seat-date .field{width:100%;min-width:0;height:40px;padding:0 6px;font-size:14px;text-align:center}
+      #view-flight .seat-to{flex:0 0 auto}
+      #view-flight .seat-row .seat-text{font-size:14px}
     }
     #view-flight .toolbar{display:grid;grid-template-columns:auto minmax(240px,1fr) minmax(160px,230px) auto;gap:11px;align-items:center;margin:16px 0 12px;padding:13px;border:1px solid #b9c4cd;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(31,45,58,.08)}
     #view-flight .tabs{display:flex;gap:0;overflow:hidden;background:#e5e9ed;padding:3px;border:1px solid #c5ced6;border-radius:9px}
