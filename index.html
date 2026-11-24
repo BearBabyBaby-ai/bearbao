@@ -398,6 +398,10 @@
     #view-flight .seat-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     #view-flight .seat-row .field{width:auto;min-width:120px}
     #view-flight .seat-to{font-weight:800;color:#33475b}
+    #view-flight .seat-date{position:relative;display:inline-flex}
+    #view-flight .seat-date .field{width:130px;min-width:0;cursor:pointer}
+    #view-flight .seat-date input[type=date]{position:absolute;left:0;bottom:0;width:100%;height:0;opacity:0;border:0;padding:0;pointer-events:none}
+    #view-flight .seat-row .seat-text{flex:1 1 260px;min-width:220px}
     #view-flight .seat-step{min-width:40px;height:40px;border:1px solid #c7d2de;border-radius:10px;background:#f4f7fb;font-weight:800;cursor:pointer}
     #view-flight .seat-result{margin-top:10px}
     #view-flight .seat-result table{width:100%;border-collapse:collapse;min-width:0}
@@ -1491,16 +1495,17 @@
           <b class="seat-title">查機位（台灣本島 → 澎湖）</b>
           <div class="seat-row">
             <button type="button" class="seat-step" data-step="-1" aria-label="前一天">◀</button>
-            <input id="seatDate" class="field" type="date" aria-label="出發日期">
+            <span class="seat-date"><input id="seatDate" class="field" type="text" inputmode="numeric" maxlength="10" placeholder="YYYY/MM/DD" aria-label="出發日期"><input id="seatDateP" type="date" tabindex="-1" aria-hidden="true"></span>
             <button type="button" class="seat-step" data-step="1" aria-label="後一天">▶</button>
             <span class="seat-to">～</span>
-            <input id="seatDate2" class="field" type="date" aria-label="回程日期">
+            <span class="seat-date"><input id="seatDate2" class="field" type="text" inputmode="numeric" maxlength="10" placeholder="YYYY/MM/DD" aria-label="回程日期"><input id="seatDate2P" type="date" tabindex="-1" aria-hidden="true"></span>
             <select id="seatFrom" class="field" aria-label="航線">
               <option value="TSA">松山 → 澎湖</option><option value="RMQ">台中 → 澎湖</option><option value="CYI">嘉義 → 澎湖</option><option value="TNN">台南 → 澎湖</option><option value="KHH">高雄 → 澎湖</option>
             </select>
             <select id="seatN" class="field" aria-label="人數"><option value="1">1 人</option><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option></select>
             <button type="button" id="seatGo" class="refresh">查詢</button>
             <button type="button" id="seatUba" class="refresh">座位查詢（華信＋立榮）</button>
+            <input id="seatText" class="field seat-text" type="text" placeholder="例：12/02-12/04 台北>澎湖 4位" aria-label="直接輸入日期或日期區段、航線">
           </div>
           <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="numeric" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
@@ -1766,18 +1771,41 @@ const Seat = (() => {
   }
   function init() {
     const d = document.getElementById('seatDate');
+    const note = t => `<div class="seat-note">${esc(t)}</div>`;
     if (!d || d.dataset.ready) return;
     d.dataset.ready = '1';
-    d.value = shift(tz(new Date()), 1);
-    d.min = tz(new Date());
+    // 日期一律顯示 YYYY/MM/DD；點日期欄跳出月曆，也可以直接打
     const d2 = document.getElementById('seatDate2');
-    d2.min = d.min;
-    d.addEventListener('change', () => { d2.min = d.value || d.min; if (d2.value && d2.value < d.value) d2.value = d.value; });
+    const K = el => el.value.trim().replace(/\//g, '-');
+    const put = (el, k) => { el.value = k ? k.replace(/-/g, '/') : ''; };
+    const minK = tz(new Date());
+    const today = () => tz(new Date());
+    // 日期判斷：沒寫年份就是今天以後最近的那一天
+    const DATE_RE = /(?:(\d{4})\s*[\/\-.年]\s*)?(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})\s*日?/g;
+    const toKey = m => {
+      const t0 = today(), y0 = Number(t0.slice(0, 4)), mo = Number(m[2]), da = Number(m[3]);
+      const mk = y => `${y}-${String(mo).padStart(2, '0')}-${String(da).padStart(2, '0')}`;
+      const ok = k => { const x = new Date(k + 'T12:00:00+08:00'); return !isNaN(x) && tz(x) === k; };
+      let k = mk(m[1] ? Number(m[1]) : y0);
+      if (!m[1] && k < t0) k = mk(y0 + 1);
+      return ok(k) ? k : '';
+    };
+    const fix = el => { const m = [...el.value.matchAll(DATE_RE)][0]; const k = m ? toKey(m) : ''; put(el, k && k >= minK ? k : ''); };
+    [[d, 'seatDateP'], [d2, 'seatDate2P']].forEach(([el, pid]) => {
+      const pk = document.getElementById(pid);
+      pk.min = minK;
+      el.addEventListener('click', () => { pk.value = K(el); try { pk.showPicker(); } catch (_) { el.focus(); } });
+      pk.addEventListener('change', () => { put(el, pk.value); el.dispatchEvent(new Event('change')); });
+      el.addEventListener('blur', () => { if (el.value.trim()) fix(el); });
+    });
+    put(d, shift(minK, 1));
+    d.addEventListener('change', () => { fix(d); if (K(d2) && K(d2) < K(d)) put(d2, K(d)); });
+    d2.addEventListener('change', () => { fix(d2); if (K(d2) && K(d2) < K(d)) put(d2, K(d)); });
     const out = document.getElementById('seatResult');
     const legs = () => {
       const from = document.getElementById('seatFrom').value;
-      const back = d2.value && d2.value >= d.value;
-      return back ? [{ k: d.value, from, to: 'MZG', tag: '去程' }, { k: d2.value, from: 'MZG', to: from, tag: '回程' }] : [{ k: d.value, from, to: 'MZG', tag: '' }];
+      const back = K(d2) && K(d2) >= K(d);
+      return back ? [{ k: K(d), from, to: 'MZG', tag: '去程' }, { k: K(d2), from: 'MZG', to: from, tag: '回程' }] : [{ k: K(d), from, to: 'MZG', tag: '' }];
     };
     const queryAll = (ls, n) => Promise.all(ls.map(l => query(l.k, l.from, n, l.to)));
     const run = async () => {
@@ -1787,13 +1815,29 @@ const Seat = (() => {
       catch (e) { out.innerHTML = `<div class="seat-note">${esc(e.message || '查詢失敗，請再試一次')}</div>`; }
     };
     document.querySelectorAll('#view-flight .seat-step').forEach(b => b.addEventListener('click', () => {
-      const n = Number(b.dataset.step), k = shift(d.value || tz(new Date()), n);
-      if (k < d.min) return;
-      d.value = k; d2.min = k;
-      if (d2.value) d2.value = shift(d2.value, n);
+      const n = Number(b.dataset.step), k = shift(K(d) || minK, n);
+      if (k < minK) return;
+      put(d, k);
+      if (K(d2)) put(d2, shift(K(d2), n));
       run();
     }));
     document.getElementById('seatGo').addEventListener('click', run);
+    const txt = document.getElementById('seatText');
+    const CITY = [['TSA', /松山|台北|臺北/], ['RMQ', /台中|臺中/], ['CYI', /嘉義/], ['TNN', /台南|臺南/], ['KHH', /高雄/]];
+    const applyText = () => {
+      const t = txt.value.replace(/\s+/g, ' ').trim();
+      if (!t) return true;
+      const ms = [...t.matchAll(DATE_RE)], ks = ms.slice(0, 2).map(toKey);
+      const city = CITY.find(([, re]) => re.test(t)), nm = t.match(/(\d)\s*(?:人|位|張)/);
+      if (!ks.length && !city && !nm) { out.innerHTML = note('請照「12/02-12/04 台北>澎湖 4位」的方式輸入'); return false; }
+      if (ks.some(k => !k || k < minK) || (ks[1] && ks[1] < ks[0])) { out.innerHTML = note('日期不正確，請再確認一次'); return false; }
+      if (ks.length) { put(d, ks[0]); put(d2, ks[1] || ''); }
+      if (city) document.getElementById('seatFrom').value = city[0];
+      if (nm) document.getElementById('seatN').value = String(Math.min(4, Math.max(1, Number(nm[1]))));
+      return true;
+    };
+    txt.addEventListener('change', applyText);
+    txt.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (applyText()) run(); } });
     // 航班動態／查機位 分開兩個畫面
     const app = document.querySelector('#view-flight .ap-app');
     document.querySelectorAll('#view-flight .fv-btn').forEach(b => b.addEventListener('click', () => {
@@ -1803,7 +1847,6 @@ const Seat = (() => {
     }));
     // 立榮座位查詢：驗證碼圖顯示給使用者看，由使用者自己輸入後送出；華信照原本查詢
     const cap = document.getElementById('seatCap'), capImg = document.getElementById('seatCapImg'), capCode = document.getElementById('seatCapCode');
-    const note = t => `<div class="seat-note">${esc(t)}</div>`;
     const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
     let token = '', capSeq = 0;
     const getJson = async (url, ms) => {
