@@ -321,7 +321,7 @@
     const img = document.createElement('img'); img.alt = ''; img.hidden = true;
     const row = document.createElement('div'); row.className = 'files';
     const code = document.createElement('input');
-    code.type = 'text'; code.maxLength = 8; code.inputMode = 'text'; code.autocapitalize = 'off'; code.spellcheck = false; code.placeholder = '輸入圖上的驗證碼'; code.autocomplete = 'off';
+    code.type = 'text'; code.maxLength = 6; code.inputMode = 'numeric'; code.placeholder = '輸入圖上的數字'; code.autocomplete = 'off';
     const go = document.createElement('button'); go.type = 'button'; go.textContent = '查詢';
     const again = document.createElement('button'); again.type = 'button'; again.textContent = '換一張';
     const msg = document.createElement('div'); msg.className = 'b-hint';
@@ -334,11 +334,11 @@
       try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'cap' })); } catch (_) { r = null; }
       const u = r && r.uba;
       if (!u || u.error || !u.img) { msg.textContent = (u && u.error) || '驗證碼讀取失敗，請按「換一張」'; return; }
-      token = u.token; img.src = u.img; img.hidden = false; go.disabled = false; msg.textContent = '看圖輸入驗證碼後按「查詢」'; code.focus();
+      token = u.token; img.src = u.img; img.hidden = false; go.disabled = false; msg.textContent = '看圖輸入數字後按「查詢」'; code.focus();
     }
     async function query() {
       const v = code.value.trim();
-      if (!token || !v) { msg.textContent = '請輸入圖上的驗證碼'; return; }
+      if (!token || !v) { msg.textContent = '請輸入圖上的數字'; return; }
       go.disabled = again.disabled = true; msg.textContent = '查詢中…';
       let r;
       try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'q', token, code: v, job: legs[i] })); } catch (_) { r = null; }

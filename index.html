@@ -1512,7 +1512,7 @@
             <button type="button" id="seatGo" class="refresh">查詢</button>
             <button type="button" id="seatUba" class="refresh">座位查詢（華信＋立榮）</button>
           </div>
-          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
+          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="numeric" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
         </section>
 
@@ -1743,137 +1743,6 @@ const DEFAULT_LINKS = [
 let hubNotices = [], hubLinks = DEFAULT_LINKS;
 
 /* ── 查機位：台灣本島 → 澎湖（華信有無位置；立榮訂位要驗證碼，只列班次，座位請到立榮官網確認） ── */
-/* ── 立榮座位（訂位頁）：由這台裝置自己連立榮官網查詢 ──
-   電腦版、熊寶桌寵：程式提供的 bearDesktop.uiaHttp；手機 APP：內建的 CapacitorHttp
-   一般瀏覽器開的網頁版沒有這條通道，UiaDev.ok 為 false（立榮只顯示連結到官網）
-   驗證碼由使用者自己看圖輸入，不做任何辨識；連線資料只放在這次開啟的記憶體裡，10 分鐘後丟掉 */
-const UiaDev = (() => {
-  const BASE = 'https://www.uniair.com.tw';
-  const PAGE = BASE + '/rwd/B2C/booking/ubk_search.aspx';
-  const UA = navigator.userAgent;
-  const desk = window.bearDesktop && typeof window.bearDesktop.uiaHttp === 'function' ? window.bearDesktop : null;
-  const capHttp = (() => { const C = window.Capacitor; return C && C.isNativePlatform && C.isNativePlatform() && C.Plugins && C.Plugins.CapacitorHttp ? C.Plugins.CapacitorHttp : null; })();
-  const ok = Boolean(desk || capHttp);
-  const store = new Map();
-
-  // Set-Cookie 合在一行時（手機）用「逗號後面接 名稱=」切開，Expires 日期裡的逗號不會被切到
-  const splitCookies = v => [].concat(v || []).flatMap(x => String(x).split(/,\s*(?=[^;,\s]+=)/));
-  const hdr = (h, name) => { if (!h) return ''; const k = Object.keys(h).find(x => x.toLowerCase() === name); return k ? h[k] : ''; };
-  async function http(url, opt = {}) {
-    const headers = Object.assign({ 'User-Agent': UA, 'Referer': PAGE }, opt.headers || {});
-    if (desk) {
-      const body = opt.form ? new URLSearchParams(opt.form).toString() : '';
-      if (body) headers['Content-Type'] = 'application/x-www-form-urlencoded';
-      return await desk.uiaHttp({ url, method: opt.form ? 'POST' : 'GET', headers, body, binary: !!opt.binary });
-    }
-    if (opt.form) headers['Content-Type'] = 'application/x-www-form-urlencoded';
-    const r = await capHttp.request({ url, method: opt.form ? 'POST' : 'GET', headers, data: opt.form || undefined, responseType: opt.binary ? 'blob' : 'text', disableRedirects: true, connectTimeout: 30000, readTimeout: 30000 });
-    return { status: r.status, setCookie: splitCookies(hdr(r.headers, 'set-cookie')), location: hdr(r.headers, 'location'), contentType: hdr(r.headers, 'content-type'), body: typeof r.data === 'string' ? r.data : JSON.stringify(r.data || '') };
-  }
-  async function fetchJar(url, jar, opt = {}) {
-    const cookie = Object.keys(jar).map(k => k + '=' + jar[k]).join('; ');
-    const r = await http(url, Object.assign({}, opt, { headers: Object.assign(cookie ? { Cookie: cookie } : {}, opt.form ? { Origin: BASE } : {}) }));
-    (r.setCookie || []).forEach(c => { const kv = String(c).split(';')[0]; const i = kv.indexOf('='); if (i > 0) jar[kv.slice(0, i).trim()] = kv.slice(i + 1).trim(); });
-    return r;
-  }
-  const abs = (loc, dir) => /^https?:/i.test(loc) ? loc : BASE + (loc.startsWith('/') ? loc : dir + loc);
-
-  const dec = s => String(s).replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>');
-  const attr = (tag, name) => { const m = String(tag).match(new RegExp('\\s' + name + '\\s*=\\s*"([^"]*)"', 'i')) || String(tag).match(new RegExp('\\s' + name + "\\s*=\\s*'([^']*)'", 'i')); return m ? dec(m[1]) : ''; };
-  // 表單裡所有會送出的欄位（隱藏欄位、文字欄、勾選的選項、選單目前的值），跟瀏覽器送出時一樣
-  function formFields(html) {
-    const f = {};
-    (html.match(/<input\b[^>]*>/gi) || []).forEach(tag => {
-      const name = attr(tag, 'name'); if (!name) return;
-      const type = (attr(tag, 'type') || 'text').toLowerCase();
-      if (/^(submit|button|image|reset|file)$/.test(type)) return;
-      if (/^(radio|checkbox)$/.test(type) && !/\schecked\b/i.test(tag)) return;
-      f[name] = attr(tag, 'value');
-    });
-    const re = /<select\b([^>]*)>([\s\S]*?)<\/select>/gi; let m;
-    while ((m = re.exec(html))) {
-      const name = attr('<select' + m[1] + '>', 'name'); if (!name) continue;
-      const opts = [...m[2].matchAll(/<option\b([^>]*)>([\s\S]*?)<\/option>/gi)].map(o => ({ v: /\svalue\s*=/i.test('<option' + o[1] + '>') ? attr('<option' + o[1] + '>', 'value') : o[2].replace(/<[^>]+>/g, '').trim(), sel: /\sselected\b/i.test(o[1]) }));
-      const c = opts.find(o => o.sel) || opts[0];
-      f[name] = c ? c.v : '';
-    }
-    return f;
-  }
-  const text = h => dec(String(h).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi, ' ').replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' '))
-    .replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
-
-  // 1. 開訂位頁、取驗證碼圖（同一組連線）
-  async function captcha() {
-    const jar = {};
-    const page = await fetchJar(PAGE, jar);
-    if (page.status !== 200) throw new Error('立榮訂位頁暫時打不開，請稍後再試');
-    const src = attr((page.body.match(/<img[^>]*BotDetectCaptcha\.ashx\?get=image[^>]*>/i) || [''])[0], 'src');
-    if (!src) throw new Error('立榮訂位頁沒有驗證碼圖，請稍後再試');
-    const img = await fetchJar(abs(src, '/rwd/B2C/booking/'), jar, { binary: true });
-    if (img.status !== 200) throw new Error('驗證碼圖讀取失敗，請按「換一張」');
-    const token = String(Date.now()) + Math.random().toString(36).slice(2);
-    const now = Date.now();
-    for (const [k, v] of store) if (now - v.at > 600000) store.delete(k);
-    store.set(token, { jar, fields: formFields(page.body), at: now });
-    return { token, img: 'data:' + (String(img.contentType || '').split(';')[0] || 'image/jpeg') + ';base64,' + img.body };
-  }
-
-  // 2. 連同使用者輸入的驗證碼送出查詢；有 ret＝來回，一張驗證碼查去回兩段
-  async function wait(p) {
-    const s = store.get(p.token);
-    if (!s || Date.now() - s.at > 600000) { store.delete(p.token); return { error: '驗證碼已過期，請按「換一張」重新輸入', expired: true }; }
-    store.delete(p.token);   // 一組驗證碼只送一次
-    const code = String(p.code || '').trim();
-    if (!/^\w{3,8}$/.test(code)) return { error: '請輸入圖上的驗證碼', expired: true };
-    const { jar, fields } = s;
-    const d = p.date.replace(/-/g, '/') + (p.ret ? '-' + p.ret.replace(/-/g, '/') : '');
-    const P = 'ctl00$CPH_Body$', n = String(p.n || 1), inf = String(p.inf || 0);
-    const form = Object.assign({}, fields, {
-      '__EVENTTARGET': P + 'btn_SelectFlight', '__EVENTARGUMENT': '',
-      [P + (p.ret ? 'rb_TripType_RT' : 'rb_TripType_OW')]: p.ret ? 'rb_TripType_RT' : 'rb_TripType_OW',
-      [P + 'hi_DEP']: p.from, [P + 'hi_ARR']: p.to,
-      [P + 'tb_TRIP_DATE']: d, [P + 'hi_TRIP_DATE']: d,
-      [P + 'tb_PaxNum']: `${n} 旅客 , ${inf} 嬰兒`,
-      [P + 'tb_PaxNumAdult']: n, [P + 'hi_PaxNumAdult']: n,
-      [P + 'tb_PaxNumInf']: inf, [P + 'hi_PaxNumInf']: inf,
-      [P + 'txt_CaptchaCode']: code
-    });
-    if (p.ret) delete form[P + 'rb_TripType_OW']; else delete form[P + 'rb_TripType_RT'];
-    let r = await fetchJar(PAGE, jar, { form });
-    for (let i = 0; i < 5 && [301, 302, 303].includes(r.status) && r.location; i++) r = await fetchJar(abs(r.location, '/rwd/B2C/booking/'), jar);
-    const html = r.body || '';
-    const errs = (html.match(/data-error="[^"]+"/g) || []).map(x => dec(x.slice(12, -1)));
-    const lb = (html.match(/id="CPH_Body_lb_ErrorMessage"[^>]*>([\s\S]*?)<\/span>/) || [])[1];
-    const err = errs.concat(lb ? [text(lb)] : []).filter(Boolean);
-    if (err.length && /ubk_search/i.test(html) && /txt_CaptchaCode/.test(html)) return { error: err.join('；'), expired: true };
-    return parse(html, !!p.ret);
-  }
-
-  // 結果頁：以班次（B7 xxx）分段，抓起飛、抵達時間與狀態字；有票價就算尚有機位
-  function parse(html, rt) {
-    const t = text((html.match(/<form[\s\S]*<\/form>/i) || [html])[0]);
-    const idx = [...t.matchAll(/B7\s*-?\s*(\d{3,4})/g)].map(m => [m.index, m[1]]);
-    let backAt = -1;
-    if (rt && idx.length) { const b = [...t.matchAll(/回程/g)].find(x => x.index > idx[0][0]); if (b) backAt = b.index; }
-    const flights = [];
-    idx.forEach(([at, no], i) => {
-      const seg = t.slice(at, i + 1 < idx.length ? idx[i + 1][0] : at + 400);
-      const tm = seg.match(/\b([01]\d|2[0-3]):[0-5]\d\b/g) || [];
-      let st = (seg.match(/(可候補|開放候補|不開放候補|候補已滿|已額滿|額滿|客滿|尚有機位|可訂位|已售完|售完|已截止|候補)/) || [])[1] || '';
-      if (!st && /(?:NT\$?|TWD)\s*[\d,]{3,}|[\d,]{3,}\s*元/.test(seg)) st = '尚有機位';
-      const dir = backAt >= 0 && at > backAt ? 'back' : 'go';
-      if (!flights.some(f => f.no === 'B7-' + no && f.dir === dir)) flights.push({ no: 'B7-' + no, dep: tm[0] || '', arr: tm[1] || '', status: st, dir });
-    });
-    return { flights };
-  }
-
-  return {
-    ok,
-    captcha: () => captcha().catch(e => ({ error: e.message || '驗證碼讀取失敗，請按「換一張」' })),
-    wait: p => wait(p).catch(e => ({ error: (e && e.message) || '立榮查詢失敗' }))
-  };
-})();
-
 const Seat = (() => {
   const UIA_BOOK = 'https://www.uniair.com.tw/rwd/B2C/booking/ubk_search.aspx';
   // 有位 → 訂位頁（華信：訂位延遲付款）；已滿 → 候補頁；立榮座位不自動查 → 立榮訂位頁
@@ -1989,54 +1858,44 @@ const Seat = (() => {
       const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
       try { return await (await fetch(url, { cache: 'no-store', signal: ac.signal })).json(); } finally { clearTimeout(t); }
     };
-    const newCap = async (keep = '') => {
+    const newCap = async () => {
       const my = ++capSeq;
-      // 換新圖時舊圖先留著（變淡），新圖到了才換掉，不會整個不見
-      token = ''; capCode.value = ''; capImg.style.opacity = '.35';
-      if (!keep) out.innerHTML = note('驗證碼讀取中…');
+      token = ''; capImg.hidden = true; capCode.value = '';
+      out.innerHTML = note('驗證碼讀取中…');
       let j = null, err = '';
       for (let i = 0; i < 2 && !j; i++) {
         try {
-          const r = await Promise.race([UiaDev.captcha(), new Promise((_, rej) => setTimeout(() => rej(new Error('')), 30000))]);
+          const r = await getJson(`${CFG.seatUrl}?act=uiaCaptcha&_=${Date.now()}`, 20000);
           if (r.error || !r.img) err = r.error || ''; else j = r;
         } catch (_) { err = ''; }
         if (my !== capSeq) return;
       }
-      if (!j) { capImg.hidden = true; capImg.style.opacity = ''; out.innerHTML = keep + note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
-      token = j.token; capImg.src = j.img; capImg.hidden = false; capImg.style.opacity = '';
-      out.innerHTML = keep || note('看圖輸入驗證碼後按「送出」');
+      if (!j) { out.innerHTML = note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
+      token = j.token; capImg.src = j.img; capImg.hidden = false;
+      out.innerHTML = note('看圖輸入驗證碼後按「送出」');
       capCode.focus();
     };
-    // 立榮座位查立榮訂位頁：今天以後的日期都可以查
-    const uiaLegs = () => { const min = today(); return legs().map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min); };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
-      // 一般瀏覽器開的網頁版連不到立榮：只查華信，立榮連到官網
-      if (!UiaDev.ok) { cap.hidden = true; token = ''; run().then(() => { out.innerHTML += note('立榮座位要用熊寶系統 APP、電腦版或熊寶桌寵才能查；網頁版請點立榮那幾列到立榮官網確認'); }); return; }
-      if (!uiaLegs().length) { cap.hidden = true; token = ''; run().then(() => { out.innerHTML += note('這天的立榮座位請到立榮官網確認'); }); return; }
       cap.hidden = false; newCap();
     });
-    document.getElementById('seatCapNew').addEventListener('click', () => newCap());
+    document.getElementById('seatCapNew').addEventListener('click', newCap);
     const send = async () => {
       const v = capCode.value.trim();
       if (!token || !v) return;
-      const ls = legs(), n = document.getElementById('seatN').value, tk = token, ok = uiaLegs();
-      if (!ok.length) { token = ''; cap.hidden = true; await run(); out.innerHTML += note('這天的立榮座位請到立榮官網確認'); return; }
-      const go = ok[0], ret = ok.length === 2 ? `&ret=${ok[1].k}` : '';
+      const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
+      const ret = ls[1] ? `&ret=${ls[1].k}` : '';
       token = '';
       out.innerHTML = note('查詢中…');
       let js, w;
       try {
-        // 先單獨送立榮驗證碼（和熊寶桌寵一樣），查完立榮才查華信，避免同時查詢讓立榮的驗證碼失效
-        w = await UiaDev.wait({ token: tk, code: v, date: go.k, ret: ok.length === 2 ? ok[1].k : '', from: go.from, to: go.to, n, inf: 0 });
-        js = await queryAll(ls, n);
+        [js, w] = await Promise.all([queryAll(ls, n),
+          getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }))]);
       } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
-      if (w.error) { const msg = `<div class="seat-note" style="color:#c62828;font-weight:800">${esc(w.error)}${w.expired ? '（已換一張新的驗證碼）' : ''}</div>`; const tb = js.map((j, i) => html(j, ls[i].tag)).join(''); if (w.expired) newCap(msg + tb); else out.innerHTML = msg + tb; return; }
+      if (w.error) { out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + note(w.error); if (w.expired) newCap(); return; }
       let none = true;
       js.forEach((j, i) => {
-        const k = ok.findIndex(l => l.i === i);
-        if (k < 0) { j.uiaNote = '這天的立榮座位請到立榮官網確認'; return; }
-        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (k ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
+        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (i ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
         if (uia.length) { none = false; j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
       });
       out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + (none ? note('立榮查無座位資料') : '');
@@ -8133,12 +7992,15 @@ if (window.bearDesktop) {
     async function uba(p) {
       if (!CFG.seatUrl) return { uba: { error: '查機位功能尚未開通' } };
       if (p.op === 'cap') {
-        return { uba: await UiaDev.captcha() };
+        try { const j = await (await fetch(`${CFG.seatUrl}?act=uiaCaptcha`, { cache: 'no-store' })).json(); return { uba: j }; }
+        catch (_) { return { uba: { error: '驗證碼讀取失敗，請按「換一張」' } }; }
       }
       if (p.op === 'list') return await seatList(p.plan, p.res || {}, '');
       const l = p.job || {};
       let j;
-      j = await UiaDev.wait({ token: p.token, code: p.code, date: l.k.replace(/\//g, '-'), ret: l.ret ? l.ret.replace(/\//g, '-') : '', from: l.from, to: l.to, n: l.n, inf: 0 });
+      const ret = l.ret ? `&ret=${l.ret.replace(/\//g, '-')}` : '';
+      try { j = await (await fetch(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(p.token)}&code=${encodeURIComponent(p.code)}&date=${l.k.replace(/\//g, '-')}${ret}&from=${l.from}&to=${l.to}&n=${l.n}&inf=0`, { cache: 'no-store' })).json(); }
+      catch (_) { return { uba: { error: '查詢失敗' } }; }
       if (j.error) return { uba: { error: j.error } };
       // 去程、回程各自對到列表的那一段
       const res = {};
@@ -8220,15 +8082,15 @@ if (window.bearDesktop) {
           const title = `${days.length > 1 ? `${md(days[0])}–${md(days[days.length - 1])} 來回` : `${md(days[0])} 單程`}・${(land => days.length > 1 ? `${land} ⇄ 澎湖` : back ? `澎湖 → ${land}` : `${land} → 澎湖`)(fromKey ? Seat.NAMES[fromKey[0]] : '台灣本島')}・${n} 位`;
           const plan = { title, n, legs: legs.map(l => ({ k: l.k, from: l.from, to: l.to, tag: l.tag, n, md: md(l.k), route: `${Seat.NAMES[l.from]}→${Seat.NAMES[l.to]}` })) };
           // 查機位流程：有指定出發地時，先在對話框出立榮驗證碼（每一段一張），使用者輸入後才查兩家並列表
-          const min = todayKey();
+          const min = addDays(todayKey(), 2);
           // 立榮驗證碼一次只出一張：來回（日期區段）用立榮「來回」查詢，只輸入一次
           const ok = fromKey ? plan.legs.map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min) : [];
           const jobs = !ok.length ? [] : ok.length === 2
             ? [{ idx: [ok[0].i, ok[1].i], k: ok[0].k, ret: ok[1].k, from: ok[0].from, to: ok[0].to, n, label: `來回 ${ok[0].md}–${ok[1].md} ${ok[0].route}` }]
             : [{ idx: [ok[0].i], k: ok[0].k, ret: '', from: ok[0].from, to: ok[0].to, n, label: `${ok[0].tag} ${ok[0].md} ${ok[0].route}` }];
           if (!CFG.seatUrl) return '查機位功能尚未開通：請先部署「航班動態.gs」網頁應用程式，並把網址填進系統設定的「航班查詢網址」';
-          if (jobs.length && UiaDev.ok) return { blocks: [{ type: 'title', text: title }, { type: 'uba', jobs, plan }] };
-          return await seatList(plan, {}, fromKey ? '' : '指定出發地才能查立榮座位');
+          if (jobs.length) return { blocks: [{ type: 'title', text: title }, { type: 'uba', jobs, plan }] };
+          return await seatList(plan, {}, fromKey ? '立榮候補只能查 2 天後的班次' : '指定出發地才能查立榮候補');
         }
         // 航班：句子有航班、班機、飛機，或只打航班代號
         // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
