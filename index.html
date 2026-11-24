@@ -426,6 +426,8 @@
     #view-flight .map-focus-trigger{cursor:pointer;text-decoration:underline;text-decoration-thickness:2px;text-underline-offset:4px}
     #view-flight .map-focus-trigger:hover{filter:brightness(1.16)}
     #view-flight .time{font-variant-numeric:tabular-nums;white-space:nowrap}
+    #view-flight td.revised{background:#fff1d6 !important;color:#c62828;font-weight:800}
+    #view-flight .revised-text{color:#c62828;font-weight:800}
     #view-flight .status-cell{padding:0!important;text-align:center;min-width:205px;border-left:3px solid #fff!important;border-right:3px solid #fff!important}
     #view-flight .status-cell .status{display:flex;align-items:center;justify-content:center;width:100%;min-height:56px;padding:13px 15px;border:0;border-radius:0;background:transparent;color:inherit;font-size:16px;font-weight:950;line-height:1.25;letter-spacing:.01em;white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.28)}
     #view-flight .status-cell.Arrived{background:#49b653;color:#fff}
@@ -3955,9 +3957,9 @@ const Flights = (() => {
       <td>${escapeHTML(row.place)}</td>
       <td>${escapeHTML(row.aircraft)}</td>
       <td class="time">${escapeHTML(row.scheduledStart)}</td>
-      ${arrival ? `<td class="time">${escapeHTML(row.expectedStart || '')}</td>` : ''}
+      ${arrival ? `<td class="time${row.expectedStart ? ' revised' : ''}">${escapeHTML(row.expectedStart || '')}</td>` : ''}
       <td class="time">${escapeHTML(row.actualStart)}</td>
-      ${arrival ? `<td class="time">${escapeHTML(row.scheduledEnd)}</td><td class="time">${escapeHTML(row.expectedEnd || '')}</td><td class="time">${escapeHTML(row.actualEnd)}</td>` : ''}
+      ${arrival ? `<td class="time">${escapeHTML(row.scheduledEnd)}</td><td class="time${row.expectedEnd ? ' revised' : ''}">${escapeHTML(row.expectedEnd || '')}</td><td class="time">${escapeHTML(row.actualEnd)}</td>` : ''}
       <td class="status-cell ${escapeHTML(row.status.className)}"><span class="status">${escapeHTML(row.status.text)}</span></td>
       ${arrival ? '' : `<td>${escapeHTML(row.gate || '—')}</td>`}
       <td>${trackingLinks(row.flight)}</td>
@@ -3975,9 +3977,9 @@ const Flights = (() => {
         <div class="kv"><small>${arrival ? '來自' : '目的地'}</small><span>${escapeHTML(row.place)}</span></div>
         <div class="kv"><small>機型</small><span>${escapeHTML(row.aircraft || '—')}</span></div>
         <div class="kv"><small>表定起飛</small><span class="time">${escapeHTML(row.scheduledStart || '—')}</span></div>
-        ${arrival ? `<div class="kv"><small>異動後起飛</small><span class="time">${escapeHTML(row.expectedStart || '')}</span></div>` : ''}
+        ${arrival ? `<div class="kv"><small>異動後起飛</small><span class="time revised-text">${escapeHTML(row.expectedStart || '')}</span></div>` : ''}
         <div class="kv"><small>${arrival ? '實際起飛' : '預估／實際起飛'}</small><span class="time">${escapeHTML(row.actualStart || '—')}</span></div>
-        ${arrival ? `<div class="kv"><small>表定到達</small><span class="time">${escapeHTML(row.scheduledEnd || '—')}</span></div><div class="kv"><small>異動後預計抵達</small><span class="time">${escapeHTML(row.expectedEnd || '')}</span></div><div class="kv"><small>預估／實際到達</small><span class="time">${escapeHTML(row.actualEnd || '—')}</span></div>` : `<div class="kv"><small>登機門</small><span>${escapeHTML(row.gate || '—')}</span></div>`}
+        ${arrival ? `<div class="kv"><small>表定到達</small><span class="time">${escapeHTML(row.scheduledEnd || '—')}</span></div><div class="kv"><small>異動後預計抵達</small><span class="time revised-text">${escapeHTML(row.expectedEnd || '')}</span></div><div class="kv"><small>預估／實際到達</small><span class="time">${escapeHTML(row.actualEnd || '—')}</span></div>` : `<div class="kv"><small>登機門</small><span>${escapeHTML(row.gate || '—')}</span></div>`}
       </div>
       ${trackingLinks(row.flight)}
     </article>`).join('')}</div>`;
@@ -7563,7 +7565,7 @@ if (window.bearDesktop) {
         const air = (String(r[0]).match(/^(UIA|MDA|DAC)/) || [])[1] || '', [deep, a, b] = AIR[air] || ['#555555', '#ffffff', '#f2f2f2'];
         alt = air === last ? 1 - alt : 0; last = air;
         const bg = alt ? b : a;
-        return r.map((v, c) => c === 0 ? [deep, '#ffffff'] : c === r.length - 1 ? [bg, STATUS_FG(v)] : [bg, '#000000']);
+        return r.map((v, c) => c === 0 ? [deep, '#ffffff'] : c === r.length - 1 ? [bg, STATUS_FG(v)] : (c === 4 || c === 7) && v ? ['#fff1d6', '#c62828'] : [bg, '#000000']);   // 異動後起飛／異動後預計抵達：橘底紅字
       });
     }
     const arrTable = (title, list, at = '') => { const rows = arrSort(list).map(arrRow); return { blocks: [{ type: 'title', text: title }, { type: 'table', head: ARR_HEAD, rows, styles: arrStyles(rows, at) }] }; };
