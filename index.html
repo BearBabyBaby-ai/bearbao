@@ -3854,8 +3854,8 @@ const Flights = (() => {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
     const mins = t => { const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
     const air = { MDA: new Map(), UIA: new Map() };
-    (mdaRows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) air.MDA.set(no, String(r[4]).trim()); });
-    (uiaRows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); const t = mins(r[6]) != null ? r[6] : r[4]; if (String(r[0] || '').trim() === today && no && mins(t) != null) air.UIA.set(no, String(t).trim()); });
+    (mdaRows || []).forEach(r => { const no = (String(r[1] || '').match(/(\d{2,4})\s*$/) || [])[1]; if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) air.MDA.set(no, String(r[4]).trim()); });
+    (uiaRows || []).forEach(r => { const no = (String(r[1] || '').match(/(\d{2,4})\s*$/) || [])[1]; const t = mins(r[6]) != null ? r[6] : r[4]; if (String(r[0] || '').trim() === today && no && mins(t) != null) air.UIA.set(no, String(t).trim()); });
     ['arrival', 'departure'].forEach(mode => state[mode].forEach(row => {
       row.expectedStart = '';
       const m = String(row.flight).match(/^(MDA|UIA)(\d+)$/);
