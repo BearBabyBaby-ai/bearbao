@@ -3857,11 +3857,18 @@ const Flights = (() => {
   }
   // 時間一律 HH:MM（8:45 → 08:45）
   function padHM(v) { const m = String(v ?? '').match(/^\s*(\d{1,2})\s*[:：]\s*(\d{2})(.*)$/); return m ? `${m[1].padStart(2, '0')}:${m[2]}${m[3]}` : (v ?? ''); }
+  // 有「異動後起飛」且比表定晚、還沒起飛（待起飛／準時）→ 狀態改為延誤
+  function revisedStatus(st, sched, revised, actual) {
+    const m = t => { const x = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return x ? Number(x[1]) * 60 + Number(x[2]) : null; };
+    if (normalize(actual) || !['Waiting', 'OnTime'].includes(st.className)) return st;
+    const a = m(sched), b = m(revised);
+    return a != null && b != null && b > a ? { text: '延誤 Delayed', className: 'Delayed', history: false } : st;
+  }
   function mapArrival(rows) {
     return validDataRows(rows, 11).map(r => {
       const flight = trackingFlightNo(r[0], r[1]);
       // 抵達航班：航空公司、班次、來自、機型、表定起飛、異動後起飛、實際起飛、表定到達、異動後預計抵達、預估/實際到達、備註
-      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), expectedStart: padHM(r[5]), actualStart: padHM(r[6]), scheduledEnd: padHM(r[7]), expectedEnd: padHM(r[8]), actualEnd: padHM(r[9]), hex: '', status: arrivalStatus(r[10], r[4], r[6], r[7], r[9] || r[8]) };
+      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), expectedStart: padHM(r[5]), actualStart: padHM(r[6]), scheduledEnd: padHM(r[7]), expectedEnd: padHM(r[8]), actualEnd: padHM(r[9]), hex: '', status: revisedStatus(arrivalStatus(r[10], r[4], r[6], r[7], r[9] || r[8]), r[4], r[5], r[6]) };
     });
   }
   function mapDeparture(rows) {
