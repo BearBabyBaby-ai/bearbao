@@ -318,7 +318,7 @@
     let i = 0, token = '';
     const res = {};
     const cap = document.createElement('div'); cap.className = 'uba-cap';
-    const img = document.createElement('img'); img.alt = '驗證碼';
+    const img = document.createElement('img'); img.alt = ''; img.hidden = true;
     const row = document.createElement('div'); row.className = 'files';
     const code = document.createElement('input');
     code.type = 'text'; code.maxLength = 6; code.inputMode = 'numeric'; code.placeholder = '輸入圖上的數字'; code.autocomplete = 'off';
@@ -329,12 +329,12 @@
     box.append(cap, img, row, msg);
     const label = () => { const l = legs[i]; cap.textContent = `立榮驗證碼・${l.label}・${l.n} 位`; };
     async function load() {
-      token = ''; code.value = ''; go.disabled = true; img.removeAttribute('src'); msg.textContent = '讀取驗證碼…';
+      token = ''; code.value = ''; go.disabled = true; img.hidden = true; img.removeAttribute('src'); msg.textContent = '讀取驗證碼…';
       let r;
       try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'cap' })); } catch (_) { r = null; }
       const u = r && r.uba;
       if (!u || u.error || !u.img) { msg.textContent = (u && u.error) || '驗證碼讀取失敗，請按「換一張」'; return; }
-      token = u.token; img.src = u.img; go.disabled = false; msg.textContent = '看圖輸入數字後按「查詢」'; code.focus();
+      token = u.token; img.src = u.img; img.hidden = false; go.disabled = false; msg.textContent = '看圖輸入數字後按「查詢」'; code.focus();
     }
     async function query() {
       const v = code.value.trim();

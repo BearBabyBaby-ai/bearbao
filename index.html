@@ -7918,6 +7918,7 @@ if (window.bearDesktop) {
           const jobs = !ok.length ? [] : ok.length === 2
             ? [{ idx: [ok[0].i, ok[1].i], k: ok[0].k, ret: ok[1].k, from: ok[0].from, to: ok[0].to, n, label: `來回 ${ok[0].md}–${ok[1].md} ${ok[0].route}` }]
             : [{ idx: [ok[0].i], k: ok[0].k, ret: '', from: ok[0].from, to: ok[0].to, n, label: `${ok[0].tag} ${ok[0].md} ${ok[0].route}` }];
+          if (!CFG.seatUrl) return '查機位功能尚未開通：請先部署「航班動態.gs」網頁應用程式，並把網址填進系統設定的「航班查詢網址」';
           if (jobs.length) return { blocks: [{ type: 'title', text: title }, { type: 'uba', jobs, plan }] };
           return await seatList(plan, {}, fromKey ? '立榮候補只能查 2 天後的班次' : '指定出發地才能查立榮候補');
         }
