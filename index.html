@@ -401,7 +401,8 @@
     #view-flight .seat-date{position:relative;display:inline-flex}
     #view-flight .seat-date .field{width:130px;min-width:0;cursor:pointer}
     #view-flight .seat-date input[type=date]{position:absolute;left:0;bottom:0;width:100%;height:0;opacity:0;border:0;padding:0;pointer-events:none}
-    #view-flight .seat-row .seat-text{flex:1 1 260px;min-width:220px}
+    #view-flight .seat-row .seat-text{flex:1 1 100%;min-width:0}
+    #view-flight .seat-row+.seat-row{margin-top:8px}
     #view-flight .seat-step{min-width:40px;height:40px;border:1px solid #c7d2de;border-radius:10px;background:#f4f7fb;font-weight:800;cursor:pointer}
     #view-flight .seat-result{margin-top:10px}
     #view-flight .seat-result table{width:100%;border-collapse:collapse;min-width:0}
@@ -1499,13 +1500,17 @@
             <button type="button" class="seat-step" data-step="1" aria-label="後一天">▶</button>
             <span class="seat-to">～</span>
             <span class="seat-date"><input id="seatDate2" class="field" type="text" inputmode="numeric" maxlength="10" placeholder="YYYY/MM/DD" aria-label="回程日期"><input id="seatDate2P" type="date" tabindex="-1" aria-hidden="true"></span>
+          </div>
+          <div class="seat-row">
+            <input id="seatText" class="field seat-text" type="text" placeholder="直接輸入日期或日期區段（例：12/02 或 12/02-12/04），也可以連航線一起打：12/02-12/04 台北>澎湖 4位" aria-label="直接輸入日期或日期區段、航線">
+          </div>
+          <div class="seat-row">
             <select id="seatFrom" class="field" aria-label="航線">
               <option value="TSA">松山 → 澎湖</option><option value="RMQ">台中 → 澎湖</option><option value="CYI">嘉義 → 澎湖</option><option value="TNN">台南 → 澎湖</option><option value="KHH">高雄 → 澎湖</option>
             </select>
             <select id="seatN" class="field" aria-label="人數"><option value="1">1 人</option><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option></select>
             <button type="button" id="seatGo" class="refresh">查詢</button>
             <button type="button" id="seatUba" class="refresh">座位查詢（華信＋立榮）</button>
-            <input id="seatText" class="field seat-text" type="text" placeholder="例：12/02-12/04 台北>澎湖 4位" aria-label="直接輸入日期或日期區段、航線">
           </div>
           <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="numeric" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
@@ -1837,7 +1842,7 @@ const Seat = (() => {
       return true;
     };
     txt.addEventListener('change', applyText);
-    txt.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); if (applyText()) run(); } });
+    txt.addEventListener('keydown', e => { if (e.key !== 'Enter') return; e.preventDefault(); if (!applyText()) return; if (CITY.some(([, re]) => re.test(txt.value))) run(); else { out.innerHTML = note('日期已填好，請在下面選航線'); document.getElementById('seatFrom').focus(); } });
     // 航班動態／查機位 分開兩個畫面
     const app = document.querySelector('#view-flight .ap-app');
     document.querySelectorAll('#view-flight .fv-btn').forEach(b => b.addEventListener('click', () => {
