@@ -1875,11 +1875,11 @@ const Seat = (() => {
       out.innerHTML = keep || note('看圖輸入驗證碼後按「送出」');
       capCode.focus();
     };
-    // 立榮候補頁只開放 2 天後的日期（和熊寶桌寵一樣）：太近的那一段不送立榮，只查華信
-    const uiaLegs = () => { const min = shift(today(), 2); return legs().map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min); };
+    // 立榮座位查立榮訂位頁：今天以後的日期都可以查
+    const uiaLegs = () => { const min = today(); return legs().map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min); };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
-      if (!uiaLegs().length) { cap.hidden = true; token = ''; run().then(() => { out.innerHTML += note('立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'); }); return; }
+      if (!uiaLegs().length) { cap.hidden = true; token = ''; run().then(() => { out.innerHTML += note('這天的立榮座位請到立榮官網確認'); }); return; }
       cap.hidden = false; newCap();
     });
     document.getElementById('seatCapNew').addEventListener('click', () => newCap());
@@ -1887,7 +1887,7 @@ const Seat = (() => {
       const v = capCode.value.trim();
       if (!token || !v) return;
       const ls = legs(), n = document.getElementById('seatN').value, tk = token, ok = uiaLegs();
-      if (!ok.length) { token = ''; cap.hidden = true; await run(); out.innerHTML += note('立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'); return; }
+      if (!ok.length) { token = ''; cap.hidden = true; await run(); out.innerHTML += note('這天的立榮座位請到立榮官網確認'); return; }
       const go = ok[0], ret = ok.length === 2 ? `&ret=${ok[1].k}` : '';
       token = '';
       out.innerHTML = note('查詢中…');
@@ -1901,7 +1901,7 @@ const Seat = (() => {
       let none = true;
       js.forEach((j, i) => {
         const k = ok.findIndex(l => l.i === i);
-        if (k < 0) { j.uiaNote = '立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'; return; }
+        if (k < 0) { j.uiaNote = '這天的立榮座位請到立榮官網確認'; return; }
         const uia = (w.flights || []).filter(f => (f.dir || 'go') === (k ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
         if (uia.length) { none = false; j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
       });
@@ -8089,7 +8089,7 @@ if (window.bearDesktop) {
           const title = `${days.length > 1 ? `${md(days[0])}–${md(days[days.length - 1])} 來回` : `${md(days[0])} 單程`}・${(land => days.length > 1 ? `${land} ⇄ 澎湖` : back ? `澎湖 → ${land}` : `${land} → 澎湖`)(fromKey ? Seat.NAMES[fromKey[0]] : '台灣本島')}・${n} 位`;
           const plan = { title, n, legs: legs.map(l => ({ k: l.k, from: l.from, to: l.to, tag: l.tag, n, md: md(l.k), route: `${Seat.NAMES[l.from]}→${Seat.NAMES[l.to]}` })) };
           // 查機位流程：有指定出發地時，先在對話框出立榮驗證碼（每一段一張），使用者輸入後才查兩家並列表
-          const min = addDays(todayKey(), 2);
+          const min = todayKey();
           // 立榮驗證碼一次只出一張：來回（日期區段）用立榮「來回」查詢，只輸入一次
           const ok = fromKey ? plan.legs.map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min) : [];
           const jobs = !ok.length ? [] : ok.length === 2
@@ -8097,7 +8097,7 @@ if (window.bearDesktop) {
             : [{ idx: [ok[0].i], k: ok[0].k, ret: '', from: ok[0].from, to: ok[0].to, n, label: `${ok[0].tag} ${ok[0].md} ${ok[0].route}` }];
           if (!CFG.seatUrl) return '查機位功能尚未開通：請先部署「航班動態.gs」網頁應用程式，並把網址填進系統設定的「航班查詢網址」';
           if (jobs.length) return { blocks: [{ type: 'title', text: title }, { type: 'uba', jobs, plan }] };
-          return await seatList(plan, {}, fromKey ? '立榮候補只能查 2 天後的班次' : '指定出發地才能查立榮候補');
+          return await seatList(plan, {}, fromKey ? '' : '指定出發地才能查立榮座位');
         }
         // 航班：句子有航班、班機、飛機，或只打航班代號
         // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
