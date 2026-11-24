@@ -7280,10 +7280,44 @@ if (window.bearDesktop) {
       return { blocks: [{ type: 'title', text: query }, ...list.map(it => ({ type: 'text', text: lines(`・${plainText(it.name)}`, [it.start === it.end ? it.start : `${it.start}–${it.end}`, it.time].filter(Boolean).join('　'), it.place && `地點：${it.place}`) }))] };
     }
 
+    /* ── 日期總覽用：落在這幾天的月曆事項（節日、搶票、生日、提醒…）與活動列表的活動（元宵活動另外列；收支不列） ── */
+    const onDayItem = (it, k) => it.yearly ? (k.slice(5) === it.start.slice(5) && k >= it.start.slice(0, 4)) : (it.start <= k && k <= it.end);
+    async function dayItems(days) {
+      try { if (typeof Cal !== 'undefined' && Cal.load) await Cal.load(); } catch (_) { return { cal: [], act: [] }; }
+      const hidden = it => (CFG.calendarHidden || []).includes(it.cat) || it.cat === '縣府政策';
+      const list = (typeof Cal !== 'undefined' ? Cal.all() : []).filter(it => it.src !== 'expense' && it.cat !== '元宵活動' && !hidden(it) && days.some(k => onDayItem(it, k)))
+        .sort((a, b) => (a.yearly ? days[0] : a.start).localeCompare(b.yearly ? days[0] : b.start) || String(a.time || '').localeCompare(String(b.time || '')));
+      return { cal: list.filter(it => it.src !== 'activity'), act: list.filter(it => it.src === 'activity') };
+    }
+    const itemWhen = (it, days) => {
+      const hit = days.filter(k => onDayItem(it, k)).map(k => k.slice(5));
+      const d = days.length > 1 ? (hit.length > 1 ? `${hit[0]}–${hit[hit.length - 1]}` : hit[0]) : '';
+      return [d, it.time].filter(Boolean).join(' ');
+    };
+    const itemLine = (it, days) => [itemWhen(it, days), plainText(it.name)].filter(Boolean).join('　');
+    // 「11/24 月曆」「11/24-11/27 活動」：列表格
+    async function dayItemsTable(days, kind) {
+      const { cal, act } = await dayItems(days);
+      const list = kind === '活動' ? act : cal;
+      const span = days.length > 1 ? `${md(days[0])}–${md(days[days.length - 1])}` : md(days[0]);
+      if (!list.length) return `${span}${kind === '活動' ? '沒有活動' : '月曆沒有事項'}`;
+      const rows = list.map(it => [days.length > 1 || it.time ? itemWhen(it, days) || '—' : '整天', plainText(it.name), it.cat || '', kind === '活動' ? (it.place || it.unit || '') : (it.range || it.content || '')]);
+      return { blocks: [{ type: 'title', text: `${span}${kind === '活動' ? '活動' : '月曆'}` }, { type: 'table', head: ['日期時間', '名稱', '類別', kind === '活動' ? '地點' : '說明'], rows }] };
+    }
     /* ── 元宵活動：元宵資訊頁同一份資料與 TXT 格式 ── */
     // 只打日期：分海、潮汐、元宵活動有資料的才列，用表格；點一列就查那一種
     async function overview(key) {
       const rows = [];
+      const ev = await dayItems([key]);
+      if (ev.cal.length) rows.push(['月曆', ev.cal.map(it => itemLine(it, [key])).join('\n'), `${key} 月曆`]);
+      if (ev.act.length) rows.push(['活動', ev.act.map(it => itemLine(it, [key])).join('\n'), `${key} 活動`]);
+      if (key === todayKey()) {
+        const st = await flightData();
+        if (st && (st.arrival.length || st.departure.length)) {
+          const late = st.arrival.filter(r => /Delayed|Cancelled/.test(r.status.className)).length;
+          rows.push(['航班', `來程 ${st.arrival.length} 班、回程 ${st.departure.length} 班${late ? `（延誤／取消 ${late} 班）` : ''}`, '當前航班']);
+        }
+      }
       if (await ensureTide()) {
         const info = tideDayInfo(key);
         if (info.hasData) {
@@ -7294,6 +7328,8 @@ if (window.bearDesktop) {
       try {
         if (!forecastRows) forecastRows = await fetchForecastRows();
         if (TIDE_PLACES.some(p => forecastDay(forecastRows, p, key))) rows.push(['潮汐', ['奎壁山', ...TIDE_PLACES].join('、'), `${key} 潮汐 選地點`]);
+        const cw = chixiDay(forecastRows, key);
+        if (cw) rows.push(['池西岩瀑建議觀賞', cw.length ? cw.join('\n') : '08:00–17:00 之間沒有建議時段', `${key} 西嶼 潮汐`]);
       } catch (_) { /* 潮汐讀取失敗就不列 */ }
       try {
         const name = Wx.areas.includes(Wx.area) ? Wx.area : '馬公市';
@@ -7324,6 +7360,13 @@ if (window.bearDesktop) {
     // 只打日期區段：列出這段期間有資料的項目（分海、潮汐、天氣、元宵活動），點一下看那一種
     async function overviewRange(r) {
       const rows = [], span = `${r.from}-${r.to}`, cnt = n => n === r.days.length ? '每天都有' : `${n} 天有資料`;
+      const ev = await dayItems(r.days);
+      if (ev.cal.length) rows.push(['月曆', ev.cal.map(it => itemLine(it, r.days)).join('\n'), `${span} 月曆`]);
+      if (ev.act.length) rows.push(['活動', ev.act.map(it => itemLine(it, r.days)).join('\n'), `${span} 活動`]);
+      if (r.days.includes(todayKey())) {
+        const st = await flightData();
+        if (st && (st.arrival.length || st.departure.length)) rows.push(['航班（今天）', `來程 ${st.arrival.length} 班、回程 ${st.departure.length} 班`, '當前航班']);
+      }
       if (await ensureTide()) {
         const n = r.days.filter(k => tideDayInfo(k).hasData).length;
         if (n) rows.push(['奎壁山分海', `緩慢分海、緩慢合海時間（${cnt(n)}）`, `${span} 分海`]);
@@ -7332,13 +7375,15 @@ if (window.bearDesktop) {
         if (!forecastRows) forecastRows = await fetchForecastRows();
         const n = r.days.filter(k => TIDE_PLACES.some(p => forecastDay(forecastRows, p, k))).length;
         if (n) rows.push(['潮汐', `${['奎壁山', ...TIDE_PLACES].join('、')}（${cnt(n)}）`, `${span} 潮汐 選地點`]);
+        const cw = r.days.map(k => [k, chixiDay(forecastRows, k)]).filter(([, w]) => w && w.length);
+        if (cw.length) rows.push(['池西岩瀑建議觀賞', cw.map(([k, w]) => `${k.slice(5)}　${w.join('、')}`).join('\n'), `${span} 西嶼 潮汐`]);
       } catch (_) { /* 潮汐讀取失敗就不列 */ }
       try {
         const name = Wx.areas.includes(Wx.area) ? Wx.area : '馬公市';
         const w = await Wx.data(name);
         if (w && !w.error) {
           const n = r.days.filter(k => w.days.has(k)).length;
-          if (n) rows.push(['天氣', `${name}天氣、氣溫、降雨、風浪（${cnt(n)}）`, `${span} 天氣 選地點`]);
+          if (n) rows.push(['天氣', `${Wx.areas.join('、')}（${cnt(n)}）`, `${span} 天氣 選地點`]);
         }
       } catch (_) { /* 天氣讀取失敗就不列 */ }
       if (await places()) {
@@ -7795,6 +7840,13 @@ if (window.bearDesktop) {
           const date = d.given ? ahead(d) : '';
           const year = date ? date.slice(0, 4) : (s.match(/(20\d{2})/) || [])[1] || '';
           return await lantern({ regions: regionsIn(s), year, date });
+        }
+        // 「11/24 月曆」「11/24-11/27 活動」：那幾天的月曆事項或活動
+        if (d.given && /(?:月曆|行事曆|活動)$/.test(s) && !/元宵/.test(s)) {
+          const kind = /活動$/.test(s) ? '活動' : '月曆';
+          const r = takeRange(s);
+          if (r && r.bad) return '日期不正確，請再確認一次';
+          return await dayItemsTable(r ? r.days : [ahead(d)], kind);
         }
         // 只打日期區段（例如 11/15-11/18）：和只打日期一樣，列出這段期間有資料的項目，點一下看那一種
         if (!s.replace(RANGE_RE, '').trim()) {
