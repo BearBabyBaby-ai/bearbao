@@ -387,6 +387,7 @@
     #view-flight .refresh{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:2px solid #ffe386;border-radius:9px;background:#f4c430;color:#17212b;font-size:15px;font-weight:950;padding:13px 20px;cursor:pointer;white-space:nowrap;box-shadow:0 5px 15px rgba(0,0,0,.20);transition:transform .18s ease,background .18s ease}
     #view-flight .refresh:hover{transform:translateY(-1px);background:#ffd54f}
     #view-flight .refresh:disabled{opacity:.6;cursor:wait}
+    #view-flight .toolbar .refresh{margin-top:0;padding:10px 18px;box-shadow:none}
     #view-flight .fv-switch{display:flex;gap:8px;margin:0 0 12px}
     #view-flight .fv-btn{flex:0 0 auto;min-width:140px;padding:11px 20px;border:2px solid #0b4f8a;border-radius:12px;background:#fff;color:#0b4f8a;font-weight:900;font-size:1rem;cursor:pointer}
     #view-flight .fv-btn.active{background:#0b4f8a;color:#fff}
@@ -426,7 +427,7 @@
       #view-flight .seat-to{flex:0 0 auto}
       #view-flight .seat-row .seat-text{font-size:14px}
     }
-    #view-flight .toolbar{display:grid;grid-template-columns:auto minmax(240px,1fr) minmax(160px,230px) auto;gap:11px;align-items:center;margin:16px 0 12px;padding:13px;border:1px solid #b9c4cd;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(31,45,58,.08)}
+    #view-flight .toolbar{display:grid;grid-template-columns:auto minmax(240px,1fr) minmax(160px,230px) auto auto;gap:11px;align-items:center;margin:16px 0 12px;padding:13px;border:1px solid #b9c4cd;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(31,45,58,.08)}
     #view-flight .tabs{display:flex;gap:0;overflow:hidden;background:#e5e9ed;padding:3px;border:1px solid #c5ced6;border-radius:9px}
     #view-flight .tab{border:0;border-radius:6px;background:transparent;color:#3f4b55;font-size:16px;font-weight:900;padding:11px 19px;cursor:pointer;transition:background .18s ease,color .18s ease}
     #view-flight .tab.active{background:#005bac;color:#fff;box-shadow:0 3px 8px rgba(0,65,122,.25)}
@@ -548,6 +549,7 @@
       #view-flight .hero p{max-width:240px;font-size:15px;line-height:1.55}
       #view-flight .refresh,#view-flight .tab,#view-flight .field{font-size:16px}
       #view-flight .toolbar{grid-template-columns:1fr 1fr}
+      #view-flight .toolbar .refresh{grid-column:1/-1}
       #view-flight .tabs{grid-column:1/-1}
       #view-flight .tab{flex:1}
       #view-flight .history-toggle{justify-self:end}
@@ -1481,7 +1483,6 @@
             <h2>澎湖機場即時航班</h2>
             <p>來程、回程班表與航班輔助查詢</p>
           </div>
-          <button id="apRefresh" class="refresh" type="button" aria-label="立即更新航班資料">立即更新</button>
         </header>
 
         <div class="fv-switch" role="tablist" aria-label="航班／查機位">
@@ -1497,6 +1498,7 @@
           <input id="apSearch" class="field" type="search" placeholder="搜尋航空公司、班次、地點、狀態" aria-label="搜尋航班">
           <select id="apAirline" class="field" aria-label="篩選航空公司"><option value="">全部航空公司</option></select>
           <label class="history-toggle"><input id="apHistory" type="checkbox"> 顯示較早班次</label>
+          <button id="apRefresh" class="refresh" type="button" aria-label="立即更新航班資料">立即更新</button>
         </section>
 
         <section class="seat-box" aria-label="查機位">
