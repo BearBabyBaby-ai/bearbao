@@ -3943,8 +3943,8 @@ const Flights = (() => {
   function tableHTML(rows) {
     const arrival = state.mode === 'arrival';
     const heads = arrival
-      ? ['航空公司', '班次', '來自', '機型', '表定起飛', '實際起飛', '表定到達', '預估／實際到達', '備註 (Remark)', '即時 HEX', '輔助查詢']
-      : ['航空公司', '班次', '目的地', '機型', '表定起飛', '預估／實際起飛', '備註 (Remark)', '登機門', '即時 HEX', '輔助查詢'];
+      ? ['航空公司', '班次', '來自', '機型', '表定起飛', '實際起飛', '表定到達', '預估／實際到達', '備註 (Remark)', '輔助查詢']
+      : ['航空公司', '班次', '目的地', '機型', '表定起飛', '預估／實際起飛', '備註 (Remark)', '登機門', '輔助查詢'];
     const body = rows.map(row => `<tr class="${row.status.history ? 'history ' : ''}${airlineClass(row.airline, row.flight)}${state.selectedFlight === row.flight ? ' flight-selected' : ''}">
       <td>${escapeHTML(row.airline)}</td>
       <td class="flight-no map-focus-trigger" data-map-flight="${escapeHTML(row.flight)}" data-map-hex="${escapeHTML(row.hex)}" role="button" tabindex="0" title="在下方地圖追蹤 ${escapeHTML(row.flight)}${row.hex ? `（即時 HEX ${escapeHTML(row.hex)}）` : ''}">${escapeHTML(row.flight)}</td>
@@ -3955,7 +3955,6 @@ const Flights = (() => {
       ${arrival ? `<td class="time">${escapeHTML(row.scheduledEnd)}</td><td class="time">${escapeHTML(row.actualEnd)}</td>` : ''}
       <td class="status-cell ${escapeHTML(row.status.className)}"><span class="status">${escapeHTML(row.status.text)}</span></td>
       ${arrival ? '' : `<td>${escapeHTML(row.gate || '—')}</td>`}
-      <td class="hex-id">${escapeHTML(row.hex || '—')}</td>
       <td>${trackingLinks(row.flight)}</td>
     </tr>`).join('');
     return `<div class="table-wrap"><table><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
@@ -3971,7 +3970,6 @@ const Flights = (() => {
         <div class="kv"><small>表定起飛</small><span class="time">${escapeHTML(row.scheduledStart || '—')}</span></div>
         <div class="kv"><small>${arrival ? '實際起飛' : '預估／實際起飛'}</small><span class="time">${escapeHTML(row.actualStart || '—')}</span></div>
         ${arrival ? `<div class="kv"><small>表定到達</small><span class="time">${escapeHTML(row.scheduledEnd || '—')}</span></div><div class="kv"><small>預估／實際到達</small><span class="time">${escapeHTML(row.actualEnd || '—')}</span></div>` : `<div class="kv"><small>登機門</small><span>${escapeHTML(row.gate || '—')}</span></div>`}
-        <div class="kv kv-hex"><small>即時 HEX</small><span class="hex-id">${escapeHTML(row.hex || '—')}</span></div>
       </div>
       ${trackingLinks(row.flight)}
     </article>`).join('')}</div>`;
