@@ -1707,7 +1707,7 @@ const Seat = (() => {
   // 有位 → 訂位頁（華信：訂位延遲付款）；已滿 → 候補頁；立榮座位不自動查 → 立榮訂位頁
   const LINK = { 華信: { 有位: 'https://www.mandarin-airlines.com/b2c/bookingpaylater', 候補: 'https://www.mandarin-airlines.com/b2c/Waiting' },
     立榮: { 有位: UIA_BOOK, 候補: 'https://www.uniair.com.tw/rwd/B2C/alternate-booking/uba_search.aspx' } };
-  const linkOf = f => (LINK[f.air] || {})[f.seat] || (f.air === '立榮' ? UIA_BOOK : '');
+  const linkOf = f => f.url || (LINK[f.air] || {})[f.seat] || (f.air === '立榮' ? UIA_BOOK : '');
   const NAMES = { TSA: '松山', RMQ: '台中', CYI: '嘉義', TNN: '台南', KHH: '高雄', MZG: '澎湖' };
   // 資料列底色：依航空公司 × 座位狀態，同色連續時深淺交替
   const ROWC = { 華信: { 有位: ['#d6eaff', '#c2dcf6'], 候補: ['#fde0e6', '#f7c9d3'], 其他: ['#fff4d6', '#ffe9b3'] },
@@ -1721,6 +1721,9 @@ const Seat = (() => {
     const res = await fetch(`${CFG.seatUrl}?date=${date}&from=${from}&to=${to}&n=${n}`, { cache: 'no-store' });
     const j = await res.json();
     if (j.error) throw new Error(j.error);
+    // 華信有人機驗證不自動查：列一列「請到華信官網確認」，點了用使用者自己的瀏覽器開華信查詢結果（日期、航線、人數已帶好）
+    if (j.mdaNote) j.flights.push({ air: '華信', no: '—', dep: '', arr: '', seat: '請到華信官網確認',
+      url: `https://www.mandarin-airlines.com/b2c/BookingNPurchase/SearchFlight?searchModel.DepartureCity=${from}&searchModel.ArrivalCity=${to}&searchModel.DepartureDate=${date.replace(/-/g, '/')}&searchModel.ItinType=1&searchModel.PassengerNo=${n}&searchModel.InfantNo=0` });
     return j;
   }
   const rowsOf = j => j.flights.map(f => [f.air, f.no, f.dep, f.arr, f.seat]);
@@ -1730,7 +1733,7 @@ const Seat = (() => {
     const head = `<div class="seat-note">${j.date.replace(/-/g, '/')}（${wk}）${NAMES[j.from]} → ${NAMES[j.to || 'MZG']}・${j.n} 人</div>`;
     if (!j.flights.length) return head + '<div class="seat-note">這天沒有班次資料</div>' + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
     const cell = f => { const u = linkOf(f), t = f.seat === '有位' ? '<span class="seat-ok">目前尚有位置</span>' : f.seat === '候補' ? '<span class="seat-wait">已滿，需候補</span>' : esc(f.seat); return u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t; };
-    return head + `<table><thead><tr><th>航空公司</th><th>班次</th><th>起飛</th><th>抵達</th><th>座位</th></tr></thead><tbody>${(bg => j.flights.map((f, i) => `<tr style="background:${bg[i]}"><td>${esc(f.air)}</td><td>${esc(f.no)}</td><td>${esc(f.dep)}</td><td>${esc(f.arr)}</td><td>${cell(f)}</td></tr>`).join(''))(rowBgs(j.flights))}</tbody></table>`
+    return head + `<table><thead><tr><th>航空公司</th><th>班次</th><th>起飛</th><th>抵達</th><th>座位</th></tr></thead><tbody>${(bg => j.flights.map((f, i) => `<tr style="background:${bg[i]}"><td>${esc(f.air)}</td><td>${esc(f.no)}</td><td>${esc(f.dep || '—')}</td><td>${esc(f.arr || '—')}</td><td>${cell(f)}</td></tr>`).join(''))(rowBgs(j.flights))}</tbody></table>`
       + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
   }
   function init() {
@@ -7842,7 +7845,7 @@ if (window.bearDesktop) {
     // ubaRes：{ '段的索引': { flights:[{no,dep,arr,status}] } }
     async function seatList(plan, ubaRes, extra) {
       const AIRC = { 華信: '#1565c0', 立榮: '#2e7d32' };
-      const SEATC = v => v === '目前尚有位置' ? '#1b5e20' : /已滿/.test(v) ? '#b71c1c' : '#8d6e00';
+      const SEATC = v => v === '目前尚有位置' ? '#1b5e20' : /已滿/.test(v) ? '#b71c1c' : /華信/.test(v) ? '#1565c0' : '#8d6e00';
       const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
       // 來回程分開呈現：去程、回程（單程）各一張表
       const groups = [], notes = new Set();
@@ -7856,7 +7859,7 @@ if (window.bearDesktop) {
         let list = j.flights;
         if (u && u.flights && u.flights.length) {
           const uia = u.flights.map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
-          list = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep).localeCompare(String(y.dep)));
+          list = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99')));
         }
         let g = groups.find(x => x.tag === leg.tag);
         if (!g) groups.push(g = { tag: leg.tag, k: leg.k, md: leg.md, routes: [], rows: [], styles: [], links: [] });
@@ -7867,7 +7870,7 @@ if (window.bearDesktop) {
           const seat = fl.seat === '有位' ? '目前尚有位置' : fl.seat === '候補' ? '已滿，需候補' : fl.seat;
           // 整列底色：依航空公司 × 座位狀態；航空公司、座位文字另用顏色
           const bg = bgs[i];
-          g.rows.push([leg.route, fl.air, fl.no, fl.dep, fl.arr, seat]);
+          g.rows.push([leg.route, fl.air, fl.no, fl.dep || '—', fl.arr || '—', seat]);
           g.styles.push([[bg, '#000000'], [bg, AIRC[fl.air] || '#555555'], [bg, '#000000'], [bg, '#000000'], [bg, '#000000'], [bg, SEATC(seat)]]);
           const url = Seat.linkOf(fl.seat === '已滿，不開放候補' ? { air: fl.air, seat: '候補' } : fl);
           g.links.push(url ? [null, null, null, null, null, url] : null);
@@ -7878,7 +7881,7 @@ if (window.bearDesktop) {
         const t = `${g.tag} ${g.md}（${'日一二三四五六'[new Date(keyToUTC(g.k)).getUTCDay()]}）${g.routes.length === 1 ? g.routes[0].replace('→', ' → ') : ''}・${plan.n} 位`;
         blocks.push({ type: 'title', text: t }, { type: 'table', title: t, head: ['航線', '航空公司', '班次', '起飛', '抵達', '座位'], rows: g.rows, styles: g.styles, links: g.links, imgBtn: true });
       });
-      blocks.push({ type: 'text', text: '點「目前尚有位置」到訂位頁，點「已滿，需候補」到候補頁' }, ...[...notes, extra].filter(Boolean).map(x => ({ type: 'text', text: x })));
+      blocks.push({ type: 'text', text: '點「目前尚有位置」到訂位頁，點「已滿，需候補」到候補頁，點「請到華信官網確認」開華信查詢結果' }, ...[...notes, extra].filter(Boolean).map(x => ({ type: 'text', text: x })));
       return { blocks };
     }
 
