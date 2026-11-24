@@ -1,6 +1,6 @@
 // 熊寶桌寵（獨立版）：熊寶在桌面走動；工作模式只能查詢，交給熊寶系統網頁版處理
 // 熊寶系統網頁版的查詢功能更新後，這裡打開就是最新的，不用重新安裝
-const { app, BrowserWindow, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, Menu, Tray, nativeImage, ipcMain } = require('electron');
 const path = require('path');
 const pet = require('./pet/src/index');
 
@@ -84,3 +84,26 @@ function start() {
 
 app.on('before-quit', () => { if (helper && !helper.isDestroyed()) helper.destroy(); });
 app.on('window-all-closed', () => {});
+
+/* ── 立榮座位：熊寶系統網頁透過這裡由這台電腦直接連立榮官網（只准連 www.uniair.com.tw） ── */
+const https = require('https');
+ipcMain.handle('uia-http', (e, r) => new Promise((resolve, reject) => {
+  let u;
+  try { u = new URL(String(r && r.url)); } catch (_) { return reject(new Error('網址不正確')); }
+  if (u.protocol !== 'https:' || u.hostname !== 'www.uniair.com.tw') return reject(new Error('只允許連立榮官網'));
+  const body = r.body ? String(r.body) : '';
+  const headers = Object.assign({}, r.headers || {});
+  if (body) headers['Content-Length'] = Buffer.byteLength(body);
+  const req = https.request(u, { method: r.method === 'POST' ? 'POST' : 'GET', headers, timeout: 30000 }, res => {
+    const chunks = [];
+    res.on('data', c => chunks.push(c));
+    res.on('end', () => {
+      const buf = Buffer.concat(chunks);
+      resolve({ status: res.statusCode, setCookie: [].concat(res.headers['set-cookie'] || []), location: res.headers.location || '', contentType: res.headers['content-type'] || '', body: r.binary ? buf.toString('base64') : buf.toString('utf8') });
+    });
+  });
+  req.on('timeout', () => req.destroy(new Error('立榮官網沒有回應')));
+  req.on('error', reject);
+  if (body) req.write(body);
+  req.end();
+}));
