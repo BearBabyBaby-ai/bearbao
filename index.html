@@ -393,12 +393,20 @@
     #view-flight .seat-row .field{width:auto;min-width:120px}
     #view-flight .seat-step{min-width:40px;height:40px;border:1px solid #c7d2de;border-radius:10px;background:#f4f7fb;font-weight:800;cursor:pointer}
     #view-flight .seat-result{margin-top:10px}
-    #view-flight .seat-result table{width:100%;border-collapse:collapse}
+    #view-flight .seat-result table{width:100%;border-collapse:collapse;min-width:0}
     #view-flight .seat-result th,#view-flight .seat-result td{padding:7px 8px;border-bottom:1px solid #e6ebf1;text-align:center;white-space:nowrap}
     #view-flight .seat-result th{background:#0b4f8a;color:#fff}
     #view-flight .seat-ok{color:#1b7a34;font-weight:800}
     #view-flight .seat-wait{color:#c62828;font-weight:800}
     #view-flight .seat-note{margin-top:6px;color:#5b6b7b;font-size:.9em}
+    #view-flight .seat-cap{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+    #view-flight .seat-cap[hidden]{display:none}
+    #view-flight .seat-cap img{height:46px;border:1px solid #c7d2de;border-radius:8px;background:#fff}
+    #view-flight .seat-cap .field{width:140px;min-width:0}
+    @media (max-width:700px){
+      #view-flight .seat-result table{table-layout:fixed;font-size:.82em}
+      #view-flight .seat-result th,#view-flight .seat-result td{padding:6px 2px;font-size:13px;letter-spacing:0;white-space:normal;word-break:keep-all;overflow-wrap:anywhere}
+    }
     #view-flight .toolbar{display:grid;grid-template-columns:auto minmax(240px,1fr) minmax(160px,230px) auto;gap:11px;align-items:center;margin:16px 0 12px;padding:13px;border:1px solid #b9c4cd;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(31,45,58,.08)}
     #view-flight .tabs{display:flex;gap:0;overflow:hidden;background:#e5e9ed;padding:3px;border:1px solid #c5ced6;border-radius:9px}
     #view-flight .tab{border:0;border-radius:6px;background:transparent;color:#3f4b55;font-size:16px;font-weight:900;padding:11px 19px;cursor:pointer;transition:background .18s ease,color .18s ease}
@@ -1471,7 +1479,9 @@
             </select>
             <select id="seatN" class="field" aria-label="人數"><option value="1">1 人</option><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option></select>
             <button type="button" id="seatGo" class="refresh">查詢</button>
+            <button type="button" id="seatUba" class="refresh">立榮座位查詢</button>
           </div>
+          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="numeric" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
         </section>
 
@@ -1751,6 +1761,46 @@ const Seat = (() => {
       d.value = k; run();
     }));
     document.getElementById('seatGo').addEventListener('click', run);
+    // 立榮座位查詢：驗證碼圖顯示給使用者看，由使用者自己輸入後送出；華信照原本查詢
+    const cap = document.getElementById('seatCap'), capImg = document.getElementById('seatCapImg'), capCode = document.getElementById('seatCapCode');
+    const note = t => `<div class="seat-note">${esc(t)}</div>`;
+    const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
+    let token = '';
+    const newCap = async () => {
+      token = ''; capImg.hidden = true; capCode.value = '';
+      out.innerHTML = note('驗證碼讀取中…');
+      try {
+        const j = await (await fetch(`${CFG.seatUrl}?act=uiaCaptcha`, { cache: 'no-store' })).json();
+        if (j.error || !j.img) throw new Error(j.error || '驗證碼讀取失敗，請按「換一張」');
+        token = j.token; capImg.src = j.img; capImg.hidden = false;
+        out.innerHTML = note('看圖輸入驗證碼後按「送出」');
+        capCode.focus();
+      } catch (e) { out.innerHTML = note(e.message || '驗證碼讀取失敗，請按「換一張」'); }
+    };
+    document.getElementById('seatUba').addEventListener('click', () => {
+      if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
+      cap.hidden = false; newCap();
+    });
+    document.getElementById('seatCapNew').addEventListener('click', newCap);
+    const send = async () => {
+      const v = capCode.value.trim();
+      if (!token || !v) return;
+      const date = d.value, from = document.getElementById('seatFrom').value, n = document.getElementById('seatN').value, tk = token;
+      token = '';
+      out.innerHTML = note('查詢中…');
+      let j, w;
+      try {
+        [j, w] = await Promise.all([query(date, from, n),
+          fetch(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${date}&from=${from}&to=MZG&n=${n}&inf=0`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ error: '立榮查詢失敗' }))]);
+      } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
+      if (w.error) { out.innerHTML = html(j) + note(w.error); if (w.expired) newCap(); return; }
+      const uia = (w.flights || []).filter(f => (f.dir || 'go') === 'go').map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
+      if (uia.length) { j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
+      out.innerHTML = html(j) + (uia.length ? '' : note('立榮查無座位資料'));
+      cap.hidden = true; capImg.hidden = true;
+    };
+    document.getElementById('seatCapGo').addEventListener('click', send);
+    capCode.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
   }
   return { init, query, rowsOf, notes, NAMES, linkOf, rowBgs };
 })();
