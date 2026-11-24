@@ -310,12 +310,13 @@
     }, 'image/png');
   }
 
-  // 立榮候補查詢框：依序查每一段（來回＝去程、回程各輸入一次驗證碼）
+  // 查機位：先出立榮驗證碼（來回也只輸入一次），使用者輸入後才查兩家航空公司並列表
   function ubaEl(b) {
     const box = document.createElement('div');
     box.className = 'b-uba';
-    const legs = b.legs || [];
+    const legs = b.jobs || [];
     let i = 0, token = '';
+    const res = {};
     const cap = document.createElement('div'); cap.className = 'uba-cap';
     const img = document.createElement('img'); img.alt = '驗證碼';
     const row = document.createElement('div'); row.className = 'files';
@@ -326,7 +327,7 @@
     const msg = document.createElement('div'); msg.className = 'b-hint';
     row.append(code, go, again);
     box.append(cap, img, row, msg);
-    const label = () => { const l = legs[i]; cap.textContent = `立榮候補查詢・${l.tag} ${l.md} ${l.route}・${l.n} 位`; };
+    const label = () => { const l = legs[i]; cap.textContent = `立榮驗證碼・${l.label}・${l.n} 位`; };
     async function load() {
       token = ''; code.value = ''; go.disabled = true; img.removeAttribute('src'); msg.textContent = '讀取驗證碼…';
       let r;
@@ -340,14 +341,19 @@
       if (!token || !v) { msg.textContent = '請輸入圖上的數字'; return; }
       go.disabled = again.disabled = true; msg.textContent = '查詢中…';
       let r;
-      try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'q', token, code: v, leg: legs[i] })); } catch (_) { r = null; }
+      try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'q', token, code: v, job: legs[i] })); } catch (_) { r = null; }
       again.disabled = false;
       const u = r && r.uba;
       if (!r || (u && u.error)) { const e = (u && u.error) || '查詢失敗'; await load(); if (token) msg.textContent = e + '，已換一張新的驗證碼，請重新輸入'; return; }
-      show(r);
+      Object.assign(res, u.res || {});
       i++;
-      if (i < legs.length) { label(); await load(); }
-      else { box.querySelectorAll('input,button').forEach(x => { x.disabled = true; }); img.remove(); cap.textContent = '立榮候補查詢完成'; msg.textContent = ''; }
+      if (i < legs.length) { label(); await load(); return; }
+      // 全部段的驗證碼都輸入完：查兩家航空公司，列成一張表
+      box.querySelectorAll('input,button').forEach(x => { x.disabled = true; }); img.remove(); cap.textContent = '立榮驗證碼已輸入'; msg.textContent = '查詢兩家航空公司中…';
+      let list;
+      try { list = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'list', plan: b.plan, res })); } catch (_) { list = '查詢失敗，請再試一次'; }
+      msg.textContent = '';
+      show(list);
     }
     go.addEventListener('click', query);
     code.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); query(); } });
