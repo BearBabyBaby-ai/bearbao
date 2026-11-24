@@ -1860,7 +1860,8 @@ const Seat = (() => {
     };
     const newCap = async (keep = '') => {
       const my = ++capSeq;
-      token = ''; capImg.hidden = true; capCode.value = '';
+      // 換新圖時舊圖先留著（變淡），新圖到了才換掉，不會整個不見
+      token = ''; capCode.value = ''; capImg.style.opacity = '.35';
       if (!keep) out.innerHTML = note('驗證碼讀取中…');
       let j = null, err = '';
       for (let i = 0; i < 2 && !j; i++) {
@@ -1870,8 +1871,8 @@ const Seat = (() => {
         } catch (_) { err = ''; }
         if (my !== capSeq) return;
       }
-      if (!j) { out.innerHTML = keep + note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
-      token = j.token; capImg.src = j.img; capImg.hidden = false;
+      if (!j) { capImg.hidden = true; capImg.style.opacity = ''; out.innerHTML = keep + note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
+      token = j.token; capImg.src = j.img; capImg.hidden = false; capImg.style.opacity = '';
       out.innerHTML = keep || note('看圖輸入驗證碼後按「送出」');
       capCode.focus();
     };
