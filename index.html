@@ -1512,7 +1512,7 @@
             <button type="button" id="seatGo" class="refresh">查詢</button>
             <button type="button" id="seatUba" class="refresh">座位查詢（華信＋立榮）</button>
           </div>
-          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
+          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
         </section>
 
@@ -1881,7 +1881,7 @@ const Seat = (() => {
     });
     document.getElementById('seatCapNew').addEventListener('click', () => newCap());
     const send = async () => {
-      const v = capCode.value.trim().toUpperCase();
+      const v = capCode.value.trim();
       if (!token || !v) return;
       const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
       const ret = ls[1] ? `&ret=${ls[1].k}` : '';

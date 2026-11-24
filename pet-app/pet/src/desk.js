@@ -321,7 +321,7 @@
     const img = document.createElement('img'); img.alt = ''; img.hidden = true;
     const row = document.createElement('div'); row.className = 'files';
     const code = document.createElement('input');
-    code.type = 'text'; code.maxLength = 8; code.inputMode = 'text'; code.autocapitalize = 'characters'; code.spellcheck = false; code.placeholder = '輸入圖上的驗證碼'; code.autocomplete = 'off';
+    code.type = 'text'; code.maxLength = 8; code.inputMode = 'text'; code.autocapitalize = 'off'; code.spellcheck = false; code.placeholder = '輸入圖上的驗證碼'; code.autocomplete = 'off';
     const go = document.createElement('button'); go.type = 'button'; go.textContent = '查詢';
     const again = document.createElement('button'); again.type = 'button'; again.textContent = '換一張';
     const msg = document.createElement('div'); msg.className = 'b-hint';
@@ -337,7 +337,7 @@
       token = u.token; img.src = u.img; img.hidden = false; go.disabled = false; msg.textContent = '看圖輸入驗證碼後按「查詢」'; code.focus();
     }
     async function query() {
-      const v = code.value.trim().toUpperCase();
+      const v = code.value.trim();
       if (!token || !v) { msg.textContent = '請輸入圖上的驗證碼'; return; }
       go.disabled = again.disabled = true; msg.textContent = '查詢中…';
       let r;
