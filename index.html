@@ -1512,7 +1512,7 @@
             <button type="button" id="seatGo" class="refresh">查詢</button>
             <button type="button" id="seatUba" class="refresh">座位查詢（華信＋立榮）</button>
           </div>
-          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="numeric" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
+          <div id="seatCap" class="seat-cap" hidden><img id="seatCapImg" alt="驗證碼" hidden><input id="seatCapCode" class="field" inputmode="text" autocapitalize="characters" autocomplete="off" spellcheck="false" maxlength="8" placeholder="輸入圖上的驗證碼" aria-label="驗證碼"><button type="button" id="seatCapGo" class="refresh">送出</button><button type="button" id="seatCapNew" class="seat-step">換一張</button></div>
           <div id="seatResult" class="seat-result"></div>
         </section>
 
@@ -1858,10 +1858,10 @@ const Seat = (() => {
       const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
       try { return await (await fetch(url, { cache: 'no-store', signal: ac.signal })).json(); } finally { clearTimeout(t); }
     };
-    const newCap = async () => {
+    const newCap = async (keep = '') => {
       const my = ++capSeq;
       token = ''; capImg.hidden = true; capCode.value = '';
-      out.innerHTML = note('驗證碼讀取中…');
+      if (!keep) out.innerHTML = note('驗證碼讀取中…');
       let j = null, err = '';
       for (let i = 0; i < 2 && !j; i++) {
         try {
@@ -1870,18 +1870,18 @@ const Seat = (() => {
         } catch (_) { err = ''; }
         if (my !== capSeq) return;
       }
-      if (!j) { out.innerHTML = note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
+      if (!j) { out.innerHTML = keep + note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
       token = j.token; capImg.src = j.img; capImg.hidden = false;
-      out.innerHTML = note('看圖輸入驗證碼後按「送出」');
+      out.innerHTML = keep || note('看圖輸入驗證碼後按「送出」');
       capCode.focus();
     };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
       cap.hidden = false; newCap();
     });
-    document.getElementById('seatCapNew').addEventListener('click', newCap);
+    document.getElementById('seatCapNew').addEventListener('click', () => newCap());
     const send = async () => {
-      const v = capCode.value.trim();
+      const v = capCode.value.trim().toUpperCase();
       if (!token || !v) return;
       const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
       const ret = ls[1] ? `&ret=${ls[1].k}` : '';
@@ -1892,7 +1892,7 @@ const Seat = (() => {
         [js, w] = await Promise.all([queryAll(ls, n),
           getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }))]);
       } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
-      if (w.error) { out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + note(w.error); if (w.expired) newCap(); return; }
+      if (w.error) { const msg = `<div class="seat-note" style="color:#c62828;font-weight:800">${esc(w.error)}${w.expired ? '（已換一張新的驗證碼）' : ''}</div>`; const tb = js.map((j, i) => html(j, ls[i].tag)).join(''); if (w.expired) newCap(msg + tb); else out.innerHTML = msg + tb; return; }
       let none = true;
       js.forEach((j, i) => {
         const uia = (w.flights || []).filter(f => (f.dir || 'go') === (i ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
