@@ -3913,7 +3913,7 @@ const Flights = (() => {
     if (!cleanFlight) return;
     state.selectedFlight = cleanFlight;
     state.selectedHex = cleanHex;
-    mapSelection.textContent = cleanHex ? `已用 HEX 精準追蹤：${cleanFlight}（${cleanHex}）` : `HEX 尚未填寫，改以班號搜尋：${cleanFlight}`;
+    mapSelection.textContent = cleanHex ? `精準追蹤：${cleanFlight}` : `以班號搜尋：${cleanFlight}`;
     clearMapFilter.disabled = false;
     const focusedUrl = embeddedMapUrl(cleanFlight, cleanHex);
     setEmbeddedMapVisible(true);
@@ -3947,7 +3947,7 @@ const Flights = (() => {
       : ['航空公司', '班次', '目的地', '機型', '表定起飛', '預估／實際起飛', '備註 (Remark)', '登機門', '輔助查詢'];
     const body = rows.map(row => `<tr class="${row.status.history ? 'history ' : ''}${airlineClass(row.airline, row.flight)}${state.selectedFlight === row.flight ? ' flight-selected' : ''}">
       <td>${escapeHTML(row.airline)}</td>
-      <td class="flight-no map-focus-trigger" data-map-flight="${escapeHTML(row.flight)}" data-map-hex="${escapeHTML(row.hex)}" role="button" tabindex="0" title="在下方地圖追蹤 ${escapeHTML(row.flight)}${row.hex ? `（即時 HEX ${escapeHTML(row.hex)}）` : ''}">${escapeHTML(row.flight)}</td>
+      <td class="flight-no map-focus-trigger" data-map-flight="${escapeHTML(row.flight)}" data-map-hex="${escapeHTML(row.hex)}" role="button" tabindex="0" title="在下方地圖追蹤 ${escapeHTML(row.flight)}">${escapeHTML(row.flight)}</td>
       <td>${escapeHTML(row.place)}</td>
       <td>${escapeHTML(row.aircraft)}</td>
       <td class="time">${escapeHTML(row.scheduledStart)}</td>
@@ -3984,7 +3984,7 @@ const Flights = (() => {
     updateAirlines();
     const rows = filteredRows();
     const visibleCount = historyToggle.checked ? rows.length : rows.filter(x => !x.status.history).length;
-    dataStatus.textContent = `${state.mode === 'arrival' ? '來程' : '回程'}航班：顯示 ${visibleCount} 班，共讀取 ${state[state.mode].length} 班｜抵達 ${state.arrival.length} 班、出發 ${state.departure.length} 班｜${state.hexStatus}`;
+    dataStatus.textContent = `${state.mode === 'arrival' ? '來程' : '回程'}航班：顯示 ${visibleCount} 班，共讀取 ${state[state.mode].length} 班｜抵達 ${state.arrival.length} 班、出發 ${state.departure.length} 班`;
     if (!rows.length) { panel.innerHTML = '<div class="empty">沒有符合篩選條件的航班。</div>'; return; }
     panel.innerHTML = tableHTML(rows) + cardsHTML(rows);
   }
