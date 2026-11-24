@@ -387,6 +387,12 @@
     #view-flight .refresh{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:2px solid #ffe386;border-radius:9px;background:#f4c430;color:#17212b;font-size:15px;font-weight:950;padding:13px 20px;cursor:pointer;white-space:nowrap;box-shadow:0 5px 15px rgba(0,0,0,.20);transition:transform .18s ease,background .18s ease}
     #view-flight .refresh:hover{transform:translateY(-1px);background:#ffd54f}
     #view-flight .refresh:disabled{opacity:.6;cursor:wait}
+    #view-flight .fv-switch{display:flex;gap:8px;margin:0 0 12px}
+    #view-flight .fv-btn{flex:0 0 auto;min-width:140px;padding:11px 20px;border:2px solid #0b4f8a;border-radius:12px;background:#fff;color:#0b4f8a;font-weight:900;font-size:1rem;cursor:pointer}
+    #view-flight .fv-btn.active{background:#0b4f8a;color:#fff}
+    @media (max-width:700px){#view-flight .fv-btn{flex:1 1 0;min-width:0}}
+    #view-flight .ap-app:not(.fv-seat)>.seat-box{display:none}
+    #view-flight .ap-app.fv-seat>:not(.hero):not(.fv-switch):not(.seat-box){display:none!important}
     #view-flight .seat-box{margin:0 0 12px;padding:13px;border:1px solid #d9e2ec;border-radius:14px;background:#fff}
     #view-flight .seat-title{display:block;margin-bottom:8px;color:#0b4f8a}
     #view-flight .seat-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -1458,6 +1464,11 @@
           <button id="apRefresh" class="refresh" type="button" aria-label="立即更新航班資料">立即更新</button>
         </header>
 
+        <div class="fv-switch" role="tablist" aria-label="航班／查機位">
+          <button type="button" class="fv-btn active" data-fv="flight" role="tab" aria-selected="true">航班動態</button>
+          <button type="button" class="fv-btn" data-fv="seat" role="tab" aria-selected="false">查機位</button>
+        </div>
+
         <section class="toolbar" aria-label="航班篩選">
           <div class="tabs" role="tablist">
             <button class="tab active" type="button" data-mode="arrival" role="tab" aria-selected="true">來程航班</button>
@@ -1761,6 +1772,13 @@ const Seat = (() => {
       d.value = k; run();
     }));
     document.getElementById('seatGo').addEventListener('click', run);
+    // 航班動態／查機位 分開兩個畫面
+    const app = document.querySelector('#view-flight .ap-app');
+    document.querySelectorAll('#view-flight .fv-btn').forEach(b => b.addEventListener('click', () => {
+      const seat = b.dataset.fv === 'seat';
+      app.classList.toggle('fv-seat', seat);
+      document.querySelectorAll('#view-flight .fv-btn').forEach(x => { x.classList.toggle('active', x === b); x.setAttribute('aria-selected', x === b ? 'true' : 'false'); });
+    }));
     // 立榮座位查詢：驗證碼圖顯示給使用者看，由使用者自己輸入後送出；華信照原本查詢
     const cap = document.getElementById('seatCap'), capImg = document.getElementById('seatCapImg'), capCode = document.getElementById('seatCapCode');
     const note = t => `<div class="seat-note">${esc(t)}</div>`;
