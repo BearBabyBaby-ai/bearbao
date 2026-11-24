@@ -1748,7 +1748,14 @@ const Seat = (() => {
   // 有位 → 訂位頁（華信：訂位延遲付款）；已滿 → 候補頁；立榮座位不自動查 → 立榮訂位頁
   const LINK = { 華信: { 有位: 'https://www.mandarin-airlines.com/b2c/bookingpaylater', 候補: 'https://www.mandarin-airlines.com/b2c/Waiting' },
     立榮: { 有位: UIA_BOOK, 候補: 'https://www.uniair.com.tw/rwd/B2C/alternate-booking/uba_search.aspx' } };
-  const linkOf = f => (LINK[f.air] || {})[f.seat] || (f.air === '立榮' ? UIA_BOOK : '');
+  // 跳到航空公司官網時帶入查詢的設定：華信帶日期、航線、人數（直接到那天的航班列表）；立榮官網只接受帶航線
+  const linkOf = (f, j) => {
+    if (!j) return (LINK[f.air] || {})[f.seat] || (f.air === '立榮' ? UIA_BOOK : '');
+    const from = j.from, to = j.to || 'MZG';
+    if (f.air === '華信') return `https://www.mandarin-airlines.com/b2c/BookingNPurchase/SearchFlight?searchModel.DepartureCity=${from}&searchModel.ArrivalCity=${to}&searchModel.DepartureDate=${String(j.date).replace(/-/g, '/')}&searchModel.ItinType=1&searchModel.PassengerNo=${j.n}&searchModel.InfantNo=0`;
+    if (f.air === '立榮') return `${UIA_BOOK}?DEP=${from}&ARR=${to}`;
+    return '';
+  };
   const NAMES = { TSA: '松山', RMQ: '台中', CYI: '嘉義', TNN: '台南', KHH: '高雄', MZG: '澎湖' };
   // 資料列底色：依航空公司 × 座位狀態，同色連續時深淺交替
   const ROWC = { 華信: { 有位: ['#d6eaff', '#c2dcf6'], 候補: ['#fde0e6', '#f7c9d3'], 其他: ['#fff4d6', '#ffe9b3'] },
@@ -1770,7 +1777,7 @@ const Seat = (() => {
     const wk = '日一二三四五六'[new Date(j.date + 'T12:00:00+08:00').getDay()];
     const head = `<div class="seat-note">${tag ? tag + '・' : ''}${j.date.replace(/-/g, '/')}（${wk}）${NAMES[j.from]} → ${NAMES[j.to || 'MZG']}・${j.n} 人</div>`;
     if (!j.flights.length) return head + '<div class="seat-note">這天沒有班次資料</div>' + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
-    const cell = f => { const u = linkOf(f), t = f.seat === '有位' ? '<span class="seat-ok">目前尚有位置</span>' : f.seat === '候補' ? '<span class="seat-wait">已滿，需候補</span>' : esc(f.seat); return u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t; };
+    const cell = f => { const u = linkOf(f, j), t = f.seat === '有位' ? '<span class="seat-ok">目前尚有位置</span>' : f.seat === '候補' ? '<span class="seat-wait">已滿，需候補</span>' : esc(f.seat); return u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t; };
     return head + `<table><thead><tr><th>航空公司</th><th>班次</th><th>起飛</th><th>抵達</th><th>座位</th></tr></thead><tbody>${(bg => j.flights.map((f, i) => `<tr style="background:${bg[i]}"><td>${esc(f.air)}</td><td>${esc(f.no)}</td><td>${esc(f.dep)}</td><td>${esc(f.arr)}</td><td>${cell(f)}</td></tr>`).join(''))(rowBgs(j.flights))}</tbody></table>`
       + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
   }
@@ -8039,7 +8046,7 @@ if (window.bearDesktop) {
           const bg = bgs[i];
           g.rows.push([leg.route, fl.air, fl.no, fl.dep, fl.arr, seat]);
           g.styles.push([[bg, '#000000'], [bg, AIRC[fl.air] || '#555555'], [bg, '#000000'], [bg, '#000000'], [bg, '#000000'], [bg, SEATC(seat)]]);
-          const url = Seat.linkOf(fl.seat === '已滿，不開放候補' ? { air: fl.air, seat: '候補' } : fl);
+          const url = Seat.linkOf(fl, j);
           g.links.push(url ? [null, null, null, null, null, url] : null);
         });
       }
