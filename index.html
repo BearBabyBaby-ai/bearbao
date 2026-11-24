@@ -7275,7 +7275,7 @@ if (window.bearDesktop) {
       }
       try {
         if (!forecastRows) forecastRows = await fetchForecastRows();
-        if (TIDE_PLACES.some(p => forecastDay(forecastRows, p, key))) rows.push(['潮汐', ['奎壁山', ...TIDE_PLACES].join('、'), `${key} 潮汐`]);
+        if (TIDE_PLACES.some(p => forecastDay(forecastRows, p, key))) rows.push(['潮汐', ['奎壁山', ...TIDE_PLACES].join('、'), `${key} 潮汐 選地點`]);
       } catch (_) { /* 潮汐讀取失敗就不列 */ }
       if (await places()) {
         const groups = new Map();
@@ -7308,14 +7308,14 @@ if (window.bearDesktop) {
       try {
         if (!forecastRows) forecastRows = await fetchForecastRows();
         const n = r.days.filter(k => TIDE_PLACES.some(p => forecastDay(forecastRows, p, k))).length;
-        if (n) rows.push(['潮汐', `${['奎壁山', ...TIDE_PLACES].join('、')}（${cnt(n)}）`, `${span} 潮汐`]);
+        if (n) rows.push(['潮汐', `${['奎壁山', ...TIDE_PLACES].join('、')}（${cnt(n)}）`, `${span} 潮汐 選地點`]);
       } catch (_) { /* 潮汐讀取失敗就不列 */ }
       try {
         const name = Wx.areas.includes(Wx.area) ? Wx.area : '馬公市';
         const w = await Wx.data(name);
         if (w && !w.error) {
           const n = r.days.filter(k => w.days.has(k)).length;
-          if (n) rows.push(['天氣', `${name}天氣、氣溫、降雨、風浪（${cnt(n)}）`, `${span} 天氣`]);
+          if (n) rows.push(['天氣', `${name}天氣、氣溫、降雨、風浪（${cnt(n)}）`, `${span} 天氣 選地點`]);
         }
       } catch (_) { /* 天氣讀取失敗就不列 */ }
       if (await places()) {
@@ -7337,6 +7337,18 @@ if (window.bearDesktop) {
       return { blocks: [
         { type: 'title', text: `${title}有這些資料，點要看的那一項` },
         { type: 'pick', head: ['項目', '內容'], rows: rows.map(x => x.slice(0, 2)), cmds: rows.map(x => x[2]) }
+      ] };
+    }
+    // 二級選單：日期總覽點「天氣」「潮汐」後，先列出查詢地點，點一個再查
+    function pickPlace(s) {
+      const base = s.replace(/\s*選地點$/, '').trim();
+      const isWx = /天氣$/.test(base), when = base.replace(/\s*(?:天氣|潮汐)$/, '').trim();
+      const show = when.split('-').map(k => `${k.slice(5)}（${'日一二三四五六'[new Date(keyToUTC(k)).getUTCDay()]}）`).join('–');
+      const list = isWx ? Wx.areas.map(a => [a, `${when} ${a} 天氣`])
+        : [...['奎壁山', ...TIDE_PLACES].map(p => [p, `${when} ${p} 潮汐`]), ['全部地點', `${when} 潮汐`]];
+      return { blocks: [
+        { type: 'title', text: `${show}${isWx ? '天氣' : '潮汐'}，點要查詢的${isWx ? '區域' : '地點'}` },
+        { type: 'pick', head: [isWx ? '查詢區域' : '查詢地點'], rows: list.map(x => [x[0]]), cmds: list.map(x => x[1]) }
       ] };
     }
     /* ── 2027澎湖元宵 路線推薦：路線站序與元宵APP（Lantern Festival）同一份 ── */
@@ -7729,6 +7741,7 @@ if (window.bearDesktop) {
           }
         }
         if (/航班|班機|飛機|班次/.test(s) || (code && s.replace(/\s|-/g, '').length <= 7)) return await flights(code ? code[1] + code[2] : '');
+        if (/(?:天氣|潮汐)\s*選地點$/.test(s)) return pickPlace(s);
         if (WX_RE.test(s)) {
           const r = takeRange(s);
           if (r && r.bad) return '日期不正確，請再確認一次';
