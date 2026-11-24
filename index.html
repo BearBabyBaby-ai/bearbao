@@ -3576,7 +3576,7 @@ function onForecastShown() {
 
 
 const Flights = (() => {
-  const SHEETS = { arrival: '抵達航班', departure: '出發航班', mda: '華信航班' };
+  const SHEETS = { arrival: '抵達航班', departure: '出發航班', mda: '華信航班', uia: '立榮航班' };
   const HISTORY_MINUTES = 90;
   let AUTO_REFRESH_MS = 60 * 1000;
   const HEX_LOOKUP_TIMEOUT_MS = 12000;
@@ -3849,16 +3849,17 @@ const Flights = (() => {
     if (lower.includes('boarding') || lower.includes('登機')) return { text: raw || '登機 Boarding', className: 'Boarding', history: false };
     return { text: raw || '準時 On Time', className: 'OnTime', history: isOlderThan(actual || scheduled) };
   }
-  // 預計起飛：華信表定起飛和澎湖航空站表定不同時，填華信表定（實際起飛不算；只有華信；同一天、同一班）
-  function applyExpected(rows) {
+  // 預計起飛：航空公司時間和澎湖航空站表定不同時才填（華信用華信表定起飛；立榮用立榮預計出發；實際起飛不算；同一天、同一班）
+  function applyExpected(mdaRows, uiaRows) {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
     const mins = t => { const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-    const mda = new Map();
-    (rows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) mda.set(no, String(r[4]).trim()); });
+    const air = { MDA: new Map(), UIA: new Map() };
+    (mdaRows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) air.MDA.set(no, String(r[4]).trim()); });
+    (uiaRows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); const t = mins(r[6]) != null ? r[6] : r[4]; if (String(r[0] || '').trim() === today && no && mins(t) != null) air.UIA.set(no, String(t).trim()); });
     ['arrival', 'departure'].forEach(mode => state[mode].forEach(row => {
       row.expectedStart = '';
-      const m = String(row.flight).match(/^MDA(\d+)$/);
-      const t = m && mda.get(m[1]);
+      const m = String(row.flight).match(/^(MDA|UIA)(\d+)$/);
+      const t = m && air[m[1]].get(m[2]);
       if (t && mins(t) !== mins(row.scheduledStart)) row.expectedStart = t;
     }));
   }
@@ -4033,10 +4034,10 @@ const Flights = (() => {
     refreshBtn.textContent = '更新中…';
     dataStatus.textContent = '正在讀取航班資料…';
     try {
-      const [arrivalRows, departureRows, mdaRows] = await Promise.all([loadSheetWithRetry(SHEETS.arrival), loadSheetWithRetry(SHEETS.departure), loadSheetWithRetry(SHEETS.mda).catch(() => [])]);
+      const [arrivalRows, departureRows, mdaRows, uiaRows] = await Promise.all([loadSheetWithRetry(SHEETS.arrival), loadSheetWithRetry(SHEETS.departure), loadSheetWithRetry(SHEETS.mda).catch(() => []), loadSheetWithRetry(SHEETS.uia).catch(() => [])]);
       state.arrival = mapArrival(arrivalRows);
       state.departure = mapDeparture(departureRows);
-      applyExpected(mdaRows);
+      applyExpected(mdaRows, uiaRows);
       if (!state.arrival.length && !state.departure.length) throw new Error('兩個航班分頁皆沒有可用資料');
       state.loaded = true; state.error = '';
       const nextSignature = currentFlightSignature();
