@@ -387,6 +387,18 @@
     #view-flight .refresh{position:relative;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:2px solid #ffe386;border-radius:9px;background:#f4c430;color:#17212b;font-size:15px;font-weight:950;padding:13px 20px;cursor:pointer;white-space:nowrap;box-shadow:0 5px 15px rgba(0,0,0,.20);transition:transform .18s ease,background .18s ease}
     #view-flight .refresh:hover{transform:translateY(-1px);background:#ffd54f}
     #view-flight .refresh:disabled{opacity:.6;cursor:wait}
+    #view-flight .seat-box{margin:0 0 12px;padding:13px;border:1px solid #d9e2ec;border-radius:14px;background:#fff}
+    #view-flight .seat-title{display:block;margin-bottom:8px;color:#0b4f8a}
+    #view-flight .seat-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    #view-flight .seat-row .field{width:auto;min-width:120px}
+    #view-flight .seat-step{min-width:40px;height:40px;border:1px solid #c7d2de;border-radius:10px;background:#f4f7fb;font-weight:800;cursor:pointer}
+    #view-flight .seat-result{margin-top:10px}
+    #view-flight .seat-result table{width:100%;border-collapse:collapse}
+    #view-flight .seat-result th,#view-flight .seat-result td{padding:7px 8px;border-bottom:1px solid #e6ebf1;text-align:center;white-space:nowrap}
+    #view-flight .seat-result th{background:#0b4f8a;color:#fff}
+    #view-flight .seat-ok{color:#1b7a34;font-weight:800}
+    #view-flight .seat-wait{color:#c62828;font-weight:800}
+    #view-flight .seat-note{margin-top:6px;color:#5b6b7b;font-size:.9em}
     #view-flight .toolbar{display:grid;grid-template-columns:auto minmax(240px,1fr) minmax(160px,230px) auto;gap:11px;align-items:center;margin:16px 0 12px;padding:13px;border:1px solid #b9c4cd;border-radius:12px;background:#fff;box-shadow:0 5px 16px rgba(31,45,58,.08)}
     #view-flight .tabs{display:flex;gap:0;overflow:hidden;background:#e5e9ed;padding:3px;border:1px solid #c5ced6;border-radius:9px}
     #view-flight .tab{border:0;border-radius:6px;background:transparent;color:#3f4b55;font-size:16px;font-weight:900;padding:11px 19px;cursor:pointer;transition:background .18s ease,color .18s ease}
@@ -1446,6 +1458,21 @@
           <label class="history-toggle"><input id="apHistory" type="checkbox"> 顯示較早班次</label>
         </section>
 
+        <section class="seat-box" aria-label="查機位">
+          <b class="seat-title">查機位（台灣本島 → 澎湖）</b>
+          <div class="seat-row">
+            <button type="button" class="seat-step" data-step="-1" aria-label="前一天">◀</button>
+            <input id="seatDate" class="field" type="date" aria-label="出發日期">
+            <button type="button" class="seat-step" data-step="1" aria-label="後一天">▶</button>
+            <select id="seatFrom" class="field" aria-label="航線">
+              <option value="TSA">松山 → 澎湖</option><option value="RMQ">台中 → 澎湖</option><option value="CYI">嘉義 → 澎湖</option><option value="TNN">台南 → 澎湖</option><option value="KHH">高雄 → 澎湖</option>
+            </select>
+            <select id="seatN" class="field" aria-label="人數"><option value="1">1 人</option><option value="2">2 人</option><option value="3">3 人</option><option value="4">4 人</option></select>
+            <button type="button" id="seatGo" class="refresh">查詢</button>
+          </div>
+          <div id="seatResult" class="seat-result"></div>
+        </section>
+
         <div class="meta">
           <span id="apStatus">正在準備自動讀取航班資料…</span>
           <span><span id="apUpdated"></span><span id="apNext"></span></span>
@@ -1663,7 +1690,7 @@ const CFG = {
   defaultView: 'home'
 };
 const OLD_LOGO_URL = 'https://lh3.googleusercontent.com/d/1rYf3EqwjJBh7pfyYFniBu5AjcKk8drS5';
-const HUB_KEYS = { '潮汐預報預設區域': 'forecastDefault', '航班自動更新秒數': 'flightRefreshSec', '月曆隱藏類別': 'calendarHidden', '首頁近期天數': 'homeDays', '預設開啟分頁': 'defaultView', '\u8ca1\u52d9\u5f8c\u7aef\u7db2\u5740': 'financeUrl' };
+const HUB_KEYS = { '潮汐預報預設區域': 'forecastDefault', '航班自動更新秒數': 'flightRefreshSec', '航班查詢網址': 'seatUrl', '月曆隱藏類別': 'calendarHidden', '首頁近期天數': 'homeDays', '預設開啟分頁': 'defaultView', '\u8ca1\u52d9\u5f8c\u7aef\u7db2\u5740': 'financeUrl' };
 const VIEW_NAMES = { '首頁': 'home', '地圖': 'map', '活動': 'events', '分海': 'tide', '潮汐': 'tide', '潮汐分海': 'tide', '航班': 'flight', '月曆': 'calendar', '元宵': 'events', '提醒': 'remind', '財務': 'finance' };
 const DEFAULT_LINKS = [
   { name: '澎湖國家風景區管理處', url: 'https://www.penghu-nsa.gov.tw/', note: '活動與旅遊資訊' },
@@ -1671,6 +1698,53 @@ const DEFAULT_LINKS = [
   { name: '即時航機地圖 ADSB.lol', url: 'https://adsb.lol/?lat=23.57&lon=119.63&zoom=7', note: '澎湖周邊即時航機' }
 ];
 let hubNotices = [], hubLinks = DEFAULT_LINKS;
+
+/* ── 查機位：台灣本島 → 澎湖（華信有無位置；立榮訂位要驗證碼，只列班次，座位請到立榮官網確認） ── */
+const Seat = (() => {
+  const UIA_BOOK = 'https://www.uniair.com.tw/rwd/B2C/booking/ubk_search.aspx';
+  const NAMES = { TSA: '松山', RMQ: '台中', CYI: '嘉義', TNN: '台南', KHH: '高雄' };
+  const tz = d => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(d);
+  const shift = (k, n) => { const d = new Date(k + 'T12:00:00+08:00'); d.setDate(d.getDate() + n); return tz(d); };
+  async function query(date, from, n) {
+    if (!CFG.seatUrl) throw new Error('查機位功能尚未開通');
+    const res = await fetch(`${CFG.seatUrl}?date=${date}&from=${from}&n=${n}`, { cache: 'no-store' });
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+    return j;
+  }
+  const rowsOf = j => j.flights.map(f => [f.air, f.no, f.dep, f.arr, f.seat]);
+  const notes = j => [j.mdaError, j.uiaError, j.uiaNote].filter(Boolean);
+  function html(j) {
+    const wk = '日一二三四五六'[new Date(j.date + 'T12:00:00+08:00').getDay()];
+    const head = `<div class="seat-note">${j.date.replace(/-/g, '/')}（${wk}）${NAMES[j.from]} → 澎湖・${j.n} 人</div>`;
+    if (!j.flights.length) return head + '<div class="seat-note">這天沒有班次資料</div>' + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
+    const cell = s => s === '有位' ? '<span class="seat-ok">有位</span>' : s === '候補' ? '<span class="seat-wait">已滿・候補</span>' : `<a href="${UIA_BOOK}" target="_blank" rel="noopener">${esc(s)}</a>`;
+    return head + `<table><thead><tr><th>航空公司</th><th>班次</th><th>起飛</th><th>抵達</th><th>座位</th></tr></thead><tbody>${j.flights.map(f => `<tr><td>${esc(f.air)}</td><td>${esc(f.no)}</td><td>${esc(f.dep)}</td><td>${esc(f.arr)}</td><td>${cell(f.seat)}</td></tr>`).join('')}</tbody></table>`
+      + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
+  }
+  function init() {
+    const d = document.getElementById('seatDate');
+    if (!d || d.dataset.ready) return;
+    d.dataset.ready = '1';
+    d.value = shift(tz(new Date()), 1);
+    d.min = tz(new Date());
+    const out = document.getElementById('seatResult');
+    const run = async () => {
+      out.innerHTML = '<div class="seat-note">查詢中…</div>';
+      try { out.innerHTML = html(await query(d.value, document.getElementById('seatFrom').value, document.getElementById('seatN').value)); }
+      catch (e) { out.innerHTML = `<div class="seat-note">${esc(e.message || '查詢失敗，請再試一次')}</div>`; }
+    };
+    document.querySelectorAll('#view-flight .seat-step').forEach(b => b.addEventListener('click', () => {
+      const k = shift(d.value || tz(new Date()), Number(b.dataset.step));
+      if (k < d.min) return;
+      d.value = k; run();
+    }));
+    document.getElementById('seatGo').addEventListener('click', run);
+  }
+  return { init, query, rowsOf, notes, NAMES };
+})();
+document.addEventListener('DOMContentLoaded', () => Seat.init());
+setTimeout(() => Seat.init(), 0);
 
 function applyCfg(key, value) {
   const v = clean(value);
@@ -7739,6 +7813,27 @@ if (window.bearDesktop) {
       const s = plain(String(text || '').replace(/\s+/g, ' ').trim());
       if (!s) return help;
       try {
+        // 查機位：「11/28 松山 2人 機位」「機位 高雄 11/30 3人」（台灣本島 → 澎湖）
+        if (/機位|座位|有位|空位/.test(s)) {
+          const fromKey = [['TSA', /松山|台北|臺北/], ['RMQ', /台中|臺中/], ['CYI', /嘉義/], ['TNN', /台南|臺南/], ['KHH', /高雄/]].find(([, re]) => re.test(s));
+          const n = Math.min(4, Math.max(1, Number((s.match(/(\d)\s*(?:人|位|張)/) || [])[1]) || 1));
+          const dd = takeDate(s.replace(/\d\s*(?:人|位|張)/, ''));
+          if (dd.bad) return '日期不正確，請再確認一次';
+          const key = dd.given ? ahead(dd) : todayKey();
+          const froms = fromKey ? [fromKey[0]] : ['TSA', 'RMQ', 'CYI', 'TNN', 'KHH'];
+          const blocks = [];
+          for (const f of froms) {
+            let j;
+            try { j = await Seat.query(key, f, n); } catch (e) { return e.message || '查詢失敗，請再試一次'; }
+            if (!j.flights.length && !fromKey) continue;
+            blocks.push({ type: 'title', text: `${md(key)} ${Seat.NAMES[f]} → 澎湖・${n} 人` });
+            if (j.flights.length) blocks.push({ type: 'table', head: ['航空公司', '班次', '起飛', '抵達', '座位'], rows: Seat.rowsOf(j).map(r => [r[0], r[1], r[2], r[3], r[4] === '候補' ? '已滿・候補' : r[4]]),
+              styles: Seat.rowsOf(j).map(r => r.map((v, c) => c === 4 ? (r[4] === '有位' ? ['#e8f5e9', '#1b7a34'] : r[4] === '候補' ? ['#fdecea', '#c62828'] : ['#ffffff', '#555555']) : ['#ffffff', '#000000'])) });
+            else blocks.push({ type: 'text', text: '這天沒有班次資料' });
+            Seat.notes(j).forEach(t => blocks.push({ type: 'text', text: t }));
+          }
+          return blocks.length ? { blocks } : `${md(key)} 沒有班次資料`;
+        }
         // 航班：句子有航班、班機、飛機，或只打航班代號
         // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
         const compact = s.toUpperCase().replace(/\s|-/g, '');
