@@ -1875,28 +1875,34 @@ const Seat = (() => {
       out.innerHTML = keep || note('看圖輸入驗證碼後按「送出」');
       capCode.focus();
     };
+    // 立榮候補頁只開放 2 天後的日期（和熊寶桌寵一樣）：太近的那一段不送立榮，只查華信
+    const uiaLegs = () => { const min = shift(today(), 2); return legs().map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min); };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
+      if (!uiaLegs().length) { cap.hidden = true; token = ''; run().then(() => { out.innerHTML += note('立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'); }); return; }
       cap.hidden = false; newCap();
     });
     document.getElementById('seatCapNew').addEventListener('click', () => newCap());
     const send = async () => {
       const v = capCode.value.trim();
       if (!token || !v) return;
-      const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
-      const ret = ls[1] ? `&ret=${ls[1].k}` : '';
+      const ls = legs(), n = document.getElementById('seatN').value, tk = token, ok = uiaLegs();
+      if (!ok.length) { token = ''; cap.hidden = true; await run(); out.innerHTML += note('立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'); return; }
+      const go = ok[0], ret = ok.length === 2 ? `&ret=${ok[1].k}` : '';
       token = '';
       out.innerHTML = note('查詢中…');
       let js, w;
       try {
         // 先單獨送立榮驗證碼（和熊寶桌寵一樣），查完立榮才查華信，避免同時查詢讓立榮的驗證碼失效
-        w = await getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }));
+        w = await getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=${go.to}&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }));
         js = await queryAll(ls, n);
       } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
       if (w.error) { const msg = `<div class="seat-note" style="color:#c62828;font-weight:800">${esc(w.error)}${w.expired ? '（已換一張新的驗證碼）' : ''}</div>`; const tb = js.map((j, i) => html(j, ls[i].tag)).join(''); if (w.expired) newCap(msg + tb); else out.innerHTML = msg + tb; return; }
       let none = true;
       js.forEach((j, i) => {
-        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (i ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
+        const k = ok.findIndex(l => l.i === i);
+        if (k < 0) { j.uiaNote = '立榮候補只開放 2 天後的日期，這天的立榮座位請到立榮官網確認'; return; }
+        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (k ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
         if (uia.length) { none = false; j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
       });
       out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + (none ? note('立榮查無座位資料') : '');
