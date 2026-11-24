@@ -1093,6 +1093,13 @@
     @keyframes xbTwinkle{0%,100%{opacity:.2;transform:scale(.6)}50%{opacity:1;transform:scale(1.15)}}
     @keyframes xbZ{0%{opacity:0;transform:translate(0,6px)}50%{opacity:1}100%{opacity:0;transform:translate(8px,-10px)}}
     @keyframes xbPop{from{transform:scale(.8);opacity:0}to{transform:none;opacity:1}}
+    /* 手機端熊寶對話框（和熊寶桌寵同一套：查詢、輸入） */
+    #xbChatBtn{display:none}
+    #xbChatBox{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top));bottom:calc(var(--nav-h) + 8px + env(safe-area-inset-bottom));z-index:9000;border-radius:16px;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#fff;overflow:hidden}
+    #xbChatBox iframe{display:block;width:100%;height:100%;border:0}
+    #xbChatBox[hidden]{display:none}
+    @media(max-width:820px){#xbChatBtn{display:flex;align-items:center;justify-content:center;position:fixed;right:16px;bottom:calc(var(--nav-h) + 96px + env(safe-area-inset-bottom));z-index:8001;width:50px;height:50px;border:2px solid #fff;border-radius:50%;background:#0a6fb3;color:#fff;font-size:24px;box-shadow:0 6px 14px rgba(0,0,0,.3);-webkit-tap-highlight-color:transparent}}
+    @media(min-width:821px){#xbChatBox{display:none}}
     @media(max-width:820px){#xbHelper{right:10px;bottom:calc(var(--nav-h) + 22px + env(safe-area-inset-bottom))}.xb-bear{width:62px;height:62px}}
     @media(prefers-reduced-motion:reduce){.xb-bear,.xb-bear::before,.xb-bear::after,.xb-scan .frame::after{animation:none!important}}
 
@@ -6562,6 +6569,23 @@ Fin.on(() => {
 });
 
 
+/* 手機端：熊寶對話框（查詢、輸入；電腦端由熊寶桌寵負責） */
+(() => {
+  const btn = document.createElement('button');
+  btn.type = 'button'; btn.id = 'xbChatBtn'; btn.setAttribute('aria-label', '問熊寶'); btn.textContent = '💬';
+  document.body.appendChild(btn);
+  let box = null;
+  btn.addEventListener('click', () => {
+    if (!box) {
+      box = document.createElement('div'); box.id = 'xbChatBox';
+      const f = document.createElement('iframe'); f.title = '熊寶工作中'; f.src = 'chat.html';
+      box.appendChild(f); document.body.appendChild(box);
+    } else box.hidden = !box.hidden;
+    if (!box.hidden) setTimeout(() => { try { box.firstChild.contentWindow.document.getElementById('input').focus(); } catch (_) { /* 載入中 */ } }, 300);
+  });
+  window.addEventListener('message', e => { if (e.origin === location.origin && e.data && e.data.bearChat === 'close' && box) box.hidden = true; });
+})();
+
 const Helper = (() => {
   const wrap = document.createElement('div');
   wrap.id = 'xbHelper';
@@ -6965,8 +6989,9 @@ if (window.bearDesktop) {
   };
   Fin.on(() => setTimeout(pushDesk, 1500));
   setTimeout(pushDesk, 1500);
-
-  /* 熊寶桌寵工作模式：對話框輸入的文字交給熊寶系統處理，回覆一段文字
+}
+{
+  /* 熊寶桌寵工作模式（電腦版桌寵、手機端熊寶對話框共用）：對話框輸入的文字交給熊寶系統處理，回覆一段文字
      「2026/11/15 分海」查奎壁山分海；「2026/11/14 宵夜 111」記一筆支出（消夜一律記成宵夜） */
   window.BearCmd = (() => {
     // 熊寶工作中：時間一律 HH:MM（背景視窗可能被判斷成手機寬度，不能沿用網頁的 hm2）

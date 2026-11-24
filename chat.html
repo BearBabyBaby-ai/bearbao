@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>熊寶工作中</title>
+<style>
+  body { --bg1: #eaf6fb; --bg2: #f3fbf2; }
+  body[data-tod="dawn"] { --bg1: #fff1e8; --bg2: #e8f0fb; }
+  body[data-tod="day"] { --bg1: #eaf6fb; --bg2: #f3fbf2; }
+  body[data-tod="dusk"] { --bg1: #ffe9dc; --bg2: #f7d9d3; }
+  body[data-tod="night"] { --bg1: #18213f; --bg2: #28305c; }
+  body[data-tod="night"] form { border-top-color: #3a4472; }
+  html, body { margin: 0; height: 100%; background: transparent; overflow: hidden;
+    font: 14px/1.45 "Microsoft JhengHei", "微軟正黑體", "PingFang TC", "Noto Sans TC", sans-serif; color: #000000; }
+  #card { position: absolute; inset: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, var(--bg1), var(--bg2)); transition: background .8s;
+    border: 2px solid #876c4b; border-radius: 16px; overflow: hidden; }
+  header { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: #f6e7cf; border-bottom: 1.5px solid #e2cba6; font-weight: bold; cursor: pointer; user-select: none; }
+  header img { width: 24px; height: 24px; border-radius: 6px; }
+  header span { flex: 1; }
+  .hbtn { width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: #000000; font: bold 16px/1 "Microsoft JhengHei", "微軟正黑體", sans-serif; cursor: pointer; }
+  .hbtn:hover:not(:disabled) { background: #ead6b5; }
+  .hbtn:disabled { opacity: .35; cursor: default; }
+  body.mini #log, body.mini form { display: none; }
+  #log { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 10px; display: flex; flex-direction: column; gap: 8px; -webkit-overflow-scrolling: touch; }
+  .msg { flex-shrink: 0; max-width: 86%; padding: 6px 10px; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
+  .bear { align-self: flex-start; background: #fff; border: 1.5px solid #e2cba6; border-bottom-left-radius: 4px; }
+  .me { align-self: flex-end; background: #0a6fb3; color: #fff; border-bottom-right-radius: 4px; }
+  .wait { color: #666666; }
+  .rich { display: flex; flex-direction: column; gap: 4px; white-space: normal; }
+  .b-title { font-weight: bold; font-size: 15px; }
+  .b-head { font-weight: bold; margin-top: 4px; }
+  .b-text { white-space: pre-wrap; margin-top: 4px; }
+  .b-link { color: #0a6fb3; text-decoration: none; cursor: pointer; white-space: pre-wrap; }
+  .b-link:hover { text-decoration: underline; }
+  .b-table { border-collapse: collapse; margin-top: 6px; font-size: 12.5px; line-height: 1.4; cursor: pointer; }
+  .b-table th, .b-table td { border: 1px solid #e2cba6; padding: 3px 6px; white-space: pre; text-align: center; vertical-align: middle; }
+  .msg.rich:has(.b-table) { max-width: 97%; overflow-x: auto; }
+  .b-table tr:first-child th { background: #f6e7cf; }
+  .b-table td { font-variant-numeric: tabular-nums; }
+  .b-table tr:not(:first-child) th { font-weight: bold; white-space: nowrap; }
+  .b-table th.grp { background: #efdcbc; text-align: center; }
+  .b-table.b-pick { cursor: default; }
+  .b-pick tr:not(:first-child) { cursor: pointer; }
+  .b-pick tr:not(:first-child):hover th, .b-pick tr:not(:first-child):hover td { background: #e8f1fb; }
+  .b-pick td { text-align: left; }
+  .b-table .tt { display: inline-block; min-width: 3.1em; text-align: left; }
+  .b-table .th { display: inline-block; min-width: 4.4em; text-align: right; }
+  .b-table tr.sep > * { border-top: 3px solid #9c7b53; }
+  .b-pub { white-space: pre-wrap; margin-top: 6px; padding: 6px 8px; border: 1px dashed #d6bd96; border-radius: 8px; }
+  .b-img { display: block; max-width: 100%; max-height: 220px; margin-top: 6px; border-radius: 8px; }
+  .b-dm { margin: 6px 0 0; }
+  .b-dm img { display: block; width: 100%; height: auto; border-radius: 8px; cursor: zoom-in; }
+  .b-dm figcaption { font-size: 12px; font-weight: 700; margin-top: 2px; }
+  .b-card { cursor: pointer; }
+  .b-hint { font-size: 12px; color: #666666; margin-top: 4px; }
+  .card { width: 140px; border: 1px solid #e2cba6; border-radius: 6px; margin-top: 6px; }
+  .files { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .files button { font: inherit; font-size: 13px; padding: 4px 10px; border: 1.5px solid #0a6fb3; border-radius: 8px; background: #fff; color: #0a6fb3; cursor: pointer; }
+  .b-uba { margin-top: 8px; padding: 8px; border: 1.5px solid #2e7d32; border-radius: 10px; background: #f4fbf3; }
+  .b-uba .uba-cap { font-weight: 700; color: #2e7d32; margin-bottom: 6px; }
+  .b-uba img { display: block; height: 50px; border: 1px solid #c8d6c5; border-radius: 6px; background: #fff; }
+  .b-uba input { font: inherit; font-size: 16px; width: 130px; padding: 4px 8px; border: 1.5px solid #9bb59a; border-radius: 8px; }
+  form { display: flex; gap: 6px; padding: 8px; border-top: 1.5px solid #e2cba6; }
+  #input { flex: 1; min-width: 0; font: inherit; font-size: 16px; color: inherit; padding: 8px 10px; border: 1.5px solid #d6bd96; border-radius: 10px; outline: none; background: #fff; }
+  #input:focus { border-color: #0a6fb3; }
+  #send { font: inherit; font-weight: bold; padding: 6px 14px; border: 0; border-radius: 10px; background: #0a6fb3; color: #fff; cursor: pointer; }
+  #send:disabled { background: #9bb8cc; cursor: default; }
+  #restore { display: none; }
+</style>
+</head>
+<body>
+<div id="card">
+  <header><img src="pet-app/pet/src/bear-icon.png" alt=""><span>熊寶工作中</span><button id="mini" class="hbtn" type="button" title="關閉" aria-label="關閉">✕</button><button id="restore" class="hbtn" type="button" aria-label="放大">□</button></header>
+  <div id="log"></div>
+  <form id="form" autocomplete="off">
+    <input id="input" placeholder="例如：11/15 分海、馬公 午餐推薦">
+    <button id="send" type="submit">送出</button>
+  </form>
+</div>
+<script>
+/* 網頁版熊寶對話框：和熊寶桌寵同一個對話框程式
+   ?q=1：只能查詢（熊熊綜合系統電腦端）；沒有 q：查詢＋輸入（熊寶系統手機端） */
+(() => {
+  const Q = new URLSearchParams(location.search).get('q') === '1';
+  if (!Q) document.getElementById('input').placeholder = '例如：11/15 分海、11/14 午餐 120';
+  // 熊寶系統本身就在外層：直接用；不在（熊熊綜合系統）：背景開一個熊寶系統來處理
+  let ready;
+  function engine() {
+    if (ready) return ready;
+    ready = new Promise(resolve => {
+      try { if (parent !== window && parent.BearCmd && parent.BearCmd.run) return resolve(parent.BearCmd); } catch (_) { /* 不同網域 */ }
+      const f = document.createElement('iframe');
+      f.src = './'; f.title = ''; f.setAttribute('aria-hidden', 'true'); f.tabIndex = -1;
+      f.style.cssText = 'position:fixed;left:-10000px;top:0;width:1280px;height:800px;border:0;visibility:hidden';
+      document.body.appendChild(f);
+      const t = setInterval(() => { try { const c = f.contentWindow.BearCmd; if (c && c.run) { clearInterval(t); resolve(c); } } catch (_) { /* 載入中 */ } }, 300);
+    });
+    return ready;
+  }
+  engine();
+  const post = msg => { try { parent.postMessage(msg, location.origin); } catch (_) { /* 沒有外層 */ } };
+  async function copyImage(png) {
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
+  }
+  window.desk = {
+    ask: async text => (await engine()).run(text, Q ? { query: true } : {}),
+    save: async (name, data) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([data], { type: /\.txt$/i.test(name) ? 'text/plain;charset=utf-8' : 'application/octet-stream' }));
+      a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      return name;
+    },
+    mini: on => { if (on) { document.body.classList.remove('mini'); document.getElementById('mini').disabled = false; post({ bearChat: 'close' }); } },
+    max: () => {},
+    copy: text => { navigator.clipboard.writeText(String(text)).catch(() => {}); },
+    copyImage,
+    onFocus: () => {}
+  };
+})();
+</script>
+<script>
+  document.write('<script src="' + (new URLSearchParams(location.search).get('q') === '1' ? 'pet-app' : 'desktop') + '/pet/src/desk.js"><\/script>');
+</script>
+</body>
+</html>
