@@ -3268,7 +3268,7 @@ function selectForecastCard(card) {
   card.classList.add('active');
   updateForecastChart(card.dataset.day);
 }
-const hm2 = t => { if (isMobile()) return t; const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/); return m ? `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}` : t; };   /* 電腦版：時間一律 HH:MM */
+const hm2 = t => { const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{1,2})/); return m ? `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}` : t; };   /* 時間一律 HH:MM */
 /* 西嶼：池西岩瀑建議觀賞高度 35～60、-35～-60；當天最高未達 60（或最低未達 -60）時只到當天最高／最低，未超過 35（或未低於 -35）不顯示 */
 const CHIXI = { from: 35, to: 60 };
 function chixiBands(tides) {
@@ -3860,19 +3860,21 @@ const Flights = (() => {
       row.expectedStart = '';
       const m = String(row.flight).match(/^(MDA|UIA)(\d+)$/);
       const t = m && air[m[1]].get(m[2]);
-      if (t && mins(t) !== mins(row.scheduledStart)) row.expectedStart = t;
+      if (t && mins(t) !== mins(row.scheduledStart)) row.expectedStart = padHM(t);
     }));
   }
+  // 時間一律 HH:MM（8:45 → 08:45）
+  function padHM(v) { const m = String(v ?? '').match(/^\s*(\d{1,2})\s*[:：]\s*(\d{2})(.*)$/); return m ? `${m[1].padStart(2, '0')}:${m[2]}${m[3]}` : (v ?? ''); }
   function mapArrival(rows) {
     return validDataRows(rows, 9).map(r => {
       const flight = trackingFlightNo(r[0], r[1]);
-      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: r[4], actualStart: r[5], scheduledEnd: r[6], actualEnd: r[7], hex: '', status: arrivalStatus(r[8], r[4], r[5], r[6], r[7]) };
+      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), actualStart: padHM(r[5]), scheduledEnd: padHM(r[6]), actualEnd: padHM(r[7]), hex: '', status: arrivalStatus(r[8], r[4], r[5], r[6], r[7]) };
     });
   }
   function mapDeparture(rows) {
     return validDataRows(rows, 8).map(r => {
       const flight = trackingFlightNo(r[0], r[1]);
-      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: r[4], actualStart: r[5], gate: r[7], hex: '', status: departureStatus(r[6], r[4], r[5]) };
+      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), actualStart: padHM(r[5]), gate: r[7], hex: '', status: departureStatus(r[6], r[4], r[5]) };
     });
   }
   function trackingLinks(flight) {
@@ -7285,7 +7287,7 @@ if (window.bearDesktop) {
         const info = tideDayInfo(key);
         if (info.hasData) {
           const of = type => info.points.filter(p => p.type === type).map(p => hm2(p.t)).filter(inDay).join('、') || '—';
-          rows.push(['奎壁山分海', `緩慢分海 ${of('sep')}\n緩慢合海 ${of('mer')}`, `${key} 分海`]);
+          rows.push(['奎壁山分海', info.points.filter(pt => pt.type === 'sep' || pt.type === 'mer').map(pt => ({ t: hm2(pt.t), label: pt.type === 'sep' ? '緩慢分海' : '緩慢合海' })).filter(x => inDay(x.t)).sort((a, b) => a.t.localeCompare(b.t)).map(x => `${x.label} ${x.t}`).join('\n') || '—', `${key} 分海`]);
         }
       }
       try {
