@@ -7295,6 +7295,11 @@ if (window.bearDesktop) {
         if (!forecastRows) forecastRows = await fetchForecastRows();
         if (TIDE_PLACES.some(p => forecastDay(forecastRows, p, key))) rows.push(['潮汐', ['奎壁山', ...TIDE_PLACES].join('、'), `${key} 潮汐 選地點`]);
       } catch (_) { /* 潮汐讀取失敗就不列 */ }
+      try {
+        const name = Wx.areas.includes(Wx.area) ? Wx.area : '馬公市';
+        const w = await Wx.data(name);
+        if (w && !w.error && w.days.has(key)) rows.push(['天氣', `${Wx.areas.join('、')}`, `${key} 天氣 選地點`]);
+      } catch (_) { /* 天氣讀取失敗就不列 */ }
       if (await places()) {
         const groups = new Map();
         for (const d of Lantern.temples()) {
