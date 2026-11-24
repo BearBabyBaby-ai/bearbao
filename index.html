@@ -7842,7 +7842,8 @@ if (window.bearDesktop) {
       const AIRC = { 華信: '#1565c0', 立榮: '#2e7d32' };
       const SEATC = v => v === '目前尚有位置' ? '#1b5e20' : /已滿/.test(v) ? '#b71c1c' : '#8d6e00';
       const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
-      const rows = [], styles = [], links = [], notes = new Set();
+      // 來回程分開呈現：去程、回程（單程）各一張表
+      const groups = [], notes = new Set();
       for (let li = 0; li < plan.legs.length; li++) {
         const leg = plan.legs[li];
         let j;
@@ -7855,25 +7856,28 @@ if (window.bearDesktop) {
           const uia = u.flights.map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
           list = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep).localeCompare(String(y.dep)));
         }
-        const dayTxt = `${leg.tag} ${leg.md}（${'日一二三四五六'[new Date(keyToUTC(leg.k)).getUTCDay()]}）`;
-        if (!list.length) { rows.push([dayTxt, leg.route, '—', '—', '—', '—', '沒有班次']); styles.push(Array(7).fill(['#f5f5f5', '#757575'])); links.push(null); continue; }
+        let g = groups.find(x => x.tag === leg.tag);
+        if (!g) groups.push(g = { tag: leg.tag, k: leg.k, md: leg.md, routes: [], rows: [], styles: [], links: [] });
+        g.routes.push(leg.route);
+        if (!list.length) { g.rows.push([leg.route, '—', '—', '—', '—', '沒有班次']); g.styles.push(Array(6).fill(['#f5f5f5', '#757575'])); g.links.push(null); continue; }
         const bgs = Seat.rowBgs(list);
         list.forEach((fl, i) => {
           const seat = fl.seat === '有位' ? '目前尚有位置' : fl.seat === '候補' ? '已滿，需候補' : fl.seat;
           // 整列底色：依航空公司 × 座位狀態；航空公司、座位文字另用顏色
           const bg = bgs[i];
-          rows.push([dayTxt, leg.route, fl.air, fl.no, fl.dep, fl.arr, seat]);
-          styles.push([[bg, '#000000'], [bg, '#000000'], [bg, AIRC[fl.air] || '#555555'], [bg, '#000000'], [bg, '#000000'], [bg, '#000000'], [bg, SEATC(seat)]]);
+          g.rows.push([leg.route, fl.air, fl.no, fl.dep, fl.arr, seat]);
+          g.styles.push([[bg, '#000000'], [bg, AIRC[fl.air] || '#555555'], [bg, '#000000'], [bg, '#000000'], [bg, '#000000'], [bg, SEATC(seat)]]);
           const url = Seat.linkOf(fl.seat === '已滿，不開放候補' ? { air: fl.air, seat: '候補' } : fl);
-          links.push(url ? [null, null, null, null, null, null, url] : null);
+          g.links.push(url ? [null, null, null, null, null, url] : null);
         });
       }
-      return { blocks: [
-        { type: 'title', text: plan.title },
-        { type: 'table', head: ['日期', '航線', '航空公司', '班次', '起飛', '抵達', '座位'], rows, styles, links, imgBtn: true },
-        { type: 'text', text: '點「目前尚有位置」到訂位頁，點「已滿，需候補」到候補頁' },
-        ...[...notes, extra].filter(Boolean).map(x => ({ type: 'text', text: x }))
-      ] };
+      const blocks = [{ type: 'title', text: plan.title }];
+      groups.forEach(g => {
+        const t = `${g.tag} ${g.md}（${'日一二三四五六'[new Date(keyToUTC(g.k)).getUTCDay()]}）${g.routes.length === 1 ? g.routes[0].replace('→', ' → ') : ''}・${plan.n} 位`;
+        blocks.push({ type: 'title', text: t }, { type: 'table', title: t, head: ['航線', '航空公司', '班次', '起飛', '抵達', '座位'], rows: g.rows, styles: g.styles, links: g.links, imgBtn: true });
+      });
+      blocks.push({ type: 'text', text: '點「目前尚有位置」到訂位頁，點「已滿，需候補」到候補頁' }, ...[...notes, extra].filter(Boolean).map(x => ({ type: 'text', text: x })));
+      return { blocks };
     }
 
     async function run(text, opts = {}) {
