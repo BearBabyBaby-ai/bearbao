@@ -1889,8 +1889,9 @@ const Seat = (() => {
       out.innerHTML = note('查詢中…');
       let js, w;
       try {
-        [js, w] = await Promise.all([queryAll(ls, n),
-          getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }))]);
+        // 先單獨送立榮驗證碼（和熊寶桌寵一樣），查完立榮才查華信，避免同時查詢讓立榮的驗證碼失效
+        w = await getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }));
+        js = await queryAll(ls, n);
       } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
       if (w.error) { const msg = `<div class="seat-note" style="color:#c62828;font-weight:800">${esc(w.error)}${w.expired ? '（已換一張新的驗證碼）' : ''}</div>`; const tb = js.map((j, i) => html(j, ls[i].tag)).join(''); if (w.expired) newCap(msg + tb); else out.innerHTML = msg + tb; return; }
       let none = true;
