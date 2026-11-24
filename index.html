@@ -3962,8 +3962,8 @@ const Flights = (() => {
       ${arrival ? '' : `<td>${escapeHTML(row.gate || '—')}</td>`}
       <td>${trackingLinks(row.flight)}</td>
     </tr>`).join('');
-    const W = { '航空公司': 110, '班次': 120, '來自': 110, '目的地': 110, '機型': 120, '備註 (Remark)': 180, '登機門': 100, '輔助查詢': 230 };   // 其餘時間欄一律同寬，表頭一行
-    const px = heads.map(h => W[h] || 140), cols = px.map(w => `<col style="width:${w}px">`).join('');
+    const W = { '航空公司': 100, '班次': 110, '來自': 100, '目的地': 100, '機型': 110, '備註 (Remark)': 160, '登機門': 90, '輔助查詢': 210 };   // 其餘時間欄一律同寬，表頭一行
+    const px = heads.map(h => W[h] || 130), cols = px.map(w => `<col style="width:${w}px">`).join('');
     return `<div class="table-wrap"><table class="flight-fixed" style="min-width:${px.reduce((a, b) => a + b, 0)}px"><colgroup>${cols}</colgroup><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
   function cardsHTML(rows) {
