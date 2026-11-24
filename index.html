@@ -3849,12 +3849,12 @@ const Flights = (() => {
     if (lower.includes('boarding') || lower.includes('登機')) return { text: raw || '登機 Boarding', className: 'Boarding', history: false };
     return { text: raw || '準時 On Time', className: 'OnTime', history: isOlderThan(actual || scheduled) };
   }
-  // 預計起飛：華信網站上的起飛時間和機場表定不同時才填（只有華信；同一天、同一班）
+  // 預計起飛：華信的起飛時間（已起飛用實際起飛，還沒起飛用華信表定）和澎湖航空站表定不同時才填（只有華信；同一天、同一班）
   function applyExpected(rows) {
     const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
     const mins = t => { const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
     const mda = new Map();
-    (rows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) mda.set(no, String(r[4]).trim()); });
+    (rows || []).forEach(r => { const no = String(r[1] || '').replace(/\D/g, ''); if (String(r[0] || '').trim() !== today || !no) return; const t = mins(r[6]) != null ? r[6] : r[4]; if (mins(t) != null) mda.set(no, String(t).trim()); });
     ['arrival', 'departure'].forEach(mode => state[mode].forEach(row => {
       row.expectedStart = '';
       const m = String(row.flight).match(/^MDA(\d+)$/);
