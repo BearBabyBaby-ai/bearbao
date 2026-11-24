@@ -1707,6 +1707,7 @@ const Seat = (() => {
   const shift = (k, n) => { const d = new Date(k + 'T12:00:00+08:00'); d.setDate(d.getDate() + n); return tz(d); };
   async function query(date, from, n) {
     if (!CFG.seatUrl) throw new Error('查機位功能尚未開通');
+    date = String(date).replace(/\//g, '-');
     const res = await fetch(`${CFG.seatUrl}?date=${date}&from=${from}&n=${n}`, { cache: 'no-store' });
     const j = await res.json();
     if (j.error) throw new Error(j.error);
@@ -7813,26 +7814,45 @@ if (window.bearDesktop) {
       const s = plain(String(text || '').replace(/\s+/g, ' ').trim());
       if (!s) return help;
       try {
-        // 查機位：「11/28 松山 2人 機位」「機位 高雄 11/30 3人」（台灣本島 → 澎湖）
-        if (/機位|座位|有位|空位/.test(s)) {
+        // 查機位：「12/02-12/04 台北>澎湖 4位」「11/28 松山 2人 機位」（台灣本島 → 澎湖；只查航空公司官網）
+        const seatRoute = /(?:台北|臺北|松山|台中|臺中|嘉義|台南|臺南|高雄)\s*[>＞→\-－~～到至]\s*澎湖/.test(s);
+        const seatShort = /\d{1,2}\s*[\/／月]\s*\d{1,2}/.test(s) && /(?:台北|臺北|松山|台中|臺中|嘉義|台南|臺南|高雄)/.test(s) && /\d\s*(?:人|位)/.test(s);   // 「12/02-12/04 台北 4位」
+        if (seatRoute || seatShort || /機位|座位|有位|空位/.test(s)) {
           const fromKey = [['TSA', /松山|台北|臺北/], ['RMQ', /台中|臺中/], ['CYI', /嘉義/], ['TNN', /台南|臺南/], ['KHH', /高雄/]].find(([, re]) => re.test(s));
           const n = Math.min(4, Math.max(1, Number((s.match(/(\d)\s*(?:人|位|張)/) || [])[1]) || 1));
-          const dd = takeDate(s.replace(/\d\s*(?:人|位|張)/, ''));
-          if (dd.bad) return '日期不正確，請再確認一次';
-          const key = dd.given ? ahead(dd) : todayKey();
+          const t = s.replace(/\d\s*(?:人|位|張)/, ' ').replace(/(?:台北|臺北|松山|台中|臺中|嘉義|台南|臺南|高雄)\s*[>＞→\-－~～到至]\s*澎湖/, ' ').replace(/台北|臺北|松山|台中|臺中|嘉義|台南|臺南|高雄|機位|座位|有位|空位/g, ' ');
+          const r = takeRange(t);
+          if (r && r.bad) return '日期不正確，請再確認一次';
+          let days = r ? r.days : null;
+          if (!days) { const dd = takeDate(t); if (dd.bad) return '日期不正確，請再確認一次'; days = [dd.given ? ahead(dd) : todayKey()]; }
+          if (days.length > 7) return '一次最多查 7 天';
           const froms = fromKey ? [fromKey[0]] : ['TSA', 'RMQ', 'CYI', 'TNN', 'KHH'];
-          const blocks = [];
-          for (const f of froms) {
-            let j;
-            try { j = await Seat.query(key, f, n); } catch (e) { return e.message || '查詢失敗，請再試一次'; }
-            if (!j.flights.length && !fromKey) continue;
-            blocks.push({ type: 'title', text: `${md(key)} ${Seat.NAMES[f]} → 澎湖・${n} 人` });
-            if (j.flights.length) blocks.push({ type: 'table', head: ['航空公司', '班次', '起飛', '抵達', '座位'], rows: Seat.rowsOf(j).map(r => [r[0], r[1], r[2], r[3], r[4] === '候補' ? '已滿・候補' : r[4]]),
-              styles: Seat.rowsOf(j).map(r => r.map((v, c) => c === 4 ? (r[4] === '有位' ? ['#e8f5e9', '#1b7a34'] : r[4] === '候補' ? ['#fdecea', '#c62828'] : ['#ffffff', '#555555']) : ['#ffffff', '#000000'])) });
-            else blocks.push({ type: 'text', text: '這天沒有班次資料' });
-            Seat.notes(j).forEach(t => blocks.push({ type: 'text', text: t }));
+          const rows = [], styles = [], notes = new Set();
+          const AIRC = { 華信: ['#1565c0', '#ffffff', '#e3f2fd'], 立榮: ['#2e7d32', '#ffffff', '#e8f5e9'] };
+          const SEATC = v => v === '有位' ? ['#c8e6c9', '#1b5e20'] : v === '已滿・候補' ? ['#ffcdd2', '#b71c1c'] : ['#fff8e1', '#8d6e00'];
+          let alt = 0;
+          for (const k of days) {
+            for (const f of froms) {
+              let j;
+              try { j = await Seat.query(k, f, n); } catch (e) { return e.message || '查詢失敗，請再試一次'; }
+              Seat.notes(j).forEach(x => notes.add(x));
+              alt = 1 - alt;
+              const dayTxt = `${k.slice(5).replace('-', '/')}（${'日一二三四五六'[new Date(keyToUTC(k)).getUTCDay()]}）`;
+              if (!j.flights.length) { rows.push([dayTxt, Seat.NAMES[f], '—', '—', '—', '—', '沒有班次']); styles.push(Array(7).fill([alt ? '#f5f5f5' : '#ffffff', '#757575'])); continue; }
+              for (const fl of j.flights) {
+                const seat = fl.seat === '候補' ? '已滿・候補' : fl.seat === '請到立榮官網確認' ? '請到立榮官網確認' : fl.seat;
+                const [deep, fg, light] = AIRC[fl.air] || ['#555555', '#ffffff', '#f2f2f2'];
+                rows.push([dayTxt, Seat.NAMES[f], fl.air, fl.no, fl.dep, fl.arr, seat]);
+                styles.push([[alt ? '#fffde7' : '#ffffff', '#000000'], [light, '#000000'], [deep, fg], [light, '#000000'], [light, '#000000'], [light, '#000000'], SEATC(seat)]);
+              }
+            }
           }
-          return blocks.length ? { blocks } : `${md(key)} 沒有班次資料`;
+          const span = days.length > 1 ? `${md(days[0])}–${md(days[days.length - 1])}` : md(days[0]);
+          return { blocks: [
+            { type: 'title', text: `${span} ${fromKey ? Seat.NAMES[fromKey[0]] : '台灣本島'} → 澎湖・${n} 位` },
+            { type: 'table', head: ['日期', '出發', '航空公司', '班次', '起飛', '抵達', '座位'], rows, styles },
+            ...[...notes].map(x => ({ type: 'text', text: x }))
+          ] };
         }
         // 航班：句子有航班、班機、飛機，或只打航班代號
         // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
