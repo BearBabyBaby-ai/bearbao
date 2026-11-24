@@ -403,6 +403,7 @@
     #view-flight td{border-right:1px solid #b8c6d1;border-bottom:3px solid #fff;padding:14px 11px;vertical-align:middle;text-align:center;font-size:15px;line-height:1.35;background:inherit}
     #view-flight td:last-child{border-right:0}
     #view-flight table.flight-fixed{table-layout:fixed}
+    #view-flight table.flight-fixed th{padding-left:4px;padding-right:4px}
     #view-flight tbody tr:nth-child(odd){background:#fff}
     #view-flight tbody tr:nth-child(even){background:#edf2f6}
     #view-flight tbody tr:hover{background:#d9e7f2}
@@ -3964,8 +3965,8 @@ const Flights = (() => {
       ${arrival ? '' : `<td>${escapeHTML(row.gate || '—')}</td>`}
       <td>${trackingLinks(row.flight)}</td>
     </tr>`).join('');
-    const W = { '航空公司': 100, '班次': 110, '來自': 100, '目的地': 100, '機型': 110, '備註 (Remark)': 160, '登機門': 90, '輔助查詢': 210 };   // 其餘時間欄一律同寬，表頭一行
-    const px = heads.map(h => W[h] || 130), cols = px.map(w => `<col style="width:${w}px">`).join('');
+    const W = { '航空公司': 100, '班次': 110, '來自': 100, '目的地': 100, '機型': 110, '備註 (Remark)': 160, '登機門': 90, '輔助查詢': 250 };   // 其餘時間欄一律同寬，表頭一行
+    const px = heads.map(h => W[h] || 125), cols = px.map(w => `<col style="width:${w}px">`).join('');
     return `<div class="table-wrap"><table class="flight-fixed" style="min-width:${px.reduce((a, b) => a + b, 0)}px"><colgroup>${cols}</colgroup><thead><tr>${heads.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table></div>`;
   }
   function cardsHTML(rows) {
