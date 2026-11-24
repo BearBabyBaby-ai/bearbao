@@ -3576,7 +3576,7 @@ function onForecastShown() {
 
 
 const Flights = (() => {
-  const SHEETS = { arrival: '抵達航班', departure: '出發航班', mda: '華信航班', uia: '立榮航班' };
+  const SHEETS = { arrival: '抵達航班', departure: '出發航班' };
   const HISTORY_MINUTES = 90;
   let AUTO_REFRESH_MS = 60 * 1000;
   const HEX_LOOKUP_TIMEOUT_MS = 12000;
@@ -3849,26 +3849,13 @@ const Flights = (() => {
     if (lower.includes('boarding') || lower.includes('登機')) return { text: raw || '登機 Boarding', className: 'Boarding', history: false };
     return { text: raw || '準時 On Time', className: 'OnTime', history: isOlderThan(actual || scheduled) };
   }
-  // 異動後起飛：航空公司時間和澎湖航空站表定不同時才填（華信用華信表定起飛；立榮用立榮預計出發；實際起飛不算；同一天、同一班）
-  function applyExpected(mdaRows, uiaRows) {
-    const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
-    const mins = t => { const m = String(t || '').match(/(\d{1,2})\s*[:：]\s*(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
-    const air = { MDA: new Map(), UIA: new Map() };
-    (mdaRows || []).forEach(r => { const no = (String(r[1] || '').match(/(\d{2,4})\s*$/) || [])[1]; if (String(r[0] || '').trim() === today && no && mins(r[4]) != null) air.MDA.set(no, String(r[4]).trim()); });
-    (uiaRows || []).forEach(r => { const no = (String(r[1] || '').match(/(\d{2,4})\s*$/) || [])[1]; const t = mins(r[6]) != null ? r[6] : r[4]; if (String(r[0] || '').trim() === today && no && mins(t) != null) air.UIA.set(no, String(t).trim()); });
-    ['arrival', 'departure'].forEach(mode => state[mode].forEach(row => {
-      row.expectedStart = '';
-      const m = String(row.flight).match(/^(MDA|UIA)(\d+)$/);
-      const t = m && air[m[1]].get(m[2]);
-      if (t && mins(t) !== mins(row.scheduledStart)) row.expectedStart = padHM(t);
-    }));
-  }
   // 時間一律 HH:MM（8:45 → 08:45）
   function padHM(v) { const m = String(v ?? '').match(/^\s*(\d{1,2})\s*[:：]\s*(\d{2})(.*)$/); return m ? `${m[1].padStart(2, '0')}:${m[2]}${m[3]}` : (v ?? ''); }
   function mapArrival(rows) {
-    return validDataRows(rows, 9).map(r => {
+    return validDataRows(rows, 11).map(r => {
       const flight = trackingFlightNo(r[0], r[1]);
-      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), actualStart: padHM(r[5]), scheduledEnd: padHM(r[6]), actualEnd: padHM(r[7]), hex: '', status: arrivalStatus(r[8], r[4], r[5], r[6], r[7]) };
+      // 抵達航班：航空公司、班次、來自、機型、表定起飛、異動後起飛、實際起飛、表定到達、異動後預計抵達、預估/實際到達、備註
+      return { airline: r[0], flight, place: r[2], aircraft: r[3], scheduledStart: padHM(r[4]), expectedStart: padHM(r[5]), actualStart: padHM(r[6]), scheduledEnd: padHM(r[7]), expectedEnd: padHM(r[8]), actualEnd: padHM(r[9]), hex: '', status: arrivalStatus(r[10], r[4], r[6], r[7], r[9]) };
     });
   }
   function mapDeparture(rows) {
@@ -3959,17 +3946,17 @@ const Flights = (() => {
   function tableHTML(rows) {
     const arrival = state.mode === 'arrival';
     const heads = arrival
-      ? ['航空公司', '班次', '來自', '機型', '表定起飛', '異動後起飛', '實際起飛', '表定到達', '預估／實際到達', '備註 (Remark)', '輔助查詢']
-      : ['航空公司', '班次', '目的地', '機型', '表定起飛', '異動後起飛', '預估／實際起飛', '備註 (Remark)', '登機門', '輔助查詢'];
+      ? ['航空公司', '班次', '來自', '機型', '表定起飛', '異動後起飛', '實際起飛', '表定到達', '異動後預計抵達', '預估／實際到達', '備註 (Remark)', '輔助查詢']
+      : ['航空公司', '班次', '目的地', '機型', '表定起飛', '預估／實際起飛', '備註 (Remark)', '登機門', '輔助查詢'];
     const body = rows.map(row => `<tr class="${row.status.history ? 'history ' : ''}${airlineClass(row.airline, row.flight)}${state.selectedFlight === row.flight ? ' flight-selected' : ''}">
       <td>${escapeHTML(row.airline)}</td>
       <td class="flight-no map-focus-trigger" data-map-flight="${escapeHTML(row.flight)}" data-map-hex="${escapeHTML(row.hex)}" role="button" tabindex="0" title="在下方地圖追蹤 ${escapeHTML(row.flight)}">${escapeHTML(row.flight)}</td>
       <td>${escapeHTML(row.place)}</td>
       <td>${escapeHTML(row.aircraft)}</td>
       <td class="time">${escapeHTML(row.scheduledStart)}</td>
-      <td class="time">${escapeHTML(row.expectedStart || '')}</td>
+      ${arrival ? `<td class="time">${escapeHTML(row.expectedStart || '')}</td>` : ''}
       <td class="time">${escapeHTML(row.actualStart)}</td>
-      ${arrival ? `<td class="time">${escapeHTML(row.scheduledEnd)}</td><td class="time">${escapeHTML(row.actualEnd)}</td>` : ''}
+      ${arrival ? `<td class="time">${escapeHTML(row.scheduledEnd)}</td><td class="time">${escapeHTML(row.expectedEnd || '')}</td><td class="time">${escapeHTML(row.actualEnd)}</td>` : ''}
       <td class="status-cell ${escapeHTML(row.status.className)}"><span class="status">${escapeHTML(row.status.text)}</span></td>
       ${arrival ? '' : `<td>${escapeHTML(row.gate || '—')}</td>`}
       <td>${trackingLinks(row.flight)}</td>
@@ -3985,9 +3972,9 @@ const Flights = (() => {
         <div class="kv"><small>${arrival ? '來自' : '目的地'}</small><span>${escapeHTML(row.place)}</span></div>
         <div class="kv"><small>機型</small><span>${escapeHTML(row.aircraft || '—')}</span></div>
         <div class="kv"><small>表定起飛</small><span class="time">${escapeHTML(row.scheduledStart || '—')}</span></div>
-        <div class="kv"><small>異動後起飛</small><span class="time">${escapeHTML(row.expectedStart || '')}</span></div>
+        ${arrival ? `<div class="kv"><small>異動後起飛</small><span class="time">${escapeHTML(row.expectedStart || '')}</span></div>` : ''}
         <div class="kv"><small>${arrival ? '實際起飛' : '預估／實際起飛'}</small><span class="time">${escapeHTML(row.actualStart || '—')}</span></div>
-        ${arrival ? `<div class="kv"><small>表定到達</small><span class="time">${escapeHTML(row.scheduledEnd || '—')}</span></div><div class="kv"><small>預估／實際到達</small><span class="time">${escapeHTML(row.actualEnd || '—')}</span></div>` : `<div class="kv"><small>登機門</small><span>${escapeHTML(row.gate || '—')}</span></div>`}
+        ${arrival ? `<div class="kv"><small>表定到達</small><span class="time">${escapeHTML(row.scheduledEnd || '—')}</span></div><div class="kv"><small>異動後預計抵達</small><span class="time">${escapeHTML(row.expectedEnd || '')}</span></div><div class="kv"><small>預估／實際到達</small><span class="time">${escapeHTML(row.actualEnd || '—')}</span></div>` : `<div class="kv"><small>登機門</small><span>${escapeHTML(row.gate || '—')}</span></div>`}
       </div>
       ${trackingLinks(row.flight)}
     </article>`).join('')}</div>`;
@@ -4036,10 +4023,9 @@ const Flights = (() => {
     refreshBtn.textContent = '更新中…';
     dataStatus.textContent = '正在讀取航班資料…';
     try {
-      const [arrivalRows, departureRows, mdaRows, uiaRows] = await Promise.all([loadSheetWithRetry(SHEETS.arrival), loadSheetWithRetry(SHEETS.departure), loadSheetWithRetry(SHEETS.mda).catch(() => []), loadSheetWithRetry(SHEETS.uia).catch(() => [])]);
+      const [arrivalRows, departureRows] = await Promise.all([loadSheetWithRetry(SHEETS.arrival), loadSheetWithRetry(SHEETS.departure)]);
       state.arrival = mapArrival(arrivalRows);
       state.departure = mapDeparture(departureRows);
-      applyExpected(mdaRows, uiaRows);
       if (!state.arrival.length && !state.departure.length) throw new Error('兩個航班分頁皆沒有可用資料');
       state.loaded = true; state.error = '';
       const nextSignature = currentFlightSignature();
@@ -7557,8 +7543,8 @@ if (window.bearDesktop) {
       return { type: 'link', text: `${airlineName(r.airline)} ${flightCode(r.flight)} ${route} ${time} ${(String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]}`, url: `https://www.flightradar24.com/${encodeURIComponent(r.flight)}`, t: time };
     }
     // 熊寶工作中查航班：只列抵達澎湖的班次，用表格（和機場航班頁一樣的欄位）
-    const ARR_HEAD = ['班次', '來自', '機型', '表定起飛', '異動後起飛', '實際起飛', '表定到達', '預估／實際到達', '狀態'];
-    const arrRow = r => [r.flight, placeName(r.place), r.aircraft || '—', hhmm(r.scheduledStart) || '—', hhmm(r.expectedStart) || '', hhmm(r.actualStart) || '—', hhmm(r.scheduledEnd) || '—', hhmm(r.actualEnd) || '—', (String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]];
+    const ARR_HEAD = ['班次', '來自', '機型', '表定起飛', '異動後起飛', '實際起飛', '表定到達', '異動後預計抵達', '預估／實際到達', '狀態'];
+    const arrRow = r => [r.flight, placeName(r.place), r.aircraft || '—', hhmm(r.scheduledStart) || '—', hhmm(r.expectedStart) || '', hhmm(r.actualStart) || '—', hhmm(r.scheduledEnd) || '—', hhmm(r.expectedEnd) || '', hhmm(r.actualEnd) || '—', (String(r.status.text).match(/^[\u4e00-\u9fff]+/) || [String(r.status.text)])[0]];
     const arrSort = list => list.slice().sort((x, y) => hhmm(x.scheduledEnd).localeCompare(hhmm(y.scheduledEnd)));
     // 航班表格分色：班次欄依航空公司（立榮綠、華信藍、德安橘）深色底白字；同一家連續多班時整列一深一淺交替；狀態欄字色（已到灰、準時綠、延誤橘、取消紫、其他藍）；航班不用紅色
     const AIR = { UIA: ['#2e7d32', '#e4f2e2', '#cde6c9'], MDA: ['#1565c0', '#e3eefb', '#cbdcf3'], DAC: ['#c25e00', '#fdeedd', '#f7d9b9'] };
