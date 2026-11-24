@@ -146,6 +146,12 @@
           });
         } else c.textContent = v;
         if (!isHead) { const [bg, fg] = cellTint(b.head || [], row, i, place, b, ri); c.style.background = cssBg(bg); c.style.color = fg; }
+        // 有連結的格子（查機位：有位→訂位、已滿→候補）：點一下用瀏覽器開，不複製圖片
+        const link = !isHead && b.links && b.links[ri] && b.links[ri][i];
+        if (link) {
+          c.style.cursor = 'pointer'; c.style.textDecoration = 'underline'; c.title = '點一下開啟';
+          c.addEventListener('click', e => { e.stopPropagation(); window.open(link); });
+        }
         r.appendChild(c);
       });
       return r;
@@ -172,10 +178,12 @@
     });
     // 表格下方跨整列的資料
     (b.foot || []).forEach(([label, value]) => t.appendChild(spanRow(label, value)));
-    t.addEventListener('click', () => saveTableImage(b, title, hint));
+    // 航班表格（imgBtn）：不點表格複製，改用下方「輸出成圖片」按鈕
+    if (!b.imgBtn) t.addEventListener('click', () => saveTableImage(b, title, hint));
+    else t.title = '';
     const hint = document.createElement('div');
     hint.className = 'b-hint';
-    hint.textContent = '📷 點表格複製成圖片';
+    hint.textContent = b.imgBtn ? '' : '📷 點表格複製成圖片';
     return [t, hint];
   }
   // 把表格畫成圖片（2 倍解析度），標題在上方
@@ -297,9 +305,55 @@
       if (!blob) return;
       try {
         await window.desk.copyImage(new Uint8Array(await blob.arrayBuffer()));
-        if (hint) { hint.textContent = '✅ 已複製成圖片，可直接貼上'; setTimeout(() => { hint.textContent = '📷 點表格複製成圖片'; }, 3000); }
+        if (hint) { hint.textContent = '✅ 已複製成圖片，可直接貼上'; setTimeout(() => { hint.textContent = b.imgBtn ? '' : '📷 點表格複製成圖片'; }, 3000); }
       } catch (_) { if (hint) hint.textContent = '⚠️ 圖片複製失敗'; }
     }, 'image/png');
+  }
+
+  // 立榮候補查詢框：依序查每一段（來回＝去程、回程各輸入一次驗證碼）
+  function ubaEl(b) {
+    const box = document.createElement('div');
+    box.className = 'b-uba';
+    const legs = b.legs || [];
+    let i = 0, token = '';
+    const cap = document.createElement('div'); cap.className = 'uba-cap';
+    const img = document.createElement('img'); img.alt = '驗證碼';
+    const row = document.createElement('div'); row.className = 'files';
+    const code = document.createElement('input');
+    code.type = 'text'; code.maxLength = 6; code.inputMode = 'numeric'; code.placeholder = '輸入圖上的數字'; code.autocomplete = 'off';
+    const go = document.createElement('button'); go.type = 'button'; go.textContent = '查詢';
+    const again = document.createElement('button'); again.type = 'button'; again.textContent = '換一張';
+    const msg = document.createElement('div'); msg.className = 'b-hint';
+    row.append(code, go, again);
+    box.append(cap, img, row, msg);
+    const label = () => { const l = legs[i]; cap.textContent = `立榮候補查詢・${l.tag} ${l.md} ${l.route}・${l.n} 位`; };
+    async function load() {
+      token = ''; code.value = ''; go.disabled = true; img.removeAttribute('src'); msg.textContent = '讀取驗證碼…';
+      let r;
+      try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'cap' })); } catch (_) { r = null; }
+      const u = r && r.uba;
+      if (!u || u.error || !u.img) { msg.textContent = (u && u.error) || '驗證碼讀取失敗，請按「換一張」'; return; }
+      token = u.token; img.src = u.img; go.disabled = false; msg.textContent = '看圖輸入數字後按「查詢」'; code.focus();
+    }
+    async function query() {
+      const v = code.value.trim();
+      if (!token || !v) { msg.textContent = '請輸入圖上的數字'; return; }
+      go.disabled = again.disabled = true; msg.textContent = '查詢中…';
+      let r;
+      try { r = await window.desk.ask('\u0001uba ' + JSON.stringify({ op: 'q', token, code: v, leg: legs[i] })); } catch (_) { r = null; }
+      again.disabled = false;
+      const u = r && r.uba;
+      if (!r || (u && u.error)) { const e = (u && u.error) || '查詢失敗'; await load(); if (token) msg.textContent = e + '，已換一張新的驗證碼，請重新輸入'; return; }
+      show(r);
+      i++;
+      if (i < legs.length) { label(); await load(); }
+      else { box.querySelectorAll('input,button').forEach(x => { x.disabled = true; }); img.remove(); cap.textContent = '立榮候補查詢完成'; msg.textContent = ''; }
+    }
+    go.addEventListener('click', query);
+    code.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); query(); } });
+    again.addEventListener('click', load);
+    if (legs.length) { label(); load(); } else cap.textContent = '';
+    return box;
   }
 
   // 熊寶系統的回覆：純文字，或是 { blocks, files }
@@ -311,6 +365,17 @@
         const title = b.title || (reply.blocks.find(x => x.type === 'title') || {}).text || '表格';
         const [t, hint] = tableEl(b, title);
         d.append(t, hint);
+        // 航班表格：表格下方「輸出成圖片」按鈕
+        if (b.imgBtn) {
+          const row = document.createElement('div');
+          row.className = 'files';
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.textContent = '輸出成圖片';
+          btn.addEventListener('click', () => saveTableImage(b, title, hint));
+          row.appendChild(btn);
+          d.appendChild(row);
+        }
         // 元宵路線推薦：表格下方「複製表格成圖資」
         if (b.copyBtn) {
           const row = document.createElement('div');
@@ -324,6 +389,8 @@
         }
         continue;
       }
+      // 立榮候補：對話框顯示立榮的驗證碼圖，使用者自己看圖輸入後按「查詢」（不做任何辨識；每次都由使用者按下才送出）
+      if (b.type === 'uba') { d.appendChild(ubaEl(b)); continue; }
       // 路線 DM：點一下用瀏覽器開大圖
       if (b.type === 'dm') {
         const fig = document.createElement('figure');
