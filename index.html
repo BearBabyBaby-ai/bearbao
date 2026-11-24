@@ -397,6 +397,7 @@
     #view-flight .seat-title{display:block;margin-bottom:8px;color:#0b4f8a}
     #view-flight .seat-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
     #view-flight .seat-row .field{width:auto;min-width:120px}
+    #view-flight .seat-to{font-weight:800;color:#33475b}
     #view-flight .seat-step{min-width:40px;height:40px;border:1px solid #c7d2de;border-radius:10px;background:#f4f7fb;font-weight:800;cursor:pointer}
     #view-flight .seat-result{margin-top:10px}
     #view-flight .seat-result table{width:100%;border-collapse:collapse;min-width:0}
@@ -1492,6 +1493,8 @@
             <button type="button" class="seat-step" data-step="-1" aria-label="前一天">◀</button>
             <input id="seatDate" class="field" type="date" aria-label="出發日期">
             <button type="button" class="seat-step" data-step="1" aria-label="後一天">▶</button>
+            <span class="seat-to">～</span>
+            <input id="seatDate2" class="field" type="date" aria-label="回程日期">
             <select id="seatFrom" class="field" aria-label="航線">
               <option value="TSA">松山 → 澎湖</option><option value="RMQ">台中 → 澎湖</option><option value="CYI">嘉義 → 澎湖</option><option value="TNN">台南 → 澎湖</option><option value="KHH">高雄 → 澎湖</option>
             </select>
@@ -1753,9 +1756,9 @@ const Seat = (() => {
   }
   const rowsOf = j => j.flights.map(f => [f.air, f.no, f.dep, f.arr, f.seat]);
   const notes = j => [j.mdaError, j.uiaError, j.uiaNote].filter(Boolean);
-  function html(j) {
+  function html(j, tag = '') {
     const wk = '日一二三四五六'[new Date(j.date + 'T12:00:00+08:00').getDay()];
-    const head = `<div class="seat-note">${j.date.replace(/-/g, '/')}（${wk}）${NAMES[j.from]} → ${NAMES[j.to || 'MZG']}・${j.n} 人</div>`;
+    const head = `<div class="seat-note">${tag ? tag + '・' : ''}${j.date.replace(/-/g, '/')}（${wk}）${NAMES[j.from]} → ${NAMES[j.to || 'MZG']}・${j.n} 人</div>`;
     if (!j.flights.length) return head + '<div class="seat-note">這天沒有班次資料</div>' + notes(j).map(t => `<div class="seat-note">${esc(t)}</div>`).join('');
     const cell = f => { const u = linkOf(f), t = f.seat === '有位' ? '<span class="seat-ok">目前尚有位置</span>' : f.seat === '候補' ? '<span class="seat-wait">已滿，需候補</span>' : esc(f.seat); return u ? `<a href="${u}" target="_blank" rel="noopener">${t}</a>` : t; };
     return head + `<table><thead><tr><th>航空公司</th><th>班次</th><th>起飛</th><th>抵達</th><th>座位</th></tr></thead><tbody>${(bg => j.flights.map((f, i) => `<tr style="background:${bg[i]}"><td>${esc(f.air)}</td><td>${esc(f.no)}</td><td>${esc(f.dep)}</td><td>${esc(f.arr)}</td><td>${cell(f)}</td></tr>`).join(''))(rowBgs(j.flights))}</tbody></table>`
@@ -1767,16 +1770,28 @@ const Seat = (() => {
     d.dataset.ready = '1';
     d.value = shift(tz(new Date()), 1);
     d.min = tz(new Date());
+    const d2 = document.getElementById('seatDate2');
+    d2.min = d.min;
+    d.addEventListener('change', () => { d2.min = d.value || d.min; if (d2.value && d2.value < d.value) d2.value = d.value; });
     const out = document.getElementById('seatResult');
+    const legs = () => {
+      const from = document.getElementById('seatFrom').value;
+      const back = d2.value && d2.value >= d.value;
+      return back ? [{ k: d.value, from, to: 'MZG', tag: '去程' }, { k: d2.value, from: 'MZG', to: from, tag: '回程' }] : [{ k: d.value, from, to: 'MZG', tag: '' }];
+    };
+    const queryAll = (ls, n) => Promise.all(ls.map(l => query(l.k, l.from, n, l.to)));
     const run = async () => {
       out.innerHTML = '<div class="seat-note">查詢中…</div>';
-      try { out.innerHTML = html(await query(d.value, document.getElementById('seatFrom').value, document.getElementById('seatN').value)); }
+      const ls = legs();
+      try { const js = await queryAll(ls, document.getElementById('seatN').value); out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join(''); }
       catch (e) { out.innerHTML = `<div class="seat-note">${esc(e.message || '查詢失敗，請再試一次')}</div>`; }
     };
     document.querySelectorAll('#view-flight .seat-step').forEach(b => b.addEventListener('click', () => {
-      const k = shift(d.value || tz(new Date()), Number(b.dataset.step));
+      const n = Number(b.dataset.step), k = shift(d.value || tz(new Date()), n);
       if (k < d.min) return;
-      d.value = k; run();
+      d.value = k; d2.min = k;
+      if (d2.value) d2.value = shift(d2.value, n);
+      run();
     }));
     document.getElementById('seatGo').addEventListener('click', run);
     // 航班動態／查機位 分開兩個畫面
@@ -1790,17 +1805,27 @@ const Seat = (() => {
     const cap = document.getElementById('seatCap'), capImg = document.getElementById('seatCapImg'), capCode = document.getElementById('seatCapCode');
     const note = t => `<div class="seat-note">${esc(t)}</div>`;
     const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
-    let token = '';
+    let token = '', capSeq = 0;
+    const getJson = async (url, ms) => {
+      const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
+      try { return await (await fetch(url, { cache: 'no-store', signal: ac.signal })).json(); } finally { clearTimeout(t); }
+    };
     const newCap = async () => {
+      const my = ++capSeq;
       token = ''; capImg.hidden = true; capCode.value = '';
       out.innerHTML = note('驗證碼讀取中…');
-      try {
-        const j = await (await fetch(`${CFG.seatUrl}?act=uiaCaptcha`, { cache: 'no-store' })).json();
-        if (j.error || !j.img) throw new Error(j.error || '驗證碼讀取失敗，請按「換一張」');
-        token = j.token; capImg.src = j.img; capImg.hidden = false;
-        out.innerHTML = note('看圖輸入驗證碼後按「送出」');
-        capCode.focus();
-      } catch (e) { out.innerHTML = note(e.message || '驗證碼讀取失敗，請按「換一張」'); }
+      let j = null, err = '';
+      for (let i = 0; i < 2 && !j; i++) {
+        try {
+          const r = await getJson(`${CFG.seatUrl}?act=uiaCaptcha&_=${Date.now()}`, 20000);
+          if (r.error || !r.img) err = r.error || ''; else j = r;
+        } catch (_) { err = ''; }
+        if (my !== capSeq) return;
+      }
+      if (!j) { out.innerHTML = note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
+      token = j.token; capImg.src = j.img; capImg.hidden = false;
+      out.innerHTML = note('看圖輸入驗證碼後按「送出」');
+      capCode.focus();
     };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
@@ -1810,18 +1835,22 @@ const Seat = (() => {
     const send = async () => {
       const v = capCode.value.trim();
       if (!token || !v) return;
-      const date = d.value, from = document.getElementById('seatFrom').value, n = document.getElementById('seatN').value, tk = token;
+      const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
+      const ret = ls[1] ? `&ret=${ls[1].k}` : '';
       token = '';
       out.innerHTML = note('查詢中…');
-      let j, w;
+      let js, w;
       try {
-        [j, w] = await Promise.all([query(date, from, n),
-          fetch(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${date}&from=${from}&to=MZG&n=${n}&inf=0`, { cache: 'no-store' }).then(r => r.json()).catch(() => ({ error: '立榮查詢失敗' }))]);
+        [js, w] = await Promise.all([queryAll(ls, n),
+          getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }))]);
       } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
-      if (w.error) { out.innerHTML = html(j) + note(w.error); if (w.expired) newCap(); return; }
-      const uia = (w.flights || []).filter(f => (f.dir || 'go') === 'go').map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
-      if (uia.length) { j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
-      out.innerHTML = html(j) + (uia.length ? '' : note('立榮查無座位資料'));
+      if (w.error) { out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + note(w.error); if (w.expired) newCap(); return; }
+      let none = true;
+      js.forEach((j, i) => {
+        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (i ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
+        if (uia.length) { none = false; j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
+      });
+      out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + (none ? note('立榮查無座位資料') : '');
       cap.hidden = true; capImg.hidden = true;
     };
     document.getElementById('seatCapGo').addEventListener('click', send);
