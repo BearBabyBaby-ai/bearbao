@@ -2361,7 +2361,9 @@ function catColor(type, cat) {
   return m && m.has(cat) ? m.get(cat) : (typeColor[type] || '#64748b');
 }
 /* 清單每一列的顏色：測速執法維持原本顏色，其他用第一個分類的顏色，沒有分類就用資料類型顏色 */
-const rowColorOf = d => { if (d.type === SPEED_T) return typeColor[d.type] || '#64748b'; const c = catOfRow(d)[0]; return c ? catColor(d.type, c) : (typeColor[d.type] || '#64748b'); };
+/* 選了類別（例如加油站）時，清單同一類別，改用區域（鄉市）上色：不同區域不同顏色 */
+const REGION_ROW_COLOR = { '馬公市': '#2252a3', '湖西鄉': '#08725f', '白沙鄉': '#855905', '西嶼鄉': '#aa3e23', '望安鄉': '#6443a6', '七美鄉': '#9b2e65' };
+const rowColorOf = d => { if (activeSub && REGION_ROW_COLOR[d.region]) return REGION_ROW_COLOR[d.region]; if (d.type === SPEED_T) return typeColor[d.type] || '#64748b'; const c = catOfRow(d)[0]; return c ? catColor(d.type, c) : (typeColor[d.type] || '#64748b'); };
 function renderSubFilters() {
   const cats = activeType ? [...new Set(allData.filter(d => d.type === activeType && (!activeRegion || d.region === activeRegion))
     .flatMap(d => (activeType === '美食' ? d.mainCategory : d.category).split(/[／/]/).map(v => v.trim())).filter(Boolean))] : [];
