@@ -6356,15 +6356,20 @@ const Finance = (() => {
     const claimable = list.filter(w => w['領獎開始'] <= k && k <= w['領獎截止']).sort((a, b) => String(a['期別代碼']).localeCompare(String(b['期別代碼'])));
     const cur = periodOf(k), curDates = periodDates(cur.code);
     
-    const nextCode = list.some(w => w['期別代碼'] === cur.code) ? periodOf(addMonthsKey(k, 2)).code : cur.code;
+    // 下次開獎：前一期、本期、下一期之中，還沒抓到號碼、而且開獎日是今天或之後的第一期（開獎當天還沒更新就顯示「今天開獎」）
+    const has = code => list.some(w => w['期別代碼'] === code);
+    const nextCode = [periodOf(addMonthsKey(k, -2)).code, cur.code, periodOf(addMonthsKey(k, 2)).code].find(c => !has(c) && periodDates(c).draw >= k) || periodOf(addMonthsKey(k, 2)).code;
     const lastPublished = list[0];
-    return { claimable, oldest: claimable[0] || null, nextCode, nextDraw: periodDates(nextCode).draw, lastPublished, curDates };
+    // 兌獎資訊顯示：已開獎、還沒過領獎截止的每一期（剛開獎、還沒到領獎開始日的也列出），依期別先後排
+    const shown = list.filter(w => String(w['開獎日'] || periodDates(w['期別代碼']).draw) <= k && k <= w['領獎截止']).sort((a, b) => String(a['期別代碼']).localeCompare(String(b['期別代碼'])));
+    return { claimable, shown, oldest: claimable[0] || null, nextCode, nextDraw: periodDates(nextCode).draw, lastPublished, curDates };
   }
   function winHtml(w) {
     const inv = invoices().filter(s => s['期別'] === w['期別代碼']);
     const wins = inv.filter(s => ['中獎', '已入帳'].includes(s['兌獎狀態']));
     const nums = (v) => String(v || '').split(/[、,，\s]+/).filter(Boolean).map(n => `<code>${esc(n)}</code>`).join('');
-    return `<div class="xb-wp"><h4>${esc(w['期別'])}<small>領獎 ${esc(String(w['領獎開始']).slice(5))}～${esc(w['領獎截止'])}</small></h4>
+    const notYet = todayKey() < String(w['領獎開始']);
+    return `<div class="xb-wp"><h4>${esc(w['期別'])}<small>${notYet ? `${esc(String(w['領獎開始']).slice(5))} 起可領獎・至 ${esc(w['領獎截止'])}` : `領獎 ${esc(String(w['領獎開始']).slice(5))}～${esc(w['領獎截止'])}`}</small></h4>
       <p>特別獎 ${nums(w['特別獎'])}</p><p>特獎 ${nums(w['特獎'])}</p><p>頭獎 ${nums(w['頭獎'])}</p>${w['增開六獎'] ? `<p>增開六獎 ${nums(w['增開六獎'])}</p>` : ''}
       <p class="xb-note">我的發票 ${inv.length} 張・${wins.length ? `<b style="color:#be123c">中獎 ${wins.length} 張，共 ${money(wins.reduce((s, x) => s + numOf(x['中獎金額']), 0))} 元</b>` : '未中獎'}</p></div>`;
   }
@@ -6398,7 +6403,7 @@ const Finance = (() => {
       <div class="xb-grid">
         <div class="xb-card"><h3>🎫 兌獎資訊<button type="button" class="xb-btn sm" data-fin-act="win">🔄 更新中獎號碼</button></h3>
           ${ci.oldest ? `<p class="xb-note" style="margin-top:0">最久可兌換：<b>${esc(ci.oldest['期別'])}</b>（領獎期限至 <b>${esc(ci.oldest['領獎截止'])}</b>，還有 ${daysBetween(k, ci.oldest['領獎截止'])} 天）<br>下次開獎：${esc(periodLabel(ci.nextCode))}・${esc(ci.nextDraw)}</p>` : `<p class="xb-note">${winning().length ? '目前沒有在領獎期間內的期別' : '尚未抓取中獎號碼，請按「更新中獎號碼」'}</p>`}
-          <div class="xb-win">${ci.claimable.length ? ci.claimable.map(winHtml).join('') : ''}</div></div>
+          <div class="xb-win">${ci.shown.length ? ci.shown.map(winHtml).join('') : ''}</div></div>
         <div class="xb-card"><h3>📈 近 6 個月支出</h3><div class="xb-bars">${months.map((mm, i) => `<div class="xb-bar" style="--c:#f59e0b"><span>${Number(mm.slice(5))} 月</span><i style="width:${Math.round(mOut[i] / maxM * 100)}%"></i><span>$${money(mOut[i])}</span></div>`).join('')}</div>
           <h3 style="margin-top:14px">🧩 本月支出類別</h3>${cats.length ? `<div class="xb-bars">${cats.map(([c, v], i) => `<div class="xb-bar" style="--c:${PAL[i % PAL.length]}"><span>${esc(c)}</span><i style="width:${Math.round(v / maxC * 100)}%"></i><span>$${money(v)}</span></div>`).join('')}</div>` : '<p class="xb-note">本月還沒有支出紀錄</p>'}</div>
         <div class="xb-card"><h3>⚡ 快速記帳</h3><div class="xb-row"><button type="button" class="xb-btn pri" data-fin-act="add">📸 新增發票</button>${loadBtn()}<button type="button" class="xb-btn" data-fin-act="manual">✍️ 手動發票</button><button type="button" class="xb-btn" data-fin-act="ledger">💵 記一筆收支</button><button type="button" class="xb-btn" data-fin-act="fuel">⛽ 加油紀錄</button></div>
