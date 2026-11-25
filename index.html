@@ -1901,7 +1901,8 @@ const Seat = (() => {
     });
     document.getElementById('seatCapNew').addEventListener('click', newCap);
     const send = async () => {
-      const v = capCode.value.trim();
+      // 立榮驗證碼全是數字：全形數字轉半形，其他字元去掉
+      const v = capCode.value.replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '');
       if (!token || !v) return;
       const ls = legs(), n = document.getElementById('seatN').value, tk = token, l = ls[step];
       if (!l) return;
@@ -8063,9 +8064,10 @@ if (window.bearDesktop) {
       }
       if (p.op === 'list') return await seatList(p.plan, p.res || {}, '');
       const l = p.job || {};
+      const code = String(p.code || '').replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)).replace(/\D/g, '');
       let j;
       const ret = l.ret ? `&ret=${l.ret.replace(/\//g, '-')}` : '';
-      try { j = await (await fetch(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(p.token)}&code=${encodeURIComponent(p.code)}&date=${l.k.replace(/\//g, '-')}${ret}&from=${l.from}&to=${l.to}&n=${l.n}&inf=0`, { cache: 'no-store' })).json(); }
+      try { j = await (await fetch(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(p.token)}&code=${encodeURIComponent(code)}&date=${l.k.replace(/\//g, '-')}${ret}&from=${l.from}&to=${l.to}&n=${l.n}&inf=0`, { cache: 'no-store' })).json(); }
       catch (_) { return { uba: { error: '查詢失敗' } }; }
       if (j.error) return { uba: { error: j.error } };
       // 去程、回程各自對到列表的那一段
