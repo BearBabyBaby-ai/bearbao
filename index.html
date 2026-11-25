@@ -1869,11 +1869,13 @@ const Seat = (() => {
     // 立榮座位查詢：驗證碼圖顯示給使用者看，由使用者自己輸入後送出；華信照原本查詢
     const cap = document.getElementById('seatCap'), capImg = document.getElementById('seatCapImg'), capCode = document.getElementById('seatCapCode');
     const uiaSeat = st => /尚有|可訂/.test(st) ? '有位' : /不開放/.test(st) ? '已滿，不開放候補' : /候補|已滿|額滿|售完/.test(st) ? '候補' : (st || '請到立榮官網確認');
-    let token = '', capSeq = 0;
+    // 來回：立榮去程、回程各一張驗證碼（立榮來回的回程班次要先選去程才看得到，所以分兩次單程查）
+    let token = '', capSeq = 0, step = 0, uiaRes = [], capErr = '';
     const getJson = async (url, ms) => {
       const ac = new AbortController(), t = setTimeout(() => ac.abort(), ms);
       try { return await (await fetch(url, { cache: 'no-store', signal: ac.signal })).json(); } finally { clearTimeout(t); }
     };
+    const legTag = () => { const ls = legs(); return ls.length > 1 ? `（${ls[step] ? ls[step].tag : ''}）` : ''; };
     const newCap = async () => {
       const my = ++capSeq;
       token = ''; capImg.hidden = true; capCode.value = '';
@@ -1888,34 +1890,38 @@ const Seat = (() => {
       }
       if (!j) { out.innerHTML = note(err || '驗證碼讀取失敗，請按「換一張」'); return; }
       token = j.token; capImg.src = j.img; capImg.hidden = false;
-      out.innerHTML = note('看圖輸入驗證碼後按「送出」');
+      out.innerHTML = (capErr ? note(capErr) : '') + note(`看圖輸入立榮驗證碼${legTag()}後按「送出」`);
+      capErr = '';
       capCode.focus();
     };
     document.getElementById('seatUba').addEventListener('click', () => {
       if (!CFG.seatUrl) { out.innerHTML = note('查機位功能尚未開通'); return; }
+      step = 0; uiaRes = []; capErr = '';
       cap.hidden = false; newCap();
     });
     document.getElementById('seatCapNew').addEventListener('click', newCap);
     const send = async () => {
       const v = capCode.value.trim();
       if (!token || !v) return;
-      const ls = legs(), n = document.getElementById('seatN').value, tk = token, go = ls[0];
-      const ret = ls[1] ? `&ret=${ls[1].k}` : '';
+      const ls = legs(), n = document.getElementById('seatN').value, tk = token, l = ls[step];
+      if (!l) return;
       token = '';
       out.innerHTML = note('查詢中…');
-      let js, w;
-      try {
-        [js, w] = await Promise.all([queryAll(ls, n),
-          getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${go.k}${ret}&from=${go.from}&to=MZG&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }))]);
-      } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
-      if (w.error) { out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + note(w.error); if (w.expired) newCap(); return; }
+      const w = await getJson(`${CFG.seatUrl}?act=uiaWait&token=${encodeURIComponent(tk)}&code=${encodeURIComponent(v)}&date=${l.k}&from=${l.from}&to=${l.to}&n=${n}&inf=0`, 60000).catch(() => ({ error: '立榮查詢失敗' }));
+      // 驗證碼用過就失效：出錯就換一張新的，同一段重新輸入
+      if (w.error) { capErr = w.error; newCap(); return; }
+      uiaRes[step] = w.flights || [];
+      step++;
+      if (step < ls.length) { newCap(); return; }
+      let js;
+      try { js = await queryAll(ls, n); } catch (e) { out.innerHTML = note(e.message || '查詢失敗，請再試一次'); return; }
       let none = true;
       js.forEach((j, i) => {
-        const uia = (w.flights || []).filter(f => (f.dir || 'go') === (i ? 'back' : 'go')).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
+        const uia = (uiaRes[i] || []).map(f => ({ air: '立榮', no: f.no, dep: f.dep, arr: f.arr, seat: uiaSeat(f.status) }));
         if (uia.length) { none = false; j.flights = j.flights.filter(f => f.air !== '立榮').concat(uia).sort((x, y) => String(x.dep || '99').localeCompare(String(y.dep || '99'))); j.uiaNote = ''; j.uiaError = ''; }
       });
-      out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + (none ? note('立榮查無座位資料') : '');
-      cap.hidden = true; capImg.hidden = true;
+      out.innerHTML = js.map((j, i) => html(j, ls[i].tag)).join('') + (none ? note('立榮這天查無班次') : '');
+      cap.hidden = true; capImg.hidden = true; step = 0; uiaRes = [];
     };
     document.getElementById('seatCapGo').addEventListener('click', send);
     capCode.addEventListener('keydown', e => { if (e.key === 'Enter') send(); });
@@ -8142,15 +8148,12 @@ if (window.bearDesktop) {
           const title = `${days.length > 1 ? `${md(days[0])}–${md(days[days.length - 1])} 來回` : `${md(days[0])} 單程`}・${(land => days.length > 1 ? `${land} ⇄ 澎湖` : back ? `澎湖 → ${land}` : `${land} → 澎湖`)(fromKey ? Seat.NAMES[fromKey[0]] : '台灣本島')}・${n} 位`;
           const plan = { title, n, legs: legs.map(l => ({ k: l.k, from: l.from, to: l.to, tag: l.tag, n, md: md(l.k), route: `${Seat.NAMES[l.from]}→${Seat.NAMES[l.to]}` })) };
           // 查機位流程：有指定出發地時，先在對話框出立榮驗證碼（每一段一張），使用者輸入後才查兩家並列表
-          const min = addDays(todayKey(), 2);
-          // 立榮驗證碼一次只出一張：來回（日期區段）用立榮「來回」查詢，只輸入一次
-          const ok = fromKey ? plan.legs.map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= min) : [];
-          const jobs = !ok.length ? [] : ok.length === 2
-            ? [{ idx: [ok[0].i, ok[1].i], k: ok[0].k, ret: ok[1].k, from: ok[0].from, to: ok[0].to, n, label: `來回 ${ok[0].md}–${ok[1].md} ${ok[0].route}` }]
-            : [{ idx: [ok[0].i], k: ok[0].k, ret: '', from: ok[0].from, to: ok[0].to, n, label: `${ok[0].tag} ${ok[0].md} ${ok[0].route}` }];
+          // 立榮驗證碼一段一張：來回（日期區段）去程、回程各輸入一次（立榮來回的回程班次要先選去程才看得到）
+          const ok = fromKey ? plan.legs.map((l, i) => Object.assign({ i }, l)).filter(l => l.k >= todayKey()) : [];
+          const jobs = ok.map(l => ({ idx: [l.i], k: l.k, ret: '', from: l.from, to: l.to, n, label: `${l.tag} ${l.md} ${l.route}` }));
           if (!CFG.seatUrl) return '查機位功能尚未開通：請先部署「航班動態.gs」網頁應用程式，並把網址填進系統設定的「航班查詢網址」';
           if (jobs.length) return { blocks: [{ type: 'title', text: title }, { type: 'uba', jobs, plan }] };
-          return await seatList(plan, {}, fromKey ? '立榮候補只能查 2 天後的班次' : '指定出發地才能查立榮候補');
+          return await seatList(plan, {}, fromKey ? '' : '指定出發地才能查立榮座位');
         }
         // 航班：句子有航班、班機、飛機，或只打航班代號
         // 航班代號：AE787、B7 8697、DA7017，或機場頁的 MDA787、UIA8697、DAC7017
