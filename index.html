@@ -7167,8 +7167,9 @@ if (window.bearDesktop) {
       const y1 = m[1] || t.slice(0, 4);
       let from = `${y1}/${pad2(m[2])}/${pad2(m[3])}`;
       if (utcToKey(keyToUTC(from)) !== from) return { bad: true };
-      // 沒寫年份：起日已經過了就是明年（照摩西分海時刻表的判斷）
-      if (!m[1] && from < t) from = `${Number(y1) + 1}${from.slice(4)}`;
+      // 沒寫年份：整段都已經過了才算明年（照摩西分海時刻表的判斷）；起日已過但迄日還沒過（例如今天 11/25 查 11/24-11/27）就是今年
+      const toThisYear = `${m[4] || y1}/${pad2(m[5] || m[2])}/${pad2(m[6])}`;
+      if (!m[1] && from < t && !(toThisYear >= t && toThisYear >= from)) from = `${Number(y1) + 1}${from.slice(4)}`;
       const y2 = m[4] || from.slice(0, 4);
       let to = `${y2}/${pad2(m[5] || from.slice(5, 7))}/${pad2(m[6])}`;
       if (utcToKey(keyToUTC(to)) !== to) return { bad: true };
@@ -8035,6 +8036,10 @@ if (window.bearDesktop) {
       const name = hit ? hit[1] : (Wx.areas.includes(Wx.area) ? Wx.area : '馬公市');
       const w = await Wx.data(name);
       if (!w || w.error) return `天氣資料讀取失敗（${w && w.error ? w.error : '沒有資料'}），請確認網路後再試一次`;
+      // 已經過去的日子沒有預報，從今天開始列
+      const tk = todayKey();
+      if (r.days[0] < tk && r.days[r.days.length - 1] >= tk) { r = { ...r, days: r.days.filter(k => k >= tk) }; r.from = r.days[0]; }
+      if (r.days[r.days.length - 1] < tk) return '天氣只能查今天起 7 天內的預報';
       const ds = r.days.map(k => w.days.get(k) || null);
       if (ds.every(d => !d)) return `${md(r.from)}–${md(r.to)} 天氣：尚無資訊`;
       const col = f => ds.map(d => !d ? '尚無資訊' : f(d));
