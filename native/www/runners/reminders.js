@@ -4,6 +4,8 @@ var ICON = { '機票搶票': '🎫', '生日紀念': '🎂', '節日': '🎉', '
 
 function kvGet(k) { try { var r = CapacitorKV.get(k); if (typeof r === 'string') return r; return r && r.value ? String(r.value) : ''; } catch (e) { return ''; } }
 function kvSet(k, v) { try { CapacitorKV.set(k, v); } catch (e) {} }
+// 提醒、分海、月曆資料不存在手機（每次直接向雲端讀）；清掉舊版存過的
+try { ['xb.reminders', 'xb.tide', 'xb.cal'].forEach(function (k) { CapacitorKV.remove(k); }); } catch (e) {}
 function str(v) { return v == null ? '' : String(v).trim(); }
 function pad(n) { return (n < 10 ? '0' : '') + n; }
 
@@ -150,15 +152,10 @@ function fetchReminders() {
     .then(function (out) {
       if (!out || !out.ok || !out.data || !out.data.reminders) return null;
       var list = out.data.reminders;
-      kvSet('xb.reminders', JSON.stringify(list));
       kvSet('xb.fetched', String(Date.now()));
       return list;
     })
     .catch(function () { return null; });
-}
-
-function cached() {
-  try { return JSON.parse(kvGet('xb.reminders') || 'null'); } catch (e) { return null; }
 }
 
 // App 開著時把連線設定交給背景
@@ -170,11 +167,9 @@ addEventListener('setConnection', function (resolve, reject, args) {
   } catch (e) { resolve({ ok: false }); }
 });
 
-// App 開著時把桌面小工具要用的資料（分海時間、風浪地區）存起來
+// App 開著時把桌面小工具的設定（風浪地區、月曆隱藏項目）存起來；分海、月曆資料不存，小工具自己讀
 addEventListener('setWidget', function (resolve, reject, args) {
   try {
-    if (args && args.tide) kvSet('xb.tide', String(args.tide));
-    if (args && args.cal) kvSet('xb.cal', String(args.cal));
     if (args && typeof args.calHidden === 'string') kvSet('xb.calHidden', args.calHidden);
     if (args && args.appArea) kvSet('xb.appArea', str(args.appArea));
     if (args && args.autoArea) kvSet('xb.autoArea', str(args.autoArea));
@@ -182,11 +177,10 @@ addEventListener('setWidget', function (resolve, reject, args) {
   } catch (e) { resolve({ ok: false }); }
 });
 
-// 檢查提醒並排定通知：App 開著時直接帶入最新資料；背景執行時每 3 小時向雲端取一次，其餘用上次的資料
+// 檢查提醒並排定通知：App 開著時直接帶入最新資料；背景執行時每 3 小時向雲端取一次（不存資料；沒取新資料時沿用已排定的通知）
 addEventListener('checkReminders', function (resolve, reject, args) {
   try {
     if (args && args.reminders) {
-      kvSet('xb.reminders', JSON.stringify(args.reminders));
       kvSet('xb.fetched', String(Date.now()));
       resolve({ count: schedule(args.reminders) });
       return;
@@ -194,7 +188,8 @@ addEventListener('checkReminders', function (resolve, reject, args) {
     var last = Number(kvGet('xb.fetched')) || 0;
     var p = Date.now() - last > FETCH_EVERY ? fetchReminders() : Promise.resolve(null);
     p.then(function (list) {
-      try { resolve({ count: schedule(list || cached() || []) }); } catch (e) { resolve({ count: 0 }); }
+      if (!list) { resolve({ count: -1 }); return; }
+      try { resolve({ count: schedule(list) }); } catch (e) { resolve({ count: 0 }); }
     });
   } catch (e) { resolve({ count: 0 }); }
 });

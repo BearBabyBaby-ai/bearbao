@@ -50,6 +50,7 @@ public class BearLockPlugin extends Plugin {
                 try {
                     LockCalendar.saveBackground(ctx, uri);
                     LockCalendar.setEnabled(ctx, true);
+                    try { BgSync.run(ctx.getApplicationContext()); } catch (Throwable ignored) {}   /* 直接讀雲端，不存手機 */
                     if (!LockCalendar.refresh(ctx, true)) { call.reject("鎖屏設定失敗"); return; }
                     call.resolve(state());
                 } catch (Exception e) {
@@ -69,6 +70,7 @@ public class BearLockPlugin extends Plugin {
                 if (on) {
                     if (!LockCalendar.bgFile(ctx).exists()) { call.reject("請先選擇鎖屏照片"); return; }
                     LockCalendar.setEnabled(ctx, true);
+                    try { BgSync.run(ctx.getApplicationContext()); } catch (Throwable ignored) {}   /* 直接讀雲端，不存手機 */
                     if (!LockCalendar.refresh(ctx, true)) { call.reject("鎖屏設定失敗"); return; }
                 } else {
                     LockCalendar.disable(ctx);

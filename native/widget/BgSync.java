@@ -37,19 +37,21 @@ final class BgSync {
     /** 在背景執行緒呼叫；回傳是否有資料更新 */
     static synchronized boolean run(Context c) {
         SharedPreferences p = WidgetData.prefs(c);
+        WidgetData.purgeStored(c);
         long now = System.currentTimeMillis();
         boolean changed = false;
-        if (now - p.getLong("bg.tideAt", 0) > TIDE_EVERY) {
+        /* 讀到的資料只放記憶體（WidgetData.mem*），不寫進手機 */
+        if (WidgetData.memTide == null || now - WidgetData.tideAt > TIDE_EVERY) {
             String t = syncTide();
-            if (t != null) { changed |= !t.equals(p.getString("xb.tide", "")); p.edit().putString("xb.tide", t).putLong("bg.tideAt", now).apply(); }
+            if (t != null) { changed |= !t.equals(WidgetData.memTide); WidgetData.memTide = t; WidgetData.tideAt = now; }
         }
-        if (now - p.getLong("bg.remAt", 0) > REMIND_EVERY) {
+        if (WidgetData.memReminders == null || now - WidgetData.remAt > REMIND_EVERY) {
             String r = syncReminders(p.getString("xb.url", ""), p.getString("xb.token", ""));
-            if (r != null) { changed |= !r.equals(p.getString("xb.reminders", "")); p.edit().putString("xb.reminders", r).putLong("bg.remAt", now).apply(); }
+            if (r != null) { changed |= !r.equals(WidgetData.memReminders); WidgetData.memReminders = r; WidgetData.remAt = now; }
         }
-        if (now - p.getLong("bg.calAt", 0) > CAL_EVERY || changed) {
+        if (WidgetData.memCal == null || now - WidgetData.calAt > CAL_EVERY || changed) {
             String cal = buildCal(p);
-            if (cal != null) { changed |= !cal.equals(p.getString("xb.cal", "")); p.edit().putString("xb.cal", cal).putLong("bg.calAt", now).apply(); }
+            if (cal != null) { changed |= !cal.equals(WidgetData.memCal); WidgetData.memCal = cal; WidgetData.calAt = now; }
         }
         return changed;
     }
@@ -354,7 +356,7 @@ final class BgSync {
 
     private static String buildCal(SharedPreferences p) {
         List<List<String>> sp = sheet(GID_SPECIAL, "特殊日期"), ac = sheet(GID_ACTIVITY, "活動列表");
-        if (sp == null && ac == null) return null;   /* 沒網路：沿用舊資料 */
+        if (sp == null && ac == null) return null;   /* 沒網路：這次不更新 */
         String today = WidgetData.dateKey(WidgetData.today());
         List<Item> base = new ArrayList<>();
         base.addAll(parseSheet(sp, true));
@@ -362,7 +364,7 @@ final class BgSync {
         Set<String> yearlyNames = new HashSet<>(), keys = new HashSet<>();
         for (Item it : base) { if (it.yearly) yearlyNames.add(it.name); keys.add(it.name + "|" + it.start); }
         List<Item> items = new ArrayList<>(base);
-        for (Item x : parseReminders(p.getString("xb.reminders", "[]"), today)) if (!yearlyNames.contains(x.name) && !keys.contains(x.name + "|" + x.start)) items.add(x);
+        for (Item x : parseReminders(WidgetData.memReminders == null ? "[]" : WidgetData.memReminders, today)) if (!yearlyNames.contains(x.name) && !keys.contains(x.name + "|" + x.start)) items.add(x);
         Set<String> hidden = new HashSet<>();
         for (String h : p.getString("xb.calHidden", "").split("[,，、\\s]+")) if (!h.trim().isEmpty()) hidden.add(h.trim());
         List<Item> vis = new ArrayList<>();

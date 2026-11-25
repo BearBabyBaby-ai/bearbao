@@ -7758,8 +7758,8 @@ if (window.bearDesktop) {
       try { set = await lanternRouteSet(); } catch (_) { return '元宵路線資料讀取失敗，請確認網路後再試一次'; }
       const all = await places();
       if (!all) return '元宵資料讀取失敗，請確認網路後再試一次';
-      // 同名廟宇（例如保安宮）用座標區分：鍵＝名稱＠座標
-      const tkOf = d => `${d.name}@${clean((d.raw || {}).Latitude)},${clean((d.raw || {}).Longitude)}`;
+      // 同名廟宇（例如保安宮）用村里區分：鍵＝名稱＠村里（與元宵APP路線同一規則）
+      const tkOf = d => `${d.name}@${clean((d.raw || {})['區域(村里)'])}`;
       const T = new Map(all.filter(d => d.type === '廟宇').map(d => [tkOf(d), d]));
       const byName = name => { const hit = all.filter(d => d.type === '廟宇' && d.name === name); return hit.find(d => d.lantern) || hit[0]; };
       const ORDER = ['north', 'east', 'south', 'city', 'suburb'];

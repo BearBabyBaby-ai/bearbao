@@ -47,6 +47,20 @@ final class WidgetData {
 
     static SharedPreferences prefs(Context c) { return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE); }
 
+    /* ---------- 小工具與鎖屏用的資料：只放在執行中的記憶體，不寫進手機（每次直接向雲端讀） ---------- */
+    static volatile String memTide, memReminders, memCal, memWx;
+    static volatile long tideAt, remAt, calAt;
+    private static volatile boolean purged;
+    /** 清掉舊版存在手機裡的資料（只做一次） */
+    static void purgeStored(Context c) {
+        if (purged) return;
+        purged = true;
+        prefs(c).edit().remove("xb.tide").remove("xb.reminders").remove("xb.cal").remove("xb.wxCache")
+            .remove("bg.tideAt").remove("bg.remAt").remove("bg.calAt").apply();
+    }
+    /** 記憶體裡還沒有資料（例如程式剛被系統重新啟動）時要先讀一次 */
+    static boolean needSync() { return memTide == null || memCal == null; }
+
     /* ---------- 時段配色：清晨 05–07、白天 07–17、傍晚 17–19、晚上 19–05 ---------- */
     static final int DAWN = 0, DAY = 1, DUSK = 2, NIGHT = 3;
 
@@ -140,7 +154,7 @@ final class WidgetData {
 
     /** 沒有資料時回傳 null */
     static List<Item> reminders(Context context) {
-        String raw = prefs(context).getString("xb.reminders", null);
+        String raw = memReminders;
         if (raw == null) return null;
         List<Item> out = new ArrayList<>();
         long today = today();
@@ -193,10 +207,10 @@ final class WidgetData {
         return out;
     }
 
-    /* ---------- 今日分海（App 開著時存下未來 30 天） ---------- */
+    /* ---------- 今日分海（直接讀雲端，只放記憶體） ---------- */
     /** 回傳 [分海時間, 合海時間, 安全通行時段]；沒有資料回傳 null */
     static List<List<String>> tide(Context context) {
-        String raw = prefs(context).getString("xb.tide", null);
+        String raw = memTide;
         if (raw == null) return null;
         try {
             JSONObject all = new JSONObject(raw);
@@ -244,7 +258,7 @@ final class WidgetData {
     }
 
     static Weather weather(Context context) {
-        String raw = prefs(context).getString("xb.wxCache", null);
+        String raw = memWx;
         if (raw == null) return null;
         try {
             JSONObject o = new JSONObject(raw);
@@ -256,7 +270,7 @@ final class WidgetData {
     }
 
     static boolean needFetch(Context context) {
-        String raw = prefs(context).getString("xb.wxCache", null);
+        String raw = memWx;
         if (raw == null) return true;
         try {
             JSONObject o = new JSONObject(raw);
@@ -330,7 +344,7 @@ final class WidgetData {
             } catch (Exception ignored) {
             }
             if (!o.has("wk") && !o.has("fc")) return;
-            prefs(context).edit().putString("xb.wxCache", o.toString()).apply();
+            memWx = o.toString();
         } catch (Exception ignored) {
         }
     }

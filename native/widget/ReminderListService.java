@@ -26,6 +26,7 @@ public class ReminderListService extends RemoteViewsService {
 
         @Override
         public void onDataSetChanged() {
+            if (WidgetData.memReminders == null) { try { BgSync.run(context.getApplicationContext()); } catch (Throwable ignored) {} }   /* 直接讀雲端，不存手機 */
             List<WidgetData.Item> list = WidgetData.reminders(context);
             items = list == null ? new ArrayList<WidgetData.Item>() : list;
             period = WidgetData.period();

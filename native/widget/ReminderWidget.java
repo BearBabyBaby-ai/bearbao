@@ -29,15 +29,17 @@ public class ReminderWidget extends AppWidgetProvider {
     @Override
     public void onUpdate(Context context, AppWidgetManager manager, int[] ids) {
         render(context);
-        if (WidgetData.needFetch(context)) {
+        if (WidgetData.needFetch(context) || WidgetData.needSync()) {
             final PendingResult pending = goAsync();
             final Context app = context.getApplicationContext();
             new Thread(new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        WidgetData.fetchWeather(app);
+                        BgSync.run(app);   /* 直接讀雲端（不存手機） */
+                        if (WidgetData.needFetch(app)) WidgetData.fetchWeather(app);
                         render(app);
+                    } catch (Throwable ignored) {
                     } finally {
                         pending.finish();
                     }
@@ -54,7 +56,11 @@ public class ReminderWidget extends AppWidgetProvider {
         new Thread(new Runnable() {
             @Override
             public void run() {
-                if (WidgetData.needFetch(app)) WidgetData.fetchWeather(app);
+                try {
+                    BgSync.run(app);   /* 直接讀雲端（不存手機） */
+                    if (WidgetData.needFetch(app)) WidgetData.fetchWeather(app);
+                } catch (Throwable ignored) {
+                }
                 render(app);
             }
         }).start();
@@ -114,7 +120,7 @@ public class ReminderWidget extends AppWidgetProvider {
             v.setRemoteAdapter(R.id.list, svc);
             v.setEmptyView(R.id.list, R.id.empty);
             List<WidgetData.Item> items = WidgetData.reminders(context);
-            v.setTextViewText(R.id.empty, items == null ? "打開熊寶系統後就會顯示提醒" : "30 天內沒有提醒");
+            v.setTextViewText(R.id.empty, items == null ? "正在讀取提醒…" : "30 天內沒有提醒");
             v.setTextColor(R.id.empty, WidgetData.sub(p));
             int template = PendingIntent.FLAG_UPDATE_CURRENT | (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S ? PendingIntent.FLAG_MUTABLE : 0);
             Intent open = new Intent(context, MainActivity.class);
@@ -129,7 +135,7 @@ public class ReminderWidget extends AppWidgetProvider {
             SpannableStringBuilder t = new SpannableStringBuilder();
             List<List<String>> tide = WidgetData.tide(context);
             if (tide == null) {
-                append(t, "打開熊寶系統後就會顯示", WidgetData.sub(p), false);
+                append(t, "正在讀取…", WidgetData.sub(p), false);
             } else if (tide.get(0).isEmpty() && tide.get(1).isEmpty() && tide.get(2).isEmpty()) {
                 append(t, "今日暫無分海資料", WidgetData.sub(p), false);
             } else {

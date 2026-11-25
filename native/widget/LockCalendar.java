@@ -132,7 +132,7 @@ final class LockCalendar {
         int[] wh = screenSize(c);
         int[] ym = shownMonth();
         String sig = WidgetData.dateKey(WidgetData.today()) + "|" + ym[0] + ym[1] + "|" + wh[0] + "x" + wh[1] + "|" + bgFile(c).lastModified()
-            + "|" + p.getString("xb.cal", "").hashCode() + "|" + p.getString("xb.tide", "").hashCode();
+            + "|" + String.valueOf(WidgetData.memCal).hashCode() + "|" + String.valueOf(WidgetData.memTide).hashCode();
         schedule(c);
         if (!force && sig.equals(p.getString("xb.lockSig", ""))) return true;
         try {
@@ -218,7 +218,7 @@ final class LockCalendar {
 
         /* 資料 */
         JSONObject cal = null;
-        try { cal = new JSONObject(WidgetData.prefs(c).getString("xb.cal", "{}")); } catch (Exception ignored) {}
+        try { cal = new JSONObject(WidgetData.memCal == null ? "{}" : WidgetData.memCal); } catch (Exception ignored) {}
         JSONObject marks = cal == null ? null : cal.optJSONObject("marks");
         JSONArray list = cal == null ? null : cal.optJSONArray("list");
         long today = WidgetData.today();
@@ -294,7 +294,7 @@ final class LockCalendar {
         List<Line> tideLines = new ArrayList<>();
         List<List<String>> tide = WidgetData.tide(c);
         int grey = col("#374151", Color.DKGRAY), ink = col("#111827", Color.BLACK);
-        if (tide == null) tideLines.add(new Line().add("打開熊寶系統後就會顯示", grey, false));
+        if (tide == null) tideLines.add(new Line().add("正在讀取…", grey, false));
         else if (tide.get(0).isEmpty() && tide.get(1).isEmpty() && tide.get(2).isEmpty()) tideLines.add(new Line().add("今日暫無分海資料", grey, false));
         else {
             if (!tide.get(0).isEmpty()) tideLines.add(new Line().add("緩慢分海 " + TextUtils.join("、", tide.get(0)), col("#115E59", ink), true));
@@ -314,7 +314,7 @@ final class LockCalendar {
                 listLines.add(new Line().add(md + " " + it.optString("n") + (tm.isEmpty() ? "" : " " + tm), col(it.optString("c"), ink), true));
             }
         }
-        if (listLines.isEmpty()) listLines.add(new Line().add(cal == null || list == null ? "打開熊寶系統後就會顯示" : "近期沒有提醒或活動", grey, false));
+        if (listLines.isEmpty()) listLines.add(new Line().add(cal == null || list == null ? "正在讀取…" : "近期沒有提醒或活動", grey, false));
 
         int n = Math.max(4, Math.max(tideLines.size(), listLines.size()));
         float ph = 16 * s + 36 * s + n * lh + 14 * s;
