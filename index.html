@@ -2390,15 +2390,65 @@ const PlaceSearch = (() => {
     { name: '七美鄉', short: '七美', match: ['七美', '七美鄉'] }
   ];
 
-  const DEITY_SYNONYMS = [
-    ['真武大帝', '玄天上帝'],
-    ['天上聖母', '媽祖'],
-    ['玉皇大帝', '玉皇大天尊'],
-    ['哪吒三太子', '哪吒太子', '三太子'],
-    ['南海觀世音菩薩', '觀世音菩薩', '觀音佛祖'],
-    ['文衡關聖帝君', '關聖帝君', '關公', '五天聖帝'],
-    ['土地公', '福德正神']
+  /* ===== 主祀判斷（各系統共用）=====
+     一間廟有多位主祀時拆開，每一位依資料歸回同一位神明（例：協天大帝(關聖帝君)→關聖帝君、銅陵媽祖→天上聖母、虎將軍→虎爺）；
+     畫面一律顯示主祀原文。資料出現新寫法時再補進這張表。 */
+  const DEITY_ALIASES = [
+    ["關聖帝君", ["關聖帝君","文衡聖帝","文衡關聖帝君","協天大帝","五天聖帝","關公","關帝","恩主公"]],
+    ["天上聖母", ["天上聖母","媽祖","銅陵媽祖","天后","天妃","媽祖娘娘"]],
+    ["虎爺", ["虎爺","虎將軍"]],
+    ["玄天上帝", ["玄天上帝","真武大帝","上帝公","北極大帝","玄天大帝"]],
+    ["觀世音菩薩", ["觀世音菩薩","觀音佛祖","觀音菩薩","南海觀世音菩薩","觀音","觀音大士","觀世音","二觀音菩薩"]],
+    ["福德正神", ["福德正神","土地公","伯公"]],
+    ["中壇元帥", ["中壇元帥","哪吒三太子","哪吒太子","三太子","中壇元帥三太子","太子爺"]],
+    ["玉皇大帝", ["玉皇大帝","玉皇大天尊","天公"]],
+    ["城隍", ["城隍","城隍尊神","城隍爺"]],
+    ["釋迦牟尼佛", ["釋迦牟尼佛","釋迦佛"]],
+    ["神農大帝", ["神農大帝","開天仙帝","神農氏"]],
+    ["五府千歲", ["五府千歲","五府王爺"]]
   ];
+  /* 單一位神明 → 歸回的神明名稱（括號裡的名字也算；同姓的王爺、府王爺、千歲是同一位） */
+  function deityName(raw) {
+    const s = String(raw || "").replace(/\s/g, "");
+    if (!s) return "";
+    const inParen = (s.match(/[（(]([^）)]+)[）)]/) || [])[1] || "";
+    const bare = s.replace(/[（(].*$/, "");
+    for (const [main, names] of DEITY_ALIASES) {
+      if (names.includes(s) || names.includes(bare) || (inParen && names.includes(inParen))) return main;
+    }
+    const wang = s.match(/^([^府王千五諸])府?(王爺|千歲)$/) || s.match(/^([^府王千五諸])王$/);
+    if (wang) return wang[1] + "府王爺";
+    return s;
+  }
+  /* 主祀欄拆成每一位神明（括號裡的頓號不拆） */
+  function deitySplit(raw) {
+    const out = []; let cur = "", depth = 0;
+    for (const ch of String(raw || "")) {
+      if (ch === "(" || ch === "（") depth++;
+      if (ch === ")" || ch === "）") depth = Math.max(0, depth - 1);
+      if (!depth && /[、／/,，;；]/.test(ch)) { if (cur.trim()) out.push(cur.trim()); cur = ""; } else cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  }
+  function deityGroups(raw) { return [...new Set(deitySplit(raw).map(deityName).filter(Boolean))]; }
+  /* 查詢的字詞是不是這間廟的主祀（別名都算；王爺、千歲找所有王爺；其他照原文包含） */
+  function deityHit(raw, query) {
+    const q = String(query || "").replace(/\s/g, "");
+    if (!q) return false;
+    const groups = deityGroups(raw);
+    if (groups.includes(deityName(q))) return true;
+    if (/^(王爺|千歲)$/.test(q) && groups.some(g => /(王爺|千歲)$/.test(g))) return true;
+    return String(raw || "").replace(/\s/g, "").includes(q);
+  }
+  /* 這個字詞是不是神明名稱（別名表裡的名字、王爺／千歲） */
+  function isDeityWord(query) {
+    const q = String(query || "").replace(/\s/g, "");
+    if (!q) return false;
+    if (/^(王爺|千歲)$/.test(q) || deityName(q) !== q || DEITY_ALIASES.some(([m]) => m === q)) return true;
+    return q.length >= 2 && DEITY_ALIASES.some(([, names]) => names.some(n => n.includes(q)));
+  }
+  const DEITY_SYNONYMS = DEITY_ALIASES.map(([main, names]) => [main, ...names]);
 
   const QUICK_KEYWORDS = [
     {
@@ -2592,11 +2642,7 @@ const PlaceSearch = (() => {
 
   function getSearchDeitySynonyms(token) {
     const text = normalizeSearchText(token);
-    if (!text) return null;
-    return DEITY_SYNONYMS.find(group => group.some(name => {
-      const synonym = normalizeSearchText(name);
-      return synonym === text || (text.length >= 2 && synonym.includes(text));
-    })) || null;
+    return text && isDeityWord(text) ? [text] : null;
   }
 
   function createSearchContext(datasets) {
@@ -2636,12 +2682,12 @@ const PlaceSearch = (() => {
           regionName, villages: [...new Set(villages.filter(Boolean))], mainCategories, subCategories,
           name: normalizeSearchText(getItemDisplayName(item, sheetName)), address,
           villageText: normalizeSearchText(item['區域(村里)']),
-          deity: normalizeSearchText(item['主祀']),
+          deity: normalizeSearchText(item['主祀']), deityRaw: String(item['主祀'] || ''),
           text: values.map(normalizeSearchText).filter(Boolean).join('\u0000')
         };
         context.rows.set(item, entry);
         if (entry.name && !entry.name.startsWith('未提供')) context.names.add(entry.name);
-        if (sheetName === '廟宇') splitSearchValues(item['主祀']).forEach(value => context.deities.add(value));
+        if (sheetName === '廟宇') [...splitSearchValues(item['主祀']), ...deitySplit(item['主祀']), ...deityGroups(item['主祀'])].map(normalizeSearchText).forEach(value => context.deities.add(value));
         for (const key of ['代表餐食／服務', '代表餐食/服務', '推薦菜色／行程', '推薦菜色/行程']) {
           String(item[key] || '').split(/[／/、,，;；|\r\n]+/).map(normalizeSearchText)
             .filter(value => value && value.length <= 40).forEach(value => context.contentTerms.add(value));
@@ -2939,9 +2985,7 @@ const PlaceSearch = (() => {
     if (!entry) return false;
     const region = getSearchRegion(text);
     if (region) return entry.regionName === region.name;
-    const deityGroup = sheetName === '廟宇' ? getSearchDeitySynonyms(text) : null;
-    if (deityGroup && deityGroup.some(value => entry.deity.includes(normalizeSearchText(value))
-      || entry.text.includes(normalizeSearchText(value)))) return true;
+    if (sheetName === '廟宇' && deityHit(entry.deityRaw, text)) return true;
     if (entry.name.includes(text) || entry.villageText.includes(text) || entry.text.includes(text)) return true;
     return text === '海鮮餐廳' && ['海鮮', '海產'].some(value => entry.text.includes(value));
   }
@@ -2973,9 +3017,7 @@ const PlaceSearch = (() => {
         || inCats(entry.mainCategories, token) || inFood(token)))) return false;
     if (plan.deities.length && (sheetName !== '廟宇'
       || !plan.deities.some(token => {
-        const synonyms = getSearchDeitySynonyms(token);
-        return synonyms ? synonyms.some(value => entry.deity.includes(normalizeSearchText(value)))
-          : entry.deity.includes(normalizeSearchText(token));
+        return deityHit(entry.deityRaw, token);
       }))) return false;
     return (!plan.terms.length && !plan.literalTerms.length)
       || plan.terms.some(token => checkItemMatchesSingleToken(item, sheetName, token, context))
@@ -3209,7 +3251,7 @@ const PlaceSearch = (() => {
     const text = prepare(query, c.ctx);
     return text ? lexSearchQuery(text, c.ctx).map(t => ({ kind: t.kind, text: t.text })) : [];
   }
-  return { search, explain, matcher, regionOf, getFoodField, getFoodName, checkValid, cleanTempleName, normalizeSearchText, isVisibleFoodItem };
+  return { search, explain, matcher, regionOf, getFoodField, getFoodName, checkValid, cleanTempleName, normalizeSearchText, isVisibleFoodItem, deityHit };
 })();
 
 function applyFilter() {
@@ -7460,7 +7502,7 @@ if (window.bearDesktop) {
       const toks = PlaceSearch.explain(sq);
       const words = toks.filter(t => t.kind === 'terms' || t.kind === 'literalTerms').map(t => PlaceSearch.normalizeSearchText(t.text));
       const temples = groups.length === 1 && groups[0][0] === '廟宇' ? groups[0][1] : [];
-      const byDeity = words.length > 0 && temples.length > 0 && words.every(w => temples.some(d => PlaceSearch.normalizeSearchText((d.raw || {})['主祀'] || '').includes(w)));
+      const byDeity = words.length > 0 && temples.length > 0 && words.every(w => temples.some(d => PlaceSearch.deityHit((d.raw || {})['主祀'] || '', w)));
       const deityAsked = /主祀|主神/.test(query) || toks.some(t => t.kind === 'deities') || byDeity;
       if (deityAsked && groups.length === 1 && groups[0][0] === '廟宇') {
         const list = byArea(groups[0][1]);

@@ -1,4 +1,4 @@
-const VERSION = 'bearbao-2026-11-24-v104';
+const VERSION = 'bearbao-2026-11-24-v105';
 const SHELL_CACHE = `bearbao-shell-${VERSION}`;
 const DATA_CACHE = 'bearbao-sheet-data';
 const LIB_CACHE = 'bearbao-libs';
@@ -12,7 +12,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k.startsWith('bearbao-shell-') && k !== SHELL_CACHE).map(k => caches.delete(k))))
+      .then(keys => Promise.all(keys.filter(k => (k.startsWith('bearbao-shell-') && k !== SHELL_CACHE) || k === DATA_CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
@@ -62,8 +62,7 @@ self.addEventListener('fetch', event => {
   }
 
     if (url.hostname === 'docs.google.com' && url.pathname.includes('/spreadsheets/') && /format=csv|out%3Acsv|out:csv/.test(url.search)) {
-    event.respondWith(networkFirst(request, DATA_CACHE, dataKey(request.url)));
-    return;
+    return;   /* 試算表資料直接讀，不在手機另外存 */
   }
 
     if (LIB_HOSTS.includes(url.hostname)) {
